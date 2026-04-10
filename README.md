@@ -208,11 +208,32 @@ MARKERS <- list(
 )
 ```
 
-To add markers for additional cell types (e.g. Neutrophils, Tregs):
-```r
-MARKERS$Neutrophil <- c("FCGR3B", "CSF3R", "S100A9", "CXCR2")
-MARKERS$Treg       <- c("FOXP3", "IL2RA", "CTLA4")
-```
+The full marker list in `config.R` now includes all major populations plus contamination indicators:
+
+| Group | Markers | Interpretation |
+|-------|---------|----------------|
+| CD4 T | CD4, IL7R, CCR7 | Expected ~40–50% of healthy PBMC |
+| CD8 T | CD8A, CD8B, GZMK | Expected ~20–30% |
+| **Treg** | FOXP3, IL2RA, CTLA4 | Small (~5–10% of T cells); expanded in cancer/autoimmunity |
+| NK | NKG7, GNLY, KLRD1 | Expected ~5–15% |
+| B cell | MS4A1, CD79A, CD19 | Expected ~5–10% |
+| **Plasma** | MZB1, JCHAIN, SDC1 | Rare in healthy blood; elevated in infection or myeloma |
+| CD14+ Mono | CD14, LYZ, S100A8 | Expected ~10–15% |
+| FCGR3A+ Mono | FCGR3A, MS4A7 | Expected ~2–5% |
+| **Neutrophil** | FCGR3B, CSF3R, CXCR2, CEACAM8 | Rare in healthy PBMC; **elevated = inflammation or poor/slow Ficoll separation** |
+| DC | FCER1A, CLEC9A | Rare (~1%); absence after filtering suggests over-filtering |
+| Platelet | PPBP, PF4 | Small cluster is normal; large cluster = **poor PBMC separation** |
+| **RBC** | HBB, HBA1, HBA2, GYPA | **Contamination** — should be absent; present = failed Ficoll gradient |
+| **HSPC** | CD34, GATA2, AVP | **Contamination** — haematopoietic progenitors; seen in mobilised or bone marrow samples |
+
+**Quality indicators to check in `report_annotation.pdf`:**
+
+- ✅ **Good:** T cells ~60–70%, NK ~10%, B cells ~5–10%, Monocytes ~15%
+- ✅ **Good:** No RBC or HSPC clusters detected
+- ⚠️ **Warning:** Neutrophil cluster present — donor may be inflamed, or sample processed slowly (neutrophils lyse quickly at room temperature)
+- ⚠️ **Warning:** Large platelet cluster (>5%) — platelet aggregation during PBMC isolation
+- ❌ **Contamination:** RBC cluster (HBB/HBA1+ cells) — Ficoll gradient failed; repeat isolation or filter HBB-high cells
+- ❌ **Contamination:** HSPC cluster (CD34+) — sample is not pure PBMC; may be bone marrow aspirate or G-CSF mobilised blood
 
 ---
 

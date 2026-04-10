@@ -128,16 +128,23 @@ HARMONY <- list(
 )
 
 # --- Canonical PBMC Marker Genes ---
+# Core immune populations
 MARKERS <- list(
   T_pan       = c("CD3D", "CD3E"),
   CD4_T       = c("CD4", "IL7R", "CCR7"),
   CD8_T       = c("CD8A", "CD8B", "GZMK"),
+  Treg        = c("FOXP3", "IL2RA", "CTLA4"),        # regulatory T cells
   NK          = c("NKG7", "GNLY", "KLRD1"),
   B_cell      = c("MS4A1", "CD79A", "CD19"),
+  Plasma      = c("MZB1", "JCHAIN", "SDC1"),          # plasma / plasmablasts
   CD14_mono   = c("CD14", "LYZ", "CST3", "S100A8"),
   FCGR3A_mono = c("FCGR3A", "MS4A7"),
+  Neutrophil  = c("FCGR3B", "CSF3R", "CXCR2", "CEACAM8"),  # inflammation marker
   DC          = c("FCER1A", "CLEC9A"),
-  Platelet    = c("PPBP", "PF4")
+  Platelet    = c("PPBP", "PF4"),
+  # Contamination indicators — presence signals poor sample quality
+  RBC         = c("HBB", "HBA1", "HBA2", "GYPA"),    # red blood cell contamination
+  HSPC        = c("CD34", "GATA2", "AVP")             # haematopoietic progenitors
 )
 
 ALL_MARKERS <- unique(unlist(MARKERS))
@@ -161,12 +168,18 @@ SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
 CELLTYPE_COLORS <- c(
   "CD4 T"        = "#E64B35",
   "CD8 T"        = "#4DBBD5",
+  "Treg"         = "#FF7F0E",
   "NK"           = "#00A087",
   "B cell"       = "#3C5488",
+  "Plasma"       = "#7B4F9E",
   "CD14+ Mono"   = "#F39B7F",
   "FCGR3A+ Mono" = "#8491B4",
+  "Neutrophil"   = "#BCBD22",
   "DC"           = "#91D1C2",
   "Platelet"     = "#DC0000",
+  # Contamination / rare populations
+  "RBC"          = "#A52A2A",
+  "HSPC"         = "#17BECF",
   "Unknown"      = "#B09C85"
 )
 
