@@ -55,8 +55,17 @@ dev.off()
 report_plots[["SingleR  -  Score Heatmap (per-cell annotation confidence)"]] <-
   singler_heatmap_path
 
-# SingleR labels UMAP
+# SingleR labels UMAP  -  Unassigned forced to grey, known types use CELLTYPE_COLORS
+singler_labels <- unique(merged$singler_label_clean)
+singler_cols   <- setNames(
+  ifelse(singler_labels == "Unassigned", "#AAAAAA",
+         ifelse(singler_labels %in% names(CELLTYPE_COLORS),
+                CELLTYPE_COLORS[singler_labels],
+                scales::hue_pal()(length(singler_labels))
+                  [seq_along(singler_labels)])),
+  singler_labels)
 p_singler <- DimPlot(merged, group.by = "singler_label_clean", reduction = "umap",
+                      cols = singler_cols,
                       label = TRUE, label.size = 3, pt.size = PLOT$pt_size, repel = TRUE) +
   labs(title = "SingleR  -  HumanPrimaryCellAtlasData") + theme_classic() +
   theme(legend.position = "right", legend.text = element_text(size = 8))
@@ -140,11 +149,10 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
   merged$cell_type[is.na(merged$cell_type)] <- "Unknown"
   message("  Using manual CLUSTER_CELLTYPE_MAP")
 } else {
-  cluster_map <- setNames(cluster_singler$majority_singler,
-                           as.character(cluster_singler$seurat_clusters))
-  merged$cell_type <- unname(cluster_map[as.character(merged$seurat_clusters)])
-  merged$cell_type[is.na(merged$cell_type)] <- "Unassigned"
-  message("  Using SingleR majority labels (set CLUSTER_CELLTYPE_MAP in config.R for manual labels)")
+  # Assign per-cell SingleR labels directly so rare types (Neutrophils, Unassigned)
+  # are not absorbed into the cluster majority and are visible in the cell type UMAP
+  merged$cell_type <- merged$singler_label_clean
+  message("  Using per-cell SingleR labels (set CLUSTER_CELLTYPE_MAP in config.R for manual labels)")
 }
 
 annot_table <- merged@meta.data %>%
@@ -160,11 +168,14 @@ write.csv(annot_table, file.path(DIRS$annotation, "cluster_annotation_table.csv"
 message("\nCluster annotation summary:")
 print(as.data.frame(annot_table))
 
-# Cell type UMAP
-ct_colors_used <- CELLTYPE_COLORS[names(CELLTYPE_COLORS) %in% unique(merged$cell_type)]
-extra <- setdiff(unique(merged$cell_type), names(CELLTYPE_COLORS))
+# Cell type UMAP  -  Unassigned → grey, known types use CELLTYPE_COLORS, rest auto-coloured
+ct_labels      <- unique(merged$cell_type)
+ct_colors_used <- CELLTYPE_COLORS[names(CELLTYPE_COLORS) %in% ct_labels]
+extra          <- setdiff(ct_labels, c(names(CELLTYPE_COLORS), "Unassigned", "Unknown"))
 if (length(extra) > 0)
   ct_colors_used <- c(ct_colors_used, setNames(hue_pal()(length(extra)), extra))
+if ("Unassigned" %in% ct_labels) ct_colors_used["Unassigned"] <- "#AAAAAA"
+if ("Unknown"    %in% ct_labels) ct_colors_used["Unknown"]    <- "#AAAAAA"
 
 p_ct <- DimPlot(merged, group.by = "cell_type", reduction = "umap",
                  cols = ct_colors_used, label = TRUE,

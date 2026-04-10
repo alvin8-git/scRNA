@@ -30,12 +30,14 @@ theme_pub <- theme_classic(base_size = 11) +
         legend.text = element_text(size = 9),
         axis.text   = element_text(size = 9))
 
-# Resolve cell type colours
+# Resolve cell type colours  -  Unassigned/Unknown forced to grey
 all_ct  <- sort(unique(merged$cell_type))
 ct_cols <- CELLTYPE_COLORS[all_ct[all_ct %in% names(CELLTYPE_COLORS)]]
-missing_ct <- setdiff(all_ct, names(CELLTYPE_COLORS))
+missing_ct <- setdiff(all_ct, c(names(CELLTYPE_COLORS), "Unassigned", "Unknown"))
 if (length(missing_ct) > 0)
   ct_cols <- c(ct_cols, setNames(hue_pal()(length(missing_ct)), missing_ct))
+if ("Unassigned" %in% all_ct) ct_cols["Unassigned"] <- "#AAAAAA"
+if ("Unknown"    %in% all_ct) ct_cols["Unknown"]    <- "#AAAAAA"
 
 # Resolve sample colours (handles novel sample names)
 sample_cols <- SAMPLE_COLORS[names(SAMPLE_COLORS) %in% SAMPLE_NAMES]
