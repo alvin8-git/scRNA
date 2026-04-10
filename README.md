@@ -138,43 +138,142 @@ Total runtime on the H1+H2 dataset (~1,200 cells): **~15–25 minutes** dependin
 
 ## Configuration
 
-All parameters are in `pipeline/config.R`. Key sections to edit:
+All parameters are centralised in `pipeline/config.R`. Open it in a text editor before running the pipeline.
+
+---
+
+### QC Thresholds
 
 ```r
-# QC thresholds
 QC <- list(
-  min_features    = 200,
-  max_features    = 6000,
-  max_percent_mt  = 20
+  min_features   = 200,    # min unique genes per cell
+  max_features   = 5000,   # max unique genes per cell  (doublet proxy)
+  min_counts     = 500,    # min total UMIs per cell
+  max_counts     = 25000,  # max total UMIs per cell
+  max_percent_mt = 20      # max mitochondrial gene %
 )
-
-# Clustering resolution
-CLUSTER <- list(default_res = 0.5, resolutions = c(0.3, 0.5, 0.8))
-
-# Manual cell type annotation (fill after inspecting annotation/canonical_markers_dotplot.pdf)
-CLUSTER_CELLTYPE_MAP <- NULL   # e.g. c("0"="CD4 T", "1"="CD8 T", ...)
 ```
 
-### Manual annotation workflow
+**Recommended values by tissue:**
 
-After the first full run, inspect `results_*/annotation/canonical_markers_dotplot.pdf`, then:
+| Parameter | Human PBMC (recommended) | Non-PBMC tissue | Notes |
+|-----------|--------------------------|-----------------|-------|
+| `min_features` | 300–500 | 200–500 | 200 is permissive; raise to exclude low-quality cells |
+| `max_features` | 4000–5000 | 6000–8000 | Cells above threshold are likely doublets |
+| `min_counts` | 500–1000 | 500–1000 | Raise for high-depth libraries |
+| `max_counts` | 15000–25000 | 20000–40000 | Generous upper cap |
+| `max_percent_mt` | **10–15%** | 20–40% | **Current default (20%) is too permissive for PBMCs** — dying/stressed cells up to 20% will be retained. Lower to 10–15% for cleaner PBMC data. Neurons and cardiomyocytes naturally have higher MT% so keep higher for those. |
 
-1. Fill `CLUSTER_CELLTYPE_MAP` in `config.R`
-2. Re-run annotation and visualization only:
+> **Tip:** Always inspect `report_qc.pdf` before finalising thresholds. The violin and scatter plots show where the natural breaks in your data are — adjust thresholds to those breaks rather than using fixed defaults.
+
+---
+
+### Cell Type Detection
+
+The pipeline detects cell types via **two independent routes**:
+
+**1. SingleR (automated, unrestricted)**
+Scores every cell against the full `HumanPrimaryCellAtlasData` reference (~30+ types) using the entire transcriptome — not just canonical markers. Cell types detectable include:
+
+- T cells (CD4, CD8, Tregs), NK cells, NKT cells
+- B cells, Plasma cells
+- Monocytes (CD14+, CD16+/FCGR3A+), Macrophages
+- Dendritic cells (mDC, pDC), Mast cells
+- Neutrophils, Eosinophils, Basophils *(if present — rare in healthy PBMC)*
+- Megakaryocytes/Platelets, Erythrocytes
+- Endothelial, Epithelial, Fibroblasts *(tissue samples)*
+
+> Rare populations like Neutrophils will be detected and labelled by SingleR even if they are not in your canonical `MARKERS` list.
+
+**2. Manual annotation via `CLUSTER_CELLTYPE_MAP`**
+You assign any label you choose after inspecting the dot plot. The canonical markers are only used for visualisation — cluster discovery uses all 2,000 HVGs.
+
+---
+
+### Canonical Marker Genes
+
+These are used only for **feature plots and dot plots** (visual QC). They do not affect clustering or SingleR annotation.
+
+```r
+MARKERS <- list(
+  T_pan       = c("CD3D", "CD3E"),
+  CD4_T       = c("CD4", "IL7R", "CCR7"),
+  CD8_T       = c("CD8A", "CD8B", "GZMK"),
+  NK          = c("NKG7", "GNLY", "KLRD1"),
+  B_cell      = c("MS4A1", "CD79A", "CD19"),
+  CD14_mono   = c("CD14", "LYZ", "CST3", "S100A8"),
+  FCGR3A_mono = c("FCGR3A", "MS4A7"),
+  DC          = c("FCER1A", "CLEC9A"),
+  Platelet    = c("PPBP", "PF4")
+)
+```
+
+To add markers for additional cell types (e.g. Neutrophils, Tregs):
+```r
+MARKERS$Neutrophil <- c("FCGR3B", "CSF3R", "S100A9", "CXCR2")
+MARKERS$Treg       <- c("FOXP3", "IL2RA", "CTLA4")
+```
+
+---
+
+### Clustering Resolution
+
+```r
+CLUSTER <- list(
+  resolutions = c(0.3, 0.4, 0.5, 0.6, 0.8),  # all tested; stored in metadata
+  default_res = 0.5,                            # used for downstream analysis
+  algorithm   = 1                               # 1 = Louvain, 4 = Leiden
+)
+```
+
+| Resolution | Typical clusters (PBMC ~1000 cells) | Use when |
+|-----------|--------------------------------------|----------|
+| 0.3 | 8–10 | Starting point; broad populations |
+| 0.5 | 12–15 | **Default — good for most PBMC runs** |
+| 0.8 | 18–22 | Needed to split CD4/CD8 T or mono subtypes |
+
+> Inspect the elbow plot in `report_individual.pdf` and the cluster UMAP at multiple resolutions before finalising.
+
+---
+
+### Manual Annotation Workflow
+
+After the first full run:
+
+1. Open `results_*/annotation/canonical_markers_dotplot.pdf`
+2. For each cluster, identify which lineage markers are expressed (large bright dots)
+3. Fill `CLUSTER_CELLTYPE_MAP` in `config.R`:
+   ```r
+   CLUSTER_CELLTYPE_MAP <- c(
+     "0" = "CD4 T",
+     "1" = "CD8 T",
+     "2" = "NK",
+     "3" = "B cell",
+     "4" = "CD14+ Mono",
+     "5" = "FCGR3A+ Mono",
+     "6" = "DC",
+     "7" = "Platelet"
+   )
+   ```
+4. Re-run annotation and visualisation only:
    ```bash
    bash pipeline/run_pipeline.sh /path/to/S1 /path/to/S2 05 06 07
    ```
 
+> If `CLUSTER_CELLTYPE_MAP` is `NULL`, SingleR majority labels are used automatically as a fallback.
+
 ---
 
-## Adapting for other species or tissues
+## Adapting for Other Species or Tissues
 
-| Parameter | Location | Example change |
-|-----------|----------|----------------|
-| MT gene pattern | `config.R` `QC$mt_pattern` | `"^MT-"` → `"^mt-"` (mouse) |
-| SingleR reference | `05_annotate.R` line ~36 | `HumanPrimaryCellAtlasData()` → `MouseRNAseqData()` |
+| Parameter | Location | Example |
+|-----------|----------|---------|
+| MT gene pattern | `config.R` line ~34 | `"^MT-"` → `"^mt-"` (mouse) |
+| `max_percent_mt` | `config.R` `QC` list | 20 → 35 (heart/brain tissue) |
+| SingleR reference | `05_annotate.R` line ~36 | `HumanPrimaryCellAtlasData()` → `MouseRNAseqData()` or `ImmGenData()` |
 | Canonical markers | `config.R` `MARKERS` list | Replace with tissue-specific genes |
-| Cell type colours | `config.R` `CELLTYPE_COLORS` | Update to match expected types |
+| Cell type colours | `config.R` `CELLTYPE_COLORS` | Update names to match expected types |
+| Harmony theta | `config.R` `HARMONY$theta` | 2 → 3–5 for strong batch effects |
 
 ---
 
