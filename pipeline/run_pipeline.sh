@@ -75,14 +75,26 @@ _sample_name() {
     echo "$bn"
   fi
 }
+_matrix_tag() {
+  local bn; bn=$(basename "$1")
+  if [[ "$bn" == "raw_matrix" || "$bn" == "raw_feature_bc_matrix" ]]; then
+    echo "raw"
+  else
+    echo "filtered"
+  fi
+}
 if [[ $N_SAMPLES -gt 0 ]]; then
-  _parts=()
-  for p in "${SAMPLE_PATHS[@]}"; do _parts+=("$(_sample_name "$p")"); done
+  _parts=(); _any_raw=false
+  for p in "${SAMPLE_PATHS[@]}"; do
+    _parts+=("$(_sample_name "$p")")
+    [[ "$(_matrix_tag "$p")" == "raw" ]] && _any_raw=true
+  done
   _suffix="${_parts[0]}"
   for (( _j=1; _j<${#_parts[@]}; _j++ )); do _suffix="${_suffix}and${_parts[$_j]}"; done
-  RESULTS_DIR="${BASE_DIR}/results_${_suffix}"
+  $_any_raw && _mtag="raw" || _mtag="filtered"
+  RESULTS_DIR="${BASE_DIR}/results_${_suffix}_${_mtag}"
 else
-  RESULTS_DIR="${BASE_DIR}/results_H1andH2"  # matches hardcoded config.R defaults
+  RESULTS_DIR="${BASE_DIR}/results_H1andH2_filtered"  # matches hardcoded config.R defaults
 fi
 LOG_DIR="${RESULTS_DIR}/logs"
 mkdir -p "${LOG_DIR}"

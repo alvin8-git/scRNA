@@ -13,12 +13,14 @@ PIPELINE_DIR <- file.path(BASE_DIR, "pipeline")
 # Integration (Harmony) runs automatically when >1 sample is provided.
 # If no env vars set, falls back to hardcoded defaults below.
 
+.FILTERED_DIRS <- c("filter_matrix", "filtered_feature_bc_matrix")
+.RAW_DIRS      <- c("raw_matrix", "raw_feature_bc_matrix")
+.MATRIX_DIRS   <- c(.FILTERED_DIRS, .RAW_DIRS)
+
 .resolve_sample_path <- function(path) {
   matrix_files <- c("matrix.mtx.gz", "matrix.mtx", "barcodes.tsv.gz", "barcodes.tsv")
   if (any(file.exists(file.path(path, matrix_files)))) return(normalizePath(path))
-  # Check known subfolder names in priority order
-  for (sub in c("filter_matrix", "filtered_feature_bc_matrix",
-                "raw_matrix", "raw_feature_bc_matrix")) {
+  for (sub in .MATRIX_DIRS) {
     cand <- file.path(path, sub)
     if (dir.exists(cand)) return(normalizePath(cand))
   }
@@ -27,10 +29,13 @@ PIPELINE_DIR <- file.path(BASE_DIR, "pipeline")
 
 .resolve_sample_name <- function(path) {
   bn <- basename(normalizePath(path, mustWork = FALSE))
-  if (bn %in% c("filter_matrix", "filtered_feature_bc_matrix",
-                "raw_matrix", "raw_feature_bc_matrix"))
+  if (bn %in% .MATRIX_DIRS)
     return(basename(dirname(normalizePath(path, mustWork = FALSE))))
   bn
+}
+
+.matrix_tag <- function(resolved_path) {
+  if (basename(resolved_path) %in% .RAW_DIRS) "raw" else "filtered"
 }
 
 # Collect all SCRNA_SAMPLE{N} env vars in order
@@ -57,7 +62,12 @@ if (length(.env_paths) > 0) {
   )
   SAMPLE_NAMES <- c("H1", "H2")
 }
-rm(.env_paths, .i, .val, .resolve_sample_path, .resolve_sample_name)
+
+# Append _filtered or _raw so runs on the same sample stay in separate folders
+.tags   <- sapply(unlist(SAMPLE_PATHS), .matrix_tag)
+.mtag   <- if (any(.tags == "raw")) "raw" else "filtered"
+rm(.env_paths, .i, .val, .FILTERED_DIRS, .RAW_DIRS, .MATRIX_DIRS,
+   .resolve_sample_path, .resolve_sample_name, .matrix_tag, .tags)
 
 SINGLE_SAMPLE <- length(SAMPLE_NAMES) == 1
 
@@ -65,8 +75,9 @@ SINGLE_SAMPLE <- length(SAMPLE_NAMES) == 1
 # Single sample  : results_H1/
 # Multiple samples: results_H1andH2/  or  results_H1andH2andH3/
 RESULTS_DIR <- file.path(BASE_DIR,
-  paste0("results_", paste(SAMPLE_NAMES, collapse = "and"))
+  paste0("results_", paste(SAMPLE_NAMES, collapse = "and"), "_", .mtag)
 )
+rm(.mtag)
 
 # --- QC Thresholds ---
 QC <- list(
