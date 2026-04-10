@@ -68,7 +68,8 @@ fi
 # Derives sample name from path: uses parent of filter_matrix, else basename
 _sample_name() {
   local bn; bn=$(basename "$1")
-  if [[ "$bn" == "filter_matrix" || "$bn" == "filtered_feature_bc_matrix" ]]; then
+  if [[ "$bn" == "filter_matrix" || "$bn" == "filtered_feature_bc_matrix" ||
+        "$bn" == "raw_matrix"    || "$bn" == "raw_feature_bc_matrix" ]]; then
     basename "$(dirname "$1")"
   else
     echo "$bn"

@@ -16,14 +16,19 @@ PIPELINE_DIR <- file.path(BASE_DIR, "pipeline")
 .resolve_sample_path <- function(path) {
   matrix_files <- c("matrix.mtx.gz", "matrix.mtx", "barcodes.tsv.gz", "barcodes.tsv")
   if (any(file.exists(file.path(path, matrix_files)))) return(normalizePath(path))
-  sub <- file.path(path, "filter_matrix")
-  if (dir.exists(sub)) return(normalizePath(sub))
+  # Check known subfolder names in priority order
+  for (sub in c("filter_matrix", "filtered_feature_bc_matrix",
+                "raw_matrix", "raw_feature_bc_matrix")) {
+    cand <- file.path(path, sub)
+    if (dir.exists(cand)) return(normalizePath(cand))
+  }
   normalizePath(path, mustWork = FALSE)
 }
 
 .resolve_sample_name <- function(path) {
   bn <- basename(normalizePath(path, mustWork = FALSE))
-  if (bn %in% c("filter_matrix", "filtered_feature_bc_matrix", "raw_feature_bc_matrix"))
+  if (bn %in% c("filter_matrix", "filtered_feature_bc_matrix",
+                "raw_matrix", "raw_feature_bc_matrix"))
     return(basename(dirname(normalizePath(path, mustWork = FALSE))))
   bn
 }
