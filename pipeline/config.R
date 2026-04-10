@@ -207,6 +207,69 @@ set_page <- function(p, pw = 8.5, ph = 7.5, small = FALSE) {
 }
 mark_small <- function(p) set_page(p, pw = 8.0, ph = 5.0, small = TRUE)
 
+# --- Per-plot caption lookup (pattern → "description\nGood: ... | Bad: ...") ---
+PLOT_CAPTIONS <- list(
+  "QC Violin" =
+    "Gene count, UMI count, and mitochondrial % distributions per cell.\nGood: Unimodal peaks; %MT median < 10%.  Bad: Bimodal nFeature or high %MT peak (dead/lysed cells).",
+  "QC Scatter" =
+    "UMI vs genes (left) and UMI vs %MT (right). Red dashed lines = filter thresholds.\nGood: Tight diagonal band; cells inside threshold box.  Bad: Cloud above %MT line or below gene line (empty drops / dying cells).",
+  "Doublet.*UMAP" =
+    "UMAP coloured by doublet (red) vs singlet (grey) classification from scDblFinder.\nGood: Doublets at cluster boundaries (mixed-identity droplets).  Bad: Doublets spread uniformly = miscalibrated rate or poor library.",
+  "Doublet.*Hist|Score Dist" =
+    "Doublet probability score distribution (0 = singlet, 1 = doublet).\nGood: Bimodal — large peak near 0, small peak near 1.  Bad: Single broad peak = doublets indistinguishable from singlets.",
+  "Variable Genes|Highly Variable" =
+    "All genes by average expression vs variance; top 2000 HVGs (red) drive PCA.\nGood: Smooth curve; known markers (CD3D, CD14) in top HVGs.  Bad: Only ribo/MT genes in top 10 = normalisation issue.",
+  "Elbow" =
+    "Variance explained per PC; red dashed line = PCs used for UMAP and clustering.\nGood: Clear elbow with cutoff just past it (PC 10-20 for PBMC).  Bad: No elbow = no structure; cutoff before elbow = noisy clusters.",
+  "PC Heatmap" =
+    "Top/bottom loading genes per PC across cells ordered by PC score.\nGood: Distinct gradient with known markers per PC.  Bad: Ribo (RPL/RPS) or stress genes dominate = technical, not biological, PCs.",
+  "UMAP.*Cluster|Cluster.*UMAP" =
+    "UMAP embedding coloured by Seurat cluster identity.\nGood: Compact, well-separated clusters.  Bad: One blob = too few PCs; many tiny clusters = resolution too high.",
+  "Top.*Marker.*Dot|Dot.*Top.*Marker" =
+    "Top 5 DE genes per cluster: dot size = % expressing, colour = avg expression.\nGood: Each cluster has unique markers.  Bad: Shared markers or low fold-change = unresolved populations.",
+  "Canonical Marker.*Feature|Feature.*Canonical" =
+    "Canonical PBMC marker expression overlaid on UMAP (grey = low, red = high).\nGood: Each marker enriched in one UMAP region.  Bad: Diffuse uniform expression = normalisation failure or very noisy data.",
+  "SingleR.*Score Heatmap|Score Heatmap" =
+    "SingleR reference scores per cell (columns) vs reference cell types (rows).\nGood: One bright score per cell, rest dark = confident annotation.  Bad: Uniformly moderate scores = ambiguous cell type.",
+  "SingleR.*Label|Labels.*UMAP" =
+    "UMAP coloured by pruned SingleR automated cell type labels.\nGood: Labels spatially coherent and match expected tissue types.  Bad: Scattered labels = wrong reference; many 'Unassigned' = reference gap.",
+  "SingleR.*Delta|Delta Score" =
+    "SingleR annotation confidence (top score minus second-best) on UMAP.\nGood: High delta (dark blue) in cluster centres.  Bad: All low delta (<0.1) = reference cannot discriminate cell types.",
+  "Canonical PBMC Markers Dot" =
+    "Canonical PBMC markers vs clusters — use this to fill CLUSTER_CELLTYPE_MAP in config.R.\nGood: Each cluster expresses one lineage's markers clearly.  Bad: Mixed or absent signal = unresolved clusters or wrong tissue.",
+  "Feature.*T Cell|T Cell.*Marker" =
+    "T cell marker expression (CD3D, CD4, CD8A, CCR7, GZMK) on UMAP.\nGood: CD3D marks all T cells; CD4/CD8A localise to separate non-overlapping regions.  Bad: Full overlap = CD4/CD8 not resolved.",
+  "Feature.*NK|NK.*Marker" =
+    "NK cell markers (NKG7, GNLY, KLRD1) on UMAP.\nGood: Co-localised region distinct from CD3D+ T cells.  Bad: Same region as T cells = NK/cytotoxic T not separated.",
+  "Feature.*B Cell|B Cell.*Marker" =
+    "B cell markers (MS4A1, CD79A, CD19) on UMAP.\nGood: Tight co-expression in an isolated cluster.  Bad: MS4A1 in monocyte region = likely annotation error.",
+  "Feature.*Mono|Mono.*Marker" =
+    "Monocyte markers (CD14, LYZ, FCGR3A, MS4A7) on UMAP.\nGood: CD14 and FCGR3A mark adjacent but distinct sub-clusters.  Bad: Full overlap = CD14/FCGR3A monocytes unresolved.",
+  "Feature.*DC|DC.*Platelet" =
+    "DC (FCER1A, CLEC9A) and platelet (PPBP, PF4) markers — typically rare populations.\nGood: Small but distinct expression clusters.  Bad: Absent = rare types filtered out or too few cells to cluster.",
+  "Cell Type.*UMAP|UMAP.*Cell Type" =
+    "UMAP coloured by final annotated cell type labels.\nGood: Spatially coherent, non-overlapping regions per type.  Bad: Intermixed types = annotation errors or insufficient cluster resolution.",
+  "Harmony|Before.*After|After.*Harmony" =
+    "UMAP by sample before (left) and after (right) Harmony batch correction.\nGood: Samples separate before; fully intermixed by cell type after.  Bad: Still separated after = increase HARMONY\\$theta (try 3-5).",
+  "Split.*Sample|UMAP.*Split" =
+    "Integrated UMAP split per sample — same embedding, one panel each.\nGood: Similar cluster layout and proportions across samples.  Bad: Missing clusters in one sample = absent cell type or sample QC failure.",
+  "Canonical.*Cell Type|Dot.*Cell Type" =
+    "Canonical markers vs annotated cell types: size = % expressing, colour = avg expression.\nGood: Diagonal specificity — each type expresses its expected markers only.  Bad: Cross-lineage expression = annotation needs refinement.",
+  "Heatmap.*Marker|Top.*Markers.*Cluster" =
+    "Top 3 DE genes per cluster across downsampled cells, grouped by annotated cell type.\nGood: Clear colour blocks per cell type.  Bad: Markers bleed across types = similar populations or incorrect annotation.",
+  "Composition|Proportion|% of Sample|Number of Cells" =
+    "Cell type proportions (%) and absolute counts per sample.\nGood: Consistent proportions across samples for stable populations.  Bad: Large differences = biological variation or uncorrected batch effect.",
+  "Violin.*Marker|Key.*Lineage|Key Marker" =
+    "Expression of 8 key lineage marker genes across annotated cell types.\nGood: Each marker high in its expected type and near-zero in all others.  Bad: Broad expression = cell type labels need revision."
+)
+
+.get_caption <- function(nm) {
+  if (is.null(nm) || is.na(nm) || nchar(nm) == 0) return(NULL)
+  for (pat in names(PLOT_CAPTIONS))
+    if (grepl(pat, nm, ignore.case = TRUE, perl = TRUE)) return(PLOT_CAPTIONS[[pat]])
+  NULL
+}
+
 # Combine a vector of PDF file paths into one PDF
 .combine_pdfs <- function(files, output) {
   files <- files[file.exists(files)]
@@ -234,16 +297,28 @@ save_report_pdf <- function(plots, filepath) {
   suppressPackageStartupMessages({ library(cowplot); library(ggplot2) })
 
   wrap_gg <- function(p, nm) {
-    if (is.null(nm) || is.na(nm) || nchar(nm) == 0) return(p)
-    if (inherits(p, "patchwork")) {
-      return(p + patchwork::plot_annotation(
-        title = nm,
-        theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0))
-      ))
+    # 1. Title banner
+    if (!is.null(nm) && !is.na(nm) && nchar(nm) > 0) {
+      if (inherits(p, "patchwork")) {
+        p <- p + patchwork::plot_annotation(
+          title = nm,
+          theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0))
+        )
+      } else {
+        title_row <- ggdraw() +
+          draw_label(nm, fontface = "bold", size = 13, x = 0.04, y = 0.5, hjust = 0)
+        p <- plot_grid(title_row, p, ncol = 1, rel_heights = c(0.06, 0.94))
+      }
     }
-    title_row <- ggdraw() +
-      draw_label(nm, fontface = "bold", size = 13, x = 0.04, y = 0.5, hjust = 0)
-    plot_grid(title_row, p, ncol = 1, rel_heights = c(0.06, 0.94))
+    # 2. Caption row (description + Good/Bad guide)
+    cap <- .get_caption(nm)
+    if (!is.null(cap)) {
+      cap_row <- ggdraw() +
+        draw_label(cap, size = 7.5, color = "#444444",
+                   x = 0.02, y = 0.55, hjust = 0, vjust = 1, lineheight = 1.3)
+      p <- plot_grid(p, cap_row, ncol = 1, rel_heights = c(1, 0.14))
+    }
+    p
   }
 
   `%||%` <- function(x, y) if (!is.null(x) && length(x) > 0) x else y
