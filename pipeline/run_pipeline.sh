@@ -100,14 +100,45 @@ LOG_DIR="${RESULTS_DIR}/logs"
 mkdir -p "${LOG_DIR}"
 
 # =============================================================================
-# Check conda environment
+# Ensure conda environment is active — auto-activate if needed
 # =============================================================================
 if [[ "${CONDA_DEFAULT_ENV:-}" != "${CONDA_ENV}" ]]; then
-  warn "Conda environment '${CONDA_ENV}' is not active."
-  warn "Run: conda activate ${CONDA_ENV}"
-  echo ""
-  read -rp "Continue anyway? [y/N] " yn
-  [[ "${yn,,}" == "y" ]] || exit 1
+  log "Conda env '${CONDA_ENV}' not active — attempting to activate..."
+
+  # Locate conda's shell init script
+  _conda_sh=""
+  _conda_base="$(conda info --base 2>/dev/null)"
+  [[ -f "${_conda_base}/etc/profile.d/conda.sh" ]] && \
+    _conda_sh="${_conda_base}/etc/profile.d/conda.sh"
+
+  # Fallback: common install locations
+  if [[ -z "$_conda_sh" ]]; then
+    for _c in "${HOME}/miniconda3" "${HOME}/miniforge3" \
+               "${HOME}/anaconda3" "/opt/conda" "/usr/local/anaconda3"; do
+      if [[ -f "${_c}/etc/profile.d/conda.sh" ]]; then
+        _conda_sh="${_c}/etc/profile.d/conda.sh"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$_conda_sh" ]]; then
+    err "Cannot find conda init script. Activate manually:"
+    err "  conda activate ${CONDA_ENV}"
+    exit 1
+  fi
+
+  # shellcheck source=/dev/null
+  source "$_conda_sh"
+
+  if ! conda activate "${CONDA_ENV}" 2>/dev/null; then
+    err "Environment '${CONDA_ENV}' not found."
+    err "Create it with:  bash ${PIPELINE_DIR}/setup_env.sh"
+    exit 1
+  fi
+  log "Activated conda env: ${CONDA_ENV}"
+else
+  log "Conda env '${CONDA_ENV}' already active."
 fi
 
 # =============================================================================
