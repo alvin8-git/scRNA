@@ -72,7 +72,12 @@ ggsave(file.path(DIRS$integrated, "integrated_umap_sample.pdf"),
 ggsave(file.path(DIRS$integrated, "integrated_umap_celltype.pdf"),
        p3, width = PLOT$width, height = PLOT$height, dpi = PLOT$dpi)
 
-p_trip <- p1 | p2 | p3
+# Triptych: re-create p3 with smaller labels to avoid clutter
+p3_trip <- DimPlot(merged, group.by = "cell_type", reduction = "umap", cols = ct_cols,
+                    label = TRUE, label.size = 2.5, repel = TRUE,
+                    pt.size = PLOT$pt_size) +
+  labs(title = "Cell Type") + theme_pub
+p_trip <- p1 | p2 | p3_trip
 ggsave(file.path(DIRS$integrated, "umap_triptych.pdf"),
        p_trip, width = 24, height = 7, dpi = PLOT$dpi)
 
@@ -101,19 +106,39 @@ if (!SINGLE_SAMPLE) {
 # =============================================================================
 message("\n--- Plot Set 3: Feature plots ---")
 
-plot_features <- function(genes, title, filename) {
+# Paginated feature plot: 3 cols x 2 rows per page (genes_per_page = 6)
+plot_features <- function(genes, title, filename, genes_per_page = 6L) {
   genes <- genes[genes %in% rownames(merged)]
   if (length(genes) == 0) { message("  Skipped ", filename); return(invisible(NULL)) }
-  ncols <- min(3, length(genes))
-  nrows <- ceiling(length(genes) / ncols)
-  p <- FeaturePlot(merged, features = genes, reduction = "umap", ncol = ncols,
-                    pt.size = 0.4, order = TRUE, cols = c("lightgrey", "#E64B35")) &
-    theme_pub & theme(axis.text = element_blank(), axis.ticks = element_blank(),
-                      plot.title = element_text(size = 10))
-  ggsave(file.path(DIRS$integrated, filename),
-         p, width = ncols * 4.5, height = nrows * 4, dpi = PLOT$dpi)
-  report_plots[[title]] <<- set_page(p, pw = min(ncols * 4.5, 11),
-                                      ph = min(nrows * 4, 9))
+
+  chunks  <- split(genes, ceiling(seq_along(genes) / genes_per_page))
+  n_pages <- length(chunks)
+
+  # Build one ggplot per page
+  page_plots <- lapply(chunks, function(gchunk) {
+    ncols <- min(3L, length(gchunk))
+    FeaturePlot(merged, features = gchunk, reduction = "umap", ncol = ncols,
+                pt.size = 0.4, order = TRUE, cols = c("lightgrey", "#E64B35")) &
+      theme_pub & theme(axis.text = element_blank(), axis.ticks = element_blank(),
+                        plot.title = element_text(size = 10))
+  })
+
+  # Save multi-page PDF (one page per chunk)
+  pdf_path <- file.path(DIRS$integrated, filename)
+  pdf(pdf_path, width = 3 * 4.5, height = 2 * 4)
+  for (p in page_plots) print(p)
+  dev.off()
+
+  # Add each page to report_plots
+  for (ci in seq_along(page_plots)) {
+    gchunk   <- chunks[[ci]]
+    ncols    <- min(3L, length(gchunk))
+    nrows    <- ceiling(length(gchunk) / ncols)
+    pg_title <- if (n_pages > 1) paste0(title, "  (", ci, "/", n_pages, ")") else title
+    report_plots[[pg_title]] <<- set_page(page_plots[[ci]],
+                                           pw = min(ncols * 4.5, 11),
+                                           ph = min(nrows * 4, 9))
+  }
 }
 
 plot_features(c(MARKERS$T_pan, MARKERS$CD4_T, MARKERS$CD8_T),
@@ -126,6 +151,10 @@ plot_features(c(MARKERS$CD14_mono, MARKERS$FCGR3A_mono),
               "Feature Plot  -  Monocyte Markers", "feature_monocytes.pdf")
 plot_features(c(MARKERS$DC, MARKERS$Platelet),
               "Feature Plot  -  DC & Platelet Markers", "feature_DC_platelet.pdf")
+plot_features(MARKERS$Neutrophil,
+              "Feature Plot  -  Neutrophil Markers", "feature_neutrophils.pdf")
+plot_features(MARKERS$RBC,
+              "Feature Plot  -  RBC Markers (Contamination)", "feature_rbc.pdf")
 plot_features(ALL_MARKERS,
               "Feature Plot  -  All Canonical Markers", "feature_all_canonical_markers.pdf")
 
@@ -137,8 +166,9 @@ message("\n--- Plot Set 4: Dot plot ---")
 markers_in_data <- ALL_MARKERS[ALL_MARKERS %in% rownames(merged)]
 p_dot <- DotPlot(merged, features = markers_in_data, group.by = "cell_type",
                   dot.scale = 8, dot.min = 0.01) +
-  scale_color_viridis_c(option = "plasma") + RotatedAxis() +
-  labs(title = "Canonical PBMC Markers × Cell Type", x = NULL, y = NULL) + theme_pub
+  scale_color_viridis_c(option = "plasma") +
+  labs(title = "Canonical PBMC Markers × Cell Type", x = NULL, y = NULL) + theme_pub +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8))
 ggsave(file.path(DIRS$integrated, "integrated_dotplot.pdf"),
        p_dot, width = 16, height = 7, dpi = PLOT$dpi)
 report_plots[["Dot Plot  -  Canonical Markers × Cell Type"]] <-
@@ -174,7 +204,8 @@ cells_use <- unlist(tapply(colnames(merged), merged$cell_type,
                     use.names = FALSE)
 
 p_heatmap <- DoHeatmap(subset(merged, cells = cells_use), features = top3_genes,
-                        group.by = "cell_type", slot = "data", size = 3) +
+                        group.by = "cell_type", group.colors = ct_cols,
+                        slot = "data", size = 3) +
   scale_fill_viridis_c() +
   theme(axis.text.y = element_text(size = 7))
 ggsave(file.path(DIRS$integrated, "integrated_heatmap.pdf"),

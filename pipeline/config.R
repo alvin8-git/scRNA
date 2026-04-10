@@ -174,12 +174,12 @@ CELLTYPE_COLORS <- c(
   "Plasma"       = "#7B4F9E",
   "CD14+ Mono"   = "#F39B7F",
   "FCGR3A+ Mono" = "#8491B4",
-  "Neutrophil"   = "#BCBD22",
+  "Neutrophil"   = "#E377C2",   # pink — distinct from NK teal
   "DC"           = "#91D1C2",
   "Platelet"     = "#DC0000",
   # Contamination / rare populations
   "RBC"          = "#A52A2A",
-  "HSPC"         = "#17BECF",
+  "HSPC"         = "#8C564B",   # brown — distinct from Monocyte salmon
   "Unknown"      = "#B09C85"
 )
 
