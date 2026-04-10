@@ -45,8 +45,9 @@ SAMPLE_PATHS=()
 STEPS_ARGS=()
 
 for arg in "$@"; do
-  if [[ "$arg" == /* ]]; then
-    SAMPLE_PATHS+=("$arg")
+  # Treat as sample path if absolute, relative directory, or starts with ./ or ../
+  if [[ "$arg" == /* ]] || [[ -d "$arg" ]] || [[ "$arg" == ./* ]] || [[ "$arg" == ../* ]]; then
+    SAMPLE_PATHS+=("$(realpath "$arg")")
   else
     STEPS_ARGS+=("$arg")
   fi
