@@ -1,0 +1,22 @@
+# Raw data and sample folders
+H1/
+H2/
+Sample1/
+Sample2/
+
+# Results (large RDS, PDF outputs)
+results*/
+
+# R artifacts
+Rplots.pdf
+*.rds
+*.RDS
+
+# Presentations
+*.pptx
+
+# Logs
+*.log
+
+# OS
+.DS_Store
