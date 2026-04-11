@@ -150,6 +150,26 @@ if (SINGLE_SAMPLE) {
          p_cluster, width = PLOT$width, height = PLOT$height, dpi = PLOT$dpi)
   report_plots[["Integrated  -  UMAP Clusters"]] <- set_page(p_cluster, 8.5, 7.5)
 
+  # Harmony mixing quality: flag clusters dominated by a single sample
+  cluster_mix <- merged@meta.data %>%
+    group_by(seurat_clusters, sample) %>% summarise(n = n(), .groups = "drop") %>%
+    group_by(seurat_clusters) %>%
+    mutate(prop = n / sum(n)) %>%
+    summarise(max_pct         = round(max(prop) * 100, 1),
+              dominant_sample = sample[which.max(prop)],
+              .groups = "drop")
+  message("\n--- Harmony mixing quality (per cluster) ---")
+  print(as.data.frame(cluster_mix))
+  unmixed <- cluster_mix[cluster_mix$max_pct > 80, ]
+  if (nrow(unmixed) > 0) {
+    message("  WARNING: ", nrow(unmixed), " cluster(s) still >80% from one sample: ",
+            paste(unmixed$seurat_clusters, collapse = ", "),
+            "\n  Consider increasing HARMONY$theta from ", HARMONY$theta, " to ",
+            HARMONY$theta + 2, "-", HARMONY$theta + 4)
+  } else {
+    message("  Good mixing: no cluster is >80% from a single sample.")
+  }
+
   p_sample <- DimPlot(merged, reduction = "umap",
                        group.by = "sample", cols = sample_cols, pt.size = PLOT$pt_size) +
     labs(title = "Integrated  -  by Sample") + theme_classic()
@@ -163,6 +183,31 @@ if (SINGLE_SAMPLE) {
   ggsave(file.path(DIRS$integrated, "integrated_umap_split_sample.pdf"),
          p_split, width = 14, height = 7, dpi = PLOT$dpi)
   report_plots[["Integrated  -  UMAP Split by Sample"]] <- set_page(p_split, pw = 11, ph = 5.5)
+}
+
+# =============================================================================
+# Resolution comparison UMAP (both paths)
+# =============================================================================
+compare_res <- intersect(CLUSTER$compare_res %||% c(0.5, 0.6, 0.8), CLUSTER$resolutions)
+if (length(compare_res) >= 2) {
+  message("\n--- Resolution comparison: ", paste(compare_res, collapse = ", "), " ---")
+  p_res_list <- lapply(compare_res, function(res) {
+    col  <- paste0("RNA_snn_res.", res)
+    n_cl <- length(unique(merged@meta.data[[col]]))
+    message("  res=", res, ": ", n_cl, " clusters")
+    DimPlot(merged, reduction = "umap", group.by = col,
+            label = TRUE, label.size = 3, pt.size = 0.4) +
+      labs(title = paste0("res=", res, "  (", n_cl, " clusters)")) +
+      theme_classic() +
+      theme(legend.position = "none",
+            plot.title = element_text(size = 11, face = "bold"))
+  })
+  p_res_compare <- wrap_plots(p_res_list, nrow = 1)
+  res_w <- length(compare_res) * 5
+  ggsave(file.path(DIRS$integrated, "cluster_resolution_comparison.pdf"),
+         p_res_compare, width = res_w, height = 5.5, dpi = PLOT$dpi)
+  report_plots[["Cluster Resolution Comparison  -  UMAP at Multiple Resolutions"]] <-
+    set_page(p_res_compare, pw = min(res_w, 11), ph = 5.5)
 }
 
 # =============================================================================

@@ -114,7 +114,17 @@ DIM <- list(
 CLUSTER <- list(
   resolutions = c(0.3, 0.4, 0.5, 0.6, 0.8),
   default_res = 0.5,
+  compare_res = c(0.5, 0.6, 0.8),   # resolutions shown side-by-side in comparison UMAP
   algorithm   = 1
+)
+
+# --- T Cell Sub-clustering ---
+# Set enabled = FALSE to skip.  t_patterns is a regex matched against cell_type labels.
+SUBCLUSTER <- list(
+  enabled    = TRUE,
+  t_patterns = "T[_ ]cell|T cell|CD4|CD8|Treg|cytotox",
+  resolution = 1.2,    # higher res → more sub-clusters
+  min_cells  = 20      # skip if fewer T cells than this
 )
 
 # --- Harmony Integration ---
@@ -191,6 +201,9 @@ PLOT <- list(
   pt_size    = 0.8,
   label_size = 4
 )
+
+# --- Utility ---
+`%||%` <- function(x, y) if (!is.null(x) && length(x) > 0) x else y
 
 # --- Output Subdirectories ---
 DIRS <- list(

@@ -185,6 +185,137 @@ ggsave(file.path(DIRS$annotation, "celltype_umap.pdf"),
        p_ct, width = PLOT$width + 2, height = PLOT$height, dpi = PLOT$dpi)
 report_plots[["Integrated  -  Cell Type UMAP"]] <- set_page(p_ct, 8.5, 7.5)
 
+# =============================================================================
+# PART 4: DC and monocyte sub-type presence check
+# =============================================================================
+message("\n--- DC & monocyte sub-type check ---")
+check_markers <- function(genes, label) {
+  present <- genes[genes %in% rownames(merged)]
+  if (length(present) == 0) {
+    message("  ", label, ": marker genes not found in dataset — may be absent or filtered")
+    return(invisible(NULL))
+  }
+  expr <- GetAssayData(merged, assay = "RNA", layer = "data")[present, , drop = FALSE]
+  pct_expressing <- round(rowMeans(expr > 0) * 100, 1)
+  message("  ", label, ": ", paste0(present, " (", pct_expressing, "% cells +ve)", collapse = ", "))
+}
+check_markers(MARKERS$DC,          "Dendritic cells  (FCER1A, CLEC9A)")
+check_markers(MARKERS$CD14_mono,   "CD14+ Monocytes  (CD14, LYZ, CST3, S100A8)")
+check_markers(MARKERS$FCGR3A_mono, "FCGR3A+ Monocytes (FCGR3A, MS4A7)")
+
+# Confirm monocyte sub-types are resolved in separate clusters
+mono_genes <- c("CD14", "FCGR3A")
+mono_present <- mono_genes[mono_genes %in% rownames(merged)]
+if (length(mono_present) == 2) {
+  expr_mat   <- GetAssayData(merged, assay = "RNA", layer = "data")[mono_genes, ]
+  meta       <- merged@meta.data
+  meta$cd14_hi   <- as.numeric(expr_mat["CD14",   ] > 0)
+  meta$fcgr3a_hi <- as.numeric(expr_mat["FCGR3A", ] > 0)
+  per_cluster <- meta %>%
+    group_by(seurat_clusters) %>%
+    summarise(pct_CD14   = round(mean(cd14_hi)   * 100, 1),
+              pct_FCGR3A = round(mean(fcgr3a_hi) * 100, 1),
+              n = n(), .groups = "drop") %>%
+    filter(pct_CD14 > 10 | pct_FCGR3A > 10) %>%
+    arrange(desc(pct_CD14))
+  if (nrow(per_cluster) > 0) {
+    message("  Monocyte marker expression by cluster:")
+    print(as.data.frame(per_cluster))
+    if (n_distinct(per_cluster$seurat_clusters) < 2)
+      message("  NOTE: CD14+ and FCGR3A+ monocytes may share a cluster — ",
+              "try CLUSTER$default_res = 0.6 or 0.8")
+    else
+      message("  CD14+ and FCGR3A+ monocytes appear in separate clusters — looks good.")
+  }
+}
+
+# =============================================================================
+# PART 5: T cell sub-clustering
+# =============================================================================
+if (isTRUE(SUBCLUSTER$enabled)) {
+  message("\n--- T cell sub-clustering (res=", SUBCLUSTER$resolution, ") ---")
+
+  # Identify clusters whose majority cell type matches T cell patterns
+  t_clusters <- annot_table %>%
+    filter(grepl(SUBCLUSTER$t_patterns, final_cell_type,
+                 ignore.case = TRUE, perl = TRUE)) %>%
+    pull(seurat_clusters) %>% as.character()
+
+  n_t_cells <- sum(as.character(merged$seurat_clusters) %in% t_clusters)
+  message("  T cell clusters identified: ",
+          if (length(t_clusters)) paste(t_clusters, collapse = ", ") else "none",
+          "  (", n_t_cells, " cells)")
+
+  if (length(t_clusters) == 0) {
+    message("  No clusters matched SUBCLUSTER$t_patterns — ",
+            "set CLUSTER_CELLTYPE_MAP or adjust t_patterns in config.R")
+  } else if (n_t_cells < SUBCLUSTER$min_cells) {
+    message("  < ", SUBCLUSTER$min_cells, " T cells — skipping sub-clustering")
+  } else {
+    # Find the SNN graph name
+    graph_name <- grep("_snn$", names(merged@graphs), value = TRUE)[1]
+    if (is.na(graph_name)) graph_name <- "RNA_snn"
+    message("  Using graph: ", graph_name)
+
+    merged <- FindSubCluster(merged, cluster = t_clusters,
+                              graph.name = graph_name,
+                              resolution = SUBCLUSTER$resolution,
+                              algorithm  = CLUSTER$algorithm)
+
+    sub_labels <- merged$sub.cluster[as.character(merged$seurat_clusters) %in% t_clusters]
+    n_sub <- length(unique(sub_labels))
+    message("  Sub-clusters found: ", n_sub)
+
+    # UMAP — non-T cells grey, T sub-clusters coloured
+    sub_col_vals <- c(Other = "#DDDDDD",
+                      setNames(scales::hue_pal()(n_sub), sort(unique(sub_labels))))
+    merged$sub_plot <- ifelse(as.character(merged$seurat_clusters) %in% t_clusters,
+                               merged$sub.cluster, "Other")
+
+    p_sub <- DimPlot(merged, group.by = "sub_plot", reduction = "umap",
+                     cols = sub_col_vals,
+                     label = TRUE, label.size = 3, pt.size = PLOT$pt_size, repel = TRUE) +
+      labs(title = paste0("T Cell Sub-clusters  (res=", SUBCLUSTER$resolution, ")")) +
+      theme_classic()
+    ggsave(file.path(DIRS$annotation, "tcell_subclusters_umap.pdf"),
+           p_sub, width = 9, height = 7, dpi = PLOT$dpi)
+    report_plots[["T Cell Sub-clusters  -  UMAP"]] <- set_page(p_sub, pw = 9, ph = 7)
+
+    # Dot plot of T cell markers across sub-clusters
+    t_markers <- unique(c(MARKERS$T_pan, MARKERS$CD4_T, MARKERS$CD8_T, MARKERS$Treg))
+    t_markers <- t_markers[t_markers %in% rownames(merged)]
+    t_barcodes <- colnames(merged)[as.character(merged$seurat_clusters) %in% t_clusters]
+    merged_t   <- subset(merged, cells = t_barcodes)
+    Idents(merged_t) <- "sub.cluster"
+
+    if (length(t_markers) > 0 && length(unique(Idents(merged_t))) > 1) {
+      p_sub_dot <- DotPlot(merged_t, features = t_markers,
+                            dot.scale = 8, dot.min = 0.01) +
+        scale_color_viridis_c(option = "plasma") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)) +
+        labs(title = "T Cell Sub-clusters  -  CD4 / CD8 / Treg Markers",
+             x = NULL, y = "Sub-cluster")
+      ggsave(file.path(DIRS$annotation, "tcell_subclusters_dotplot.pdf"),
+             p_sub_dot, width = 10, height = 6, dpi = PLOT$dpi)
+      report_plots[["T Cell Sub-clusters  -  CD4 / CD8 / Treg Marker Dot Plot"]] <-
+        set_page(p_sub_dot, pw = 10, ph = 6)
+    }
+
+    # Summary table
+    sub_summary <- merged@meta.data %>%
+      filter(as.character(seurat_clusters) %in% t_clusters) %>%
+      group_by(sub.cluster) %>%
+      summarise(n_cells          = n(),
+                singler_majority = names(which.max(table(singler_label_clean))),
+                .groups = "drop")
+    write.csv(sub_summary,
+              file.path(DIRS$annotation, "tcell_subcluster_summary.csv"),
+              row.names = FALSE)
+    message("  Sub-cluster summary:")
+    print(as.data.frame(sub_summary))
+  }
+}
+
 saveRDS(merged, file.path(DIRS$integrated, "integrated_annotated.rds"))
 
 save_report_pdf(report_plots, file.path(DIRS$annotation, "annotation_report.pdf"))
