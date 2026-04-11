@@ -185,13 +185,17 @@ make_overall_report <- function(output_path) {
   }
 
   # ------------------------------------------------------------------ #
-  # 2. Doublet UMAP — one portrait page per sample                      #
+  # 2. Doublet UMAP + Score Histogram stacked — one portrait per sample #
   # ------------------------------------------------------------------ #
   for (nm in SAMPLE_NAMES) {
     .add(
-      list(.render(file.path(DIRS$doublets, paste0(nm, "_doublet_umap.pdf")))),
-      title     = paste0(nm, " — Doublet Detection UMAP"),
-      landscape = FALSE
+      list(
+        .render(file.path(DIRS$doublets, paste0(nm, "_doublet_umap.pdf"))),
+        .render(file.path(DIRS$doublets, paste0(nm, "_doublet_score_hist.pdf")))
+      ),
+      title     = paste0(nm, " — Doublet Detection UMAP & Score Distribution"),
+      caption   = .two_caps("Doublet.*UMAP", "Doublet.*Hist|Score Dist"),
+      landscape = FALSE, ncols = 1L
     )
   }
 
