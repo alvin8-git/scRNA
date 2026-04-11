@@ -236,9 +236,8 @@ prop_df <- merged@meta.data %>%
 # Stacked 100% bar: one bar per sample, no side legend (legend placed between panels)
 p_bar <- ggplot(prop_df, aes(x = sample, y = prop, fill = cell_type)) +
   geom_bar(stat = "identity", width = 0.7) +
-  geom_text(aes(label = ifelse(prop >= 0.07,
-                              paste0(cell_type, "\n", round(prop * 100), "%"),
-                              ifelse(prop >= 0.02, paste0(round(prop * 100), "%"), ""))),
+  geom_text(aes(label = ifelse(prop >= 0.02,
+                              paste0(cell_type, " ", round(prop * 100), "%"), "")),
             position = position_stack(vjust = 0.5),
             size = 2.5, colour = "white", fontface = "bold", lineheight = 0.85) +
   scale_fill_manual(values = ct_cols) +

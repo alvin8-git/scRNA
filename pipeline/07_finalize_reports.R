@@ -167,6 +167,58 @@ make_overall_report <- function(output_path) {
     trimws(paste(c1, c2, sep = if (nchar(c1) > 0 && nchar(c2) > 0) "\n" else ""))
   }
 
+  # Paired-image page: title | img1 | cap1 (directly below) | img2 | cap2
+  # Used when each image needs its own caption directly beneath it.
+  .add_paired <- function(img1, img2, title, key1, key2, landscape = FALSE) {
+    img1 <- if (is.character(img1)) .render(img1) else img1
+    img2 <- if (is.character(img2)) .render(img2) else img2
+    if (is.null(img1) && is.null(img2)) return(invisible(NULL))
+
+    dims <- if (landscape) A4L else A4P
+    cap1 <- .get_caption(key1) %||% ""
+    cap2 <- .get_caption(key2) %||% ""
+
+    has_title <- !is.null(title) && nchar(trimws(title)) > 0
+    has_c1    <- nchar(trimws(cap1)) > 0
+    has_c2    <- nchar(trimws(cap2)) > 0 && !is.null(img2)
+
+    rows <- list(); rel_h <- numeric(0)
+
+    if (has_title) {
+      rows[[length(rows)+1L]] <- ggdraw() +
+        draw_label(title, fontface = "bold", size = 13,
+                   x = 0.03, y = 0.5, hjust = 0, vjust = 0.5)
+      rel_h <- c(rel_h, 0.05)
+    }
+
+    if (!is.null(img1)) {
+      rows[[length(rows)+1L]] <- ggdraw() + draw_image(img1)
+      rel_h <- c(rel_h, if (is.null(img2)) 0.88 else 0.40)
+      if (has_c1) {
+        rows[[length(rows)+1L]] <- ggdraw() +
+          draw_label(cap1, size = 7, color = "#444444",
+                     x = 0.03, y = 0.92, hjust = 0, vjust = 1, lineheight = 1.2)
+        rel_h <- c(rel_h, 0.07)
+      }
+    }
+
+    if (!is.null(img2)) {
+      rows[[length(rows)+1L]] <- ggdraw() + draw_image(img2)
+      rel_h <- c(rel_h, 0.38)
+      if (has_c2) {
+        rows[[length(rows)+1L]] <- ggdraw() +
+          draw_label(cap2, size = 7, color = "#444444",
+                     x = 0.03, y = 0.92, hjust = 0, vjust = 1, lineheight = 1.2)
+        rel_h <- c(rel_h, 0.10)
+      }
+    }
+
+    rel_h <- rel_h / sum(rel_h)  # normalise to 1
+    pg <- plot_grid(plotlist = rows, ncol = 1L, rel_heights = rel_h)
+    tf <- .save_page(list(plot = pg, w = unname(dims["w"]), h = unname(dims["h"])))
+    if (!is.null(tf)) pages <<- c(pages, tf)
+  }
+
   message("  Building Overall_report.pdf pages (A4 normalized)...")
 
   # ------------------------------------------------------------------ #
@@ -209,18 +261,16 @@ make_overall_report <- function(output_path) {
   )
 
   # ------------------------------------------------------------------ #
-  # 4. HVG + Top-5 Markers per sample — one portrait page per sample   #
+  # 4. HVG + Top-5 Markers per sample — each caption below its image   #
   # ------------------------------------------------------------------ #
   for (nm in SAMPLE_NAMES) {
-    .add(
-      list(
-        .render(file.path(DIRS$individual, nm, paste0(nm, "_hvg.pdf"))),
-        .render(file.path(DIRS$individual, nm, paste0(nm, "_dotplot_markers.pdf")))
-      ),
+    .add_paired(
+      img1      = file.path(DIRS$individual, nm, paste0(nm, "_hvg.pdf")),
+      img2      = file.path(DIRS$individual, nm, paste0(nm, "_dotplot_markers.pdf")),
       title     = paste0(nm, " — Highly Variable Genes & Top 5 Markers per Cluster"),
-      caption   = .two_caps("Variable Genes|Highly Variable",
-                             "Top.*Marker.*Dot|Dot.*Top.*Marker"),
-      landscape = FALSE, ncols = 1L
+      key1      = "Variable Genes|Highly Variable",
+      key2      = "Top.*Marker.*Dot|Dot.*Top.*Marker",
+      landscape = FALSE
     )
   }
 
