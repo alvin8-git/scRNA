@@ -21,12 +21,20 @@ load_sample <- function(sample_name, data_path) {
   counts <- Read10X(data.dir = data_path, gene.column = 2,
                     cell.column = 1, unique.features = TRUE)
   if (is.list(counts)) counts <- counts[["Gene Expression"]]
+
+  n_gem <- ncol(counts)   # raw GEM barcodes before any Seurat filtering
   seu <- CreateSeuratObject(counts = counts, project = sample_name,
                             min.cells = 3, min.features = 200)
   seu$sample     <- sample_name
   seu$orig.ident <- sample_name
+  seu$n_gem      <- n_gem   # store per-cell so it survives QC subsetting
   seu <- RenameCells(seu, add.cell.id = sample_name)
-  message("  Loaded: ", ncol(seu), " cells x ", nrow(seu), " genes")
+
+  n_loaded      <- ncol(seu)
+  n_low_gene    <- n_gem - n_loaded
+  message("  GEM barcodes (CellRanger): ", n_gem)
+  message("  After CreateSeuratObject  (min.features >= 200): ", n_loaded,
+          "  [-", n_low_gene, " cells with < 200 genes]")
   seu
 }
 
@@ -101,6 +109,10 @@ seu_list <- mapply(load_sample, names(SAMPLE_PATHS), SAMPLE_PATHS,
                    SIMPLIFY = FALSE)
 seu_list <- lapply(seu_list, add_qc_metrics)
 
+# Capture counts BEFORE QC (after CreateSeuratObject load-filter)
+n_gem_vec    <- sapply(seu_list, function(s) s$n_gem[1])
+n_loaded_vec <- sapply(seu_list, ncol)
+
 message("\n--- Generating pre-filter QC plots ---")
 report_plots <- list()
 for (nm in SAMPLE_NAMES) {
@@ -113,6 +125,9 @@ message("Thresholds: nFeature [", QC$min_features, ",", QC$max_features, "] | ",
         "nCount [", QC$min_counts, ",", QC$max_counts, "] | ",
         "MT <= ", QC$max_percent_mt, "%")
 seu_list <- mapply(filter_cells, seu_list, SAMPLE_NAMES, SIMPLIFY = FALSE)
+
+# Capture counts AFTER QC
+n_qc_vec <- sapply(seu_list, ncol)
 
 for (nm in SAMPLE_NAMES) {
   outdir <- file.path(DIRS$individual, nm)
@@ -130,8 +145,35 @@ qc_summary <- data.frame(
 )
 write.csv(qc_summary, file.path(DIRS$qc, "qc_summary_table.csv"), row.names = FALSE)
 
+# --- Cell fate tracking: accounts for every barcode from GEM input ---
+cell_fate <- data.frame(
+  Sample                   = SAMPLE_NAMES,
+  GEM_barcodes             = n_gem_vec,
+  After_load               = n_loaded_vec,
+  Removed_load_low_genes   = n_gem_vec - n_loaded_vec,   # < 200 genes (CreateSeuratObject)
+  After_QC                 = n_qc_vec,
+  Removed_QC               = n_loaded_vec - n_qc_vec,    # nFeature/nCount/MT thresholds
+  # Doublet column filled in by 02_doublets.R
+  After_doublet_removal    = NA_integer_,
+  Removed_doublets         = NA_integer_,
+  row.names                = NULL,
+  stringsAsFactors         = FALSE
+)
+cell_fate$Total_removed  <- cell_fate$GEM_barcodes - cell_fate$After_QC
+cell_fate$Pct_retained   <- round(cell_fate$After_QC / cell_fate$GEM_barcodes * 100, 1)
+write.csv(cell_fate, file.path(DIRS$qc, "cell_fate.csv"), row.names = FALSE)
+
 message("\n--- QC Summary ---")
 print(qc_summary)
+message("\n--- Cell Fate (load + QC) ---")
+message("  Removal reasons:")
+message("    load  : cells with < 200 genes (CreateSeuratObject min.features=200)")
+message("    QC    : nFeature [", QC$min_features, ",", QC$max_features, "]  |  ",
+        "nCount [", QC$min_counts, ",", QC$max_counts, "]  |  ",
+        "MT <= ", QC$max_percent_mt, "%")
+print(cell_fate[, c("Sample", "GEM_barcodes", "Removed_load_low_genes",
+                    "After_load", "Removed_QC", "After_QC",
+                    "Total_removed", "Pct_retained")])
 
 save_report_pdf(report_plots, file.path(DIRS$qc, "qc_report.pdf"))
 message("\n01_load_qc.R complete. Outputs in: ", DIRS$qc)

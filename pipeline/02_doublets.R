@@ -95,4 +95,29 @@ for (nm in SAMPLE_NAMES) {
 }
 
 save_report_pdf(report_plots, file.path(DIRS$doublets, "doublets_report.pdf"))
+
+# --- Update cell_fate.csv with doublet removal counts ---
+fate_file <- file.path(DIRS$qc, "cell_fate.csv")
+if (file.exists(fate_file)) {
+  cell_fate <- read.csv(fate_file, stringsAsFactors = FALSE)
+  for (nm in SAMPLE_NAMES) {
+    seu_post <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds")))
+    idx <- match(nm, cell_fate$Sample)
+    if (!is.na(idx)) {
+      n_before_dbl   <- cell_fate$After_QC[idx]
+      n_after_dbl    <- ncol(seu_post)
+      cell_fate$After_doublet_removal[idx] <- n_after_dbl
+      cell_fate$Removed_doublets[idx]      <- n_before_dbl - n_after_dbl
+      cell_fate$Total_removed[idx]         <- cell_fate$GEM_barcodes[idx] - n_after_dbl
+      cell_fate$Pct_retained[idx]          <- round(n_after_dbl /
+                                               cell_fate$GEM_barcodes[idx] * 100, 1)
+    }
+  }
+  write.csv(cell_fate, fate_file, row.names = FALSE)
+  message("\n--- Cell Fate (load + QC + doublets) ---")
+  print(cell_fate[, c("Sample", "GEM_barcodes", "Removed_load_low_genes",
+                      "Removed_QC", "Removed_doublets",
+                      "After_doublet_removal", "Pct_retained")])
+}
+
 message("\n02_doublets.R complete.")
