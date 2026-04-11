@@ -44,7 +44,8 @@ plot_qc <- function(seu, sample_name) {
   p_vln <- VlnPlot(seu,
     features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
     ncol     = 3, pt.size = 0.2, group.by = "orig.ident"
-  ) & theme(legend.position = "none", plot.title = element_text(size = 11))
+  ) & theme(legend.position = "none", plot.title = element_text(size = 11),
+            axis.text.x = element_text(angle = 0, hjust = 0.5))
   ggsave(file.path(outdir, paste0(sample_name, "_violin_qc.pdf")),
          p_vln, width = 12, height = 5)
   plots[[paste0(sample_name, "  -  QC Violin (nFeature / nCount / %MT)")]] <-

@@ -102,8 +102,9 @@ process_individual <- function(seu, sample_name) {
     group_by(cluster) %>% slice_max(avg_log2FC, n = 5) %>%
     pull(gene) %>% unique()
 
-  p_dot <- DotPlot(seu, features = top5) + RotatedAxis() +
-    labs(title = paste0(sample_name, "  -  Top 5 Markers per Cluster"))
+  p_dot <- DotPlot(seu, features = top5) +
+    labs(title = paste0(sample_name, "  -  Top 5 Markers per Cluster")) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7))
   ggsave(file.path(outdir, paste0(sample_name, "_dotplot_markers.pdf")),
          p_dot, width = max(12, length(top5) * 0.4), height = 7)
   plots[[paste0(sample_name, "  -  Top Marker Dot Plot")]] <-

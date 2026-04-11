@@ -39,6 +39,10 @@ run_doubletfinder <- function(seu, sample_name) {
   seu$doublet_score <- sce$scDblFinder.score
   seu$doublet_class <- sce$scDblFinder.class
 
+  # Compute doublet stats before plotting so we can embed them in the title
+  n_doublets <- sum(seu$doublet_class == "doublet")
+  pct_dbl    <- round(n_doublets / n_cells * 100, 1)
+
   # Quick UMAP for visualisation only
   seu_vis <- NormalizeData(seu, verbose = FALSE)
   seu_vis <- FindVariableFeatures(seu_vis, nfeatures = 2000, verbose = FALSE)
@@ -51,7 +55,9 @@ run_doubletfinder <- function(seu, sample_name) {
     group.by = "doublet_class",
     cols     = c("singlet" = "#CCCCCC", "doublet" = "#E64B35"),
     pt.size  = 1.0
-  ) + labs(title = paste0(sample_name, "  -  scDblFinder")) + theme_classic()
+  ) + labs(title = paste0(sample_name, "  -  Doublet UMAP  (",
+                          n_doublets, " in ", n_cells, " cells  (", pct_dbl, "%))")) +
+    theme_classic()
   ggsave(file.path(DIRS$doublets, paste0(sample_name, "_doublet_umap.pdf")),
          p_umap, width = 7, height = 6)
   plots[[paste0(sample_name, "  -  Doublet UMAP")]] <- mark_small(p_umap)
@@ -66,9 +72,8 @@ run_doubletfinder <- function(seu, sample_name) {
          p_hist, width = 6, height = 4)
   plots[[paste0(sample_name, "  -  Doublet Score Histogram")]] <- mark_small(p_hist)
 
-  n_doublets <- sum(seu$doublet_class == "doublet")
   message("  Doublets: ", n_doublets,
-          " (", round(n_doublets / n_cells * 100, 1), "%)",
+          " (", pct_dbl, "%)",
           " | Retaining: ", n_cells - n_doublets, " singlets")
 
   seu_singlets <- subset(seu, subset = doublet_class == "singlet")

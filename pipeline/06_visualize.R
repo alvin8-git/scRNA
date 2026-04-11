@@ -155,8 +155,18 @@ plot_features(MARKERS$Neutrophil,
               "Feature Plot  -  Neutrophil Markers", "feature_neutrophils.pdf")
 plot_features(MARKERS$RBC,
               "Feature Plot  -  RBC Markers (Contamination)", "feature_rbc.pdf")
-plot_features(ALL_MARKERS,
-              "Feature Plot  -  All Canonical Markers", "feature_all_canonical_markers.pdf")
+# Only show markers not already covered by the dedicated plots above
+already_plotted <- unique(c(
+  MARKERS$T_pan, MARKERS$CD4_T, MARKERS$CD8_T,
+  MARKERS$NK, MARKERS$B_cell,
+  MARKERS$CD14_mono, MARKERS$FCGR3A_mono,
+  MARKERS$DC, MARKERS$Platelet,
+  MARKERS$Neutrophil, MARKERS$RBC
+))
+remaining_markers <- setdiff(ALL_MARKERS, already_plotted)
+plot_features(remaining_markers,
+              "Feature Plot  -  Remaining Markers (Treg / Plasma / HSPC)",
+              "feature_remaining_markers.pdf")
 
 # =============================================================================
 # PLOT SET 4: Dot plot  -  cell types × canonical markers
@@ -223,43 +233,62 @@ prop_df <- merged@meta.data %>%
   group_by(sample, cell_type) %>% summarise(n = n(), .groups = "drop") %>%
   group_by(sample) %>% mutate(prop = n / sum(n))
 
-p_bar <- ggplot(prop_df, aes(x = cell_type, y = prop, fill = cell_type)) +
+# Stacked 100% bar: one bar per sample, no side legend (legend placed between panels)
+p_bar <- ggplot(prop_df, aes(x = sample, y = prop, fill = cell_type)) +
   geom_bar(stat = "identity", width = 0.7) +
-  facet_wrap(~ sample, nrow = 1) +
-  scale_fill_manual(values = ct_cols, guide = "none") +
+  geom_text(aes(label = ifelse(prop >= 0.07,
+                              paste0(cell_type, "\n", round(prop * 100), "%"),
+                              ifelse(prop >= 0.02, paste0(round(prop * 100), "%"), ""))),
+            position = position_stack(vjust = 0.5),
+            size = 2.5, colour = "white", fontface = "bold", lineheight = 0.85) +
+  scale_fill_manual(values = ct_cols) +
   scale_y_continuous(labels = percent_format()) +
   labs(title = "Cell Type  -  % of Sample", x = NULL, y = "Proportion") +
   theme_pub +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+  theme(legend.position = "none")
+
+# Horizontal compact legend strip (2 rows) to sit between the two panels
+p_bar_legend <- cowplot::get_legend(
+  ggplot(prop_df, aes(x = sample, y = prop, fill = cell_type)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = ct_cols) +
+    guides(fill = guide_legend(nrow = 2, title = "Cell Type",
+                               title.theme = element_text(size = 8, face = "bold"),
+                               label.theme = element_text(size = 7))) +
+    theme(legend.position  = "bottom",
+          legend.key.size  = unit(0.35, "cm"),
+          legend.direction = "horizontal",
+          legend.box       = "horizontal")
+)
+
+combined_w <- max(7, length(unique(prop_df$sample)) * 5)
+
 ggsave(file.path(DIRS$integrated, "celltype_proportions_bar.pdf"),
-       p_bar, width = max(7, length(unique(prop_df$sample)) * 5), height = 5,
-       dpi = PLOT$dpi)
+       p_bar, width = combined_w, height = 6, dpi = PLOT$dpi)
 
 p_bar_n <- ggplot(prop_df, aes(x = cell_type, y = n, fill = cell_type)) +
   geom_bar(stat = "identity", width = 0.7) +
   facet_wrap(~ sample, nrow = 1) +
   scale_fill_manual(values = ct_cols, guide = "none") +
-  labs(title = "Cell Type  -  Number of Cells", x = NULL, y = "Cell Count",
-       fill = "Cell Type") +
+  labs(title = "Cell Type  -  Number of Cells", x = NULL, y = "Cell Count") +
   theme_pub +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
 ggsave(file.path(DIRS$integrated, "celltype_counts_bar.pdf"),
-       p_bar_n, width = max(7, length(unique(prop_df$sample)) * 5), height = 5,
-       dpi = PLOT$dpi)
+       p_bar_n, width = combined_w, height = 5, dpi = PLOT$dpi)
 
-# Combined 2-panel portrait figure: % on top, counts on bottom
-p_bar_combined <- p_bar / p_bar_n +
-  plot_annotation(
-    title = "Cell Type Composition per Sample",
-    theme = theme(plot.title = element_text(size = 14, face = "bold"))
-  )
+# Combined: stacked % | compact legend strip | counts
+p_bar_combined <- plot_grid(
+  p_bar, p_bar_legend, p_bar_n,
+  ncol = 1, rel_heights = c(1, 0.12, 0.85),
+  labels = c("", "", ""),
+  align = "v", axis = "lr"
+)
+
 ggsave(file.path(DIRS$integrated, "celltype_composition_combined.pdf"),
-       p_bar_combined,
-       width  = max(7, length(unique(prop_df$sample)) * 5),
-       height = 10, dpi = PLOT$dpi)
+       p_bar_combined, width = combined_w, height = 10, dpi = PLOT$dpi)
 
 report_plots[["Cell Type Composition  -  % (top) and Cell Count (bottom)"]] <-
-  set_page(p_bar_combined, pw = max(7, length(unique(prop_df$sample)) * 5), ph = 10)
+  set_page(p_bar_combined, pw = combined_w, ph = 10)
 
 # =============================================================================
 # PLOT SET 7: Violin plots  -  key lineage markers
@@ -269,10 +298,26 @@ message("\n--- Plot Set 7: Violin plots ---")
 key_markers <- c("CD3D", "CD4", "CD8A", "NKG7", "MS4A1", "CD14", "FCGR3A", "PPBP")
 key_markers <- key_markers[key_markers %in% rownames(merged)]
 
-p_vln <- VlnPlot(merged, features = key_markers, group.by = "cell_type",
-                  pt.size = 0, ncol = 4, cols = ct_cols) &
-  theme_pub & theme(legend.position = "none",
-                    axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+# Per-marker violin with cell-type association in each plot title
+marker_labels <- c(
+  "CD3D"   = "CD3D (T cells)",
+  "CD4"    = "CD4 (CD4 T)",
+  "CD8A"   = "CD8A (CD8 T)",
+  "NKG7"   = "NKG7 (NK)",
+  "MS4A1"  = "MS4A1 (B cell)",
+  "CD14"   = "CD14 (CD14+ Mono)",
+  "FCGR3A" = "FCGR3A (FCGR3A+ Mono)",
+  "PPBP"   = "PPBP (Platelet)"
+)
+vln_list <- lapply(key_markers, function(gene) {
+  lbl <- if (gene %in% names(marker_labels)) marker_labels[[gene]] else gene
+  VlnPlot(merged, features = gene, group.by = "cell_type",
+          pt.size = 0, cols = ct_cols) +
+    labs(title = lbl) + theme_pub +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+})
+p_vln <- wrap_plots(vln_list, ncol = 4)
 vln_h <- ceiling(length(key_markers) / 4) * 4 + 1
 ggsave(file.path(DIRS$integrated, "violin_key_markers.pdf"),
        p_vln, width = 18, height = vln_h, dpi = PLOT$dpi)
