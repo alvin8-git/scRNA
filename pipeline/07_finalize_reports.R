@@ -225,14 +225,13 @@ make_overall_report <- function(output_path) {
   # 1. QC: violin + scatter stacked — one portrait page per sample      #
   # ------------------------------------------------------------------ #
   for (nm in SAMPLE_NAMES) {
-    .add(
-      list(
-        .render(file.path(DIRS$qc, paste0(nm, "_violin_qc.pdf"))),
-        .render(file.path(DIRS$qc, paste0(nm, "_scatter_qc.pdf")))
-      ),
+    .add_paired(
+      img1      = file.path(DIRS$qc, paste0(nm, "_violin_qc.pdf")),
+      img2      = file.path(DIRS$qc, paste0(nm, "_scatter_qc.pdf")),
       title     = paste0(nm, " — QC Violin & Scatter Plots"),
-      caption   = .two_caps("QC Violin", "QC Scatter"),
-      landscape = FALSE, ncols = 1L
+      key1      = "QC Violin",
+      key2      = "QC Scatter",
+      landscape = FALSE
     )
   }
 
@@ -240,14 +239,13 @@ make_overall_report <- function(output_path) {
   # 2. Doublet UMAP + Score Histogram stacked — one portrait per sample #
   # ------------------------------------------------------------------ #
   for (nm in SAMPLE_NAMES) {
-    .add(
-      list(
-        .render(file.path(DIRS$doublets, paste0(nm, "_doublet_umap.pdf"))),
-        .render(file.path(DIRS$doublets, paste0(nm, "_doublet_score_hist.pdf")))
-      ),
+    .add_paired(
+      img1      = file.path(DIRS$doublets, paste0(nm, "_doublet_umap.pdf")),
+      img2      = file.path(DIRS$doublets, paste0(nm, "_doublet_score_hist.pdf")),
       title     = paste0(nm, " — Doublet Detection UMAP & Score Distribution"),
-      caption   = .two_caps("Doublet.*UMAP", "Doublet.*Hist|Score Dist"),
-      landscape = FALSE, ncols = 1L
+      key1      = "Doublet.*UMAP",
+      key2      = "Doublet.*Hist|Score Dist",
+      landscape = FALSE
     )
   }
 
