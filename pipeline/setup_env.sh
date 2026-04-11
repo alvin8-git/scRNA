@@ -30,13 +30,16 @@ mamba create -n ${ENV_NAME} \
     r-matrix \
     r-hdf5r \
     r-ggrepel \
+    r-pdftools \
+    r-magick \
     -y
 
 echo ""
 echo "Verifying all key packages..."
 conda run -n ${ENV_NAME} Rscript - <<'EOF'
 pkgs <- c("Seurat", "harmony", "SingleR", "celldex", "scDblFinder",
-          "ggplot2", "patchwork", "cowplot", "pheatmap", "viridis", "dplyr")
+          "ggplot2", "patchwork", "cowplot", "pheatmap", "viridis", "dplyr",
+          "pdftools", "magick")
 for (p in pkgs) {
   library(p, character.only = TRUE, quietly = TRUE)
   cat(sprintf("  OK: %s %s\n", p, as.character(packageVersion(p))))

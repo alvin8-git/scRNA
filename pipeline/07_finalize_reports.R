@@ -1,6 +1,7 @@
 # =============================================================================
 # 07_finalize_reports.R - Merge per-step partial PDFs into 5 category reports
-#   plus an Overall_report combining curated plots from all stages.
+#   plus an Overall_report.pdf where every page is normalized to A4 size with
+#   a bold title banner and description / Good-Bad caption.
 #
 #   01-QC_report.pdf
 #   02-Doublet_report.pdf
@@ -10,6 +11,8 @@
 #   Overall_report.pdf
 # =============================================================================
 source("/data/alvin/scRNA/pipeline/config.R")
+
+`%||%` <- function(x, y) if (!is.null(x) && length(x) > 0) x else y
 
 combine <- function(inputs, output) {
   existing <- inputs[file.exists(inputs)]
@@ -51,32 +54,284 @@ combine(
 )
 
 # =============================================================================
-# Overall_report.pdf  -  curated cross-stage summary
+# Overall_report.pdf — every page normalized to A4 portrait or landscape,
+#   with a bold title banner at top and a description/interpretation strip
+#   at the bottom.  Requires the 'pdftools' R package to rasterize source PDFs.
 # =============================================================================
-overall_inputs <- c(
-  # QC (all pages)
-  file.path(DIRS$qc, "qc_report.pdf"),
-  # Doublets (all pages)
-  file.path(DIRS$doublets, "doublets_report.pdf"),
-  # Annotation: SingleR score heatmap only
-  file.path(DIRS$annotation, "singler_scores_heatmap.pdf"),
-  # Individual: HVG + top-5-markers dot plot per sample
-  unlist(lapply(SAMPLE_NAMES, function(nm) c(
-    file.path(DIRS$individual, nm, paste0(nm, "_hvg.pdf")),
-    file.path(DIRS$individual, nm, paste0(nm, "_dotplot_markers.pdf"))
-  ))),
-  # Integrated
-  file.path(DIRS$integrated, "harmony_before_after.pdf"),
-  file.path(DIRS$integrated, "integrated_umap_sample.pdf"),
-  file.path(DIRS$integrated, "integrated_umap_celltype.pdf"),
-  file.path(DIRS$integrated, "umap_split_by_sample.pdf"),
-  file.path(DIRS$integrated, "umap_triptych.pdf"),
-  file.path(DIRS$integrated, "integrated_dotplot.pdf"),
-  file.path(DIRS$integrated, "integrated_heatmap.pdf"),
-  file.path(DIRS$integrated, "celltype_composition_combined.pdf"),
-  file.path(DIRS$integrated, "violin_key_markers.pdf")
-)
-combine(overall_inputs, file.path(DIRS$reports, "Overall_report.pdf"))
+
+make_overall_report <- function(output_path) {
+  suppressPackageStartupMessages({
+    library(cowplot)
+    library(ggplot2)
+  })
+
+  if (!requireNamespace("pdftools", quietly = TRUE)) {
+    message("  pdftools not available — using simple merge for Overall_report.")
+    message("  Install with: install.packages('pdftools')")
+    return(FALSE)
+  }
+
+  # A4 dimensions in inches
+  A4P <- c(w = 8.27,  h = 11.69)   # portrait
+  A4L <- c(w = 11.69, h = 8.27)    # landscape
+
+  # ------------------------------------------------------------------
+  # Render one page of a PDF to a nativeRaster (returns NULL on error)
+  # ------------------------------------------------------------------
+  .render <- function(path, page = 1L, dpi = 150L) {
+    if (is.null(path) || !file.exists(path)) return(NULL)
+    n <- tryCatch(pdftools::pdf_length(path), error = function(e) 0L)
+    if (n < page) return(NULL)
+    tryCatch(
+      pdftools::pdf_render_page(path, page = page, dpi = dpi, numeric = FALSE),
+      error = function(e) NULL
+    )
+  }
+
+  # ------------------------------------------------------------------
+  # Build a single A4 page: image grid + title banner + caption strip.
+  # imgs   : list of nativeRaster objects (NULLs are dropped)
+  # ncols  : columns in the image grid (rows calculated automatically)
+  # Returns list(plot, w, h) or NULL if no images
+  # ------------------------------------------------------------------
+  .build_page <- function(imgs, title = NULL, caption = NULL,
+                           landscape = FALSE, ncols = 1L) {
+    imgs <- Filter(Negate(is.null), imgs)
+    if (length(imgs) == 0) return(NULL)
+
+    dims <- if (landscape) A4L else A4P
+    has_title   <- !is.null(title)   && nchar(trimws(title))   > 0
+    has_caption <- !is.null(caption) && nchar(trimws(caption)) > 0
+
+    th <- if (has_title)   0.055 else 0
+    ch <- if (has_caption) 0.14  else 0
+    ih <- 1 - th - ch
+
+    # Image grid
+    img_plots <- lapply(imgs, function(img) ggdraw() + draw_image(img))
+    nrows <- ceiling(length(img_plots) / ncols)
+    img_grid <- if (length(img_plots) == 1L) {
+      img_plots[[1]]
+    } else {
+      plot_grid(plotlist = img_plots, ncol = ncols, nrow = nrows)
+    }
+
+    # Row list and relative heights
+    rows <- list(); rel_h <- numeric(0)
+
+    if (has_title) {
+      rows[[length(rows) + 1L]] <- ggdraw() +
+        draw_label(title, fontface = "bold", size = 13,
+                   x = 0.03, y = 0.5, hjust = 0, vjust = 0.5)
+      rel_h <- c(rel_h, th)
+    }
+    rows[[length(rows) + 1L]] <- img_grid
+    rel_h <- c(rel_h, ih)
+    if (has_caption) {
+      rows[[length(rows) + 1L]] <- ggdraw() +
+        draw_label(caption, size = 7.5, color = "#444444",
+                   x = 0.03, y = 0.92, hjust = 0, vjust = 1, lineheight = 1.25)
+      rel_h <- c(rel_h, ch)
+    }
+
+    pg <- if (length(rows) == 1L) rows[[1L]] else
+      plot_grid(plotlist = rows, ncol = 1L, rel_heights = rel_h)
+
+    list(plot = pg, w = unname(dims["w"]), h = unname(dims["h"]))
+  }
+
+  # Write one page spec to a temp PDF; returns path or NULL
+  .save_page <- function(spec) {
+    if (is.null(spec)) return(NULL)
+    tf <- tempfile(fileext = ".pdf")
+    pdf(tf, width = spec$w, height = spec$h)
+    tryCatch(
+      { print(spec$plot); dev.off(); tf },
+      error = function(e) { try(dev.off(), silent = TRUE); NULL }
+    )
+  }
+
+  # Convenience: build + save in one call; appends path to `pages` in parent
+  pages <- character(0)
+  .add <- function(imgs, title, caption = NULL, landscape = FALSE, ncols = 1L) {
+    cap <- caption %||% .get_caption(title)
+    spec <- .build_page(imgs, title, cap, landscape, ncols)
+    tf <- .save_page(spec)
+    if (!is.null(tf)) pages <<- c(pages, tf)
+  }
+
+  # Combined caption helper: paste two captions, skip empty ones
+  .two_caps <- function(key1, key2) {
+    c1 <- .get_caption(key1) %||% ""
+    c2 <- .get_caption(key2) %||% ""
+    trimws(paste(c1, c2, sep = if (nchar(c1) > 0 && nchar(c2) > 0) "\n" else ""))
+  }
+
+  message("  Building Overall_report.pdf pages (A4 normalized)...")
+
+  # ------------------------------------------------------------------ #
+  # 1. QC: violin + scatter stacked — one portrait page per sample      #
+  # ------------------------------------------------------------------ #
+  for (nm in SAMPLE_NAMES) {
+    .add(
+      list(
+        .render(file.path(DIRS$qc, paste0(nm, "_violin_qc.pdf"))),
+        .render(file.path(DIRS$qc, paste0(nm, "_scatter_qc.pdf")))
+      ),
+      title     = paste0(nm, " — QC Violin & Scatter Plots"),
+      caption   = .two_caps("QC Violin", "QC Scatter"),
+      landscape = FALSE, ncols = 1L
+    )
+  }
+
+  # ------------------------------------------------------------------ #
+  # 2. Doublet UMAP — one portrait page per sample                      #
+  # ------------------------------------------------------------------ #
+  for (nm in SAMPLE_NAMES) {
+    .add(
+      list(.render(file.path(DIRS$doublets, paste0(nm, "_doublet_umap.pdf")))),
+      title     = paste0(nm, " — Doublet Detection UMAP"),
+      landscape = FALSE
+    )
+  }
+
+  # ------------------------------------------------------------------ #
+  # 3. SingleR score heatmap — landscape                                #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$annotation, "singler_scores_heatmap.pdf"))),
+    title     = "SingleR Reference Score Heatmap",
+    landscape = TRUE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 4. HVG + Top-5 Markers per sample — one portrait page per sample   #
+  # ------------------------------------------------------------------ #
+  for (nm in SAMPLE_NAMES) {
+    .add(
+      list(
+        .render(file.path(DIRS$individual, nm, paste0(nm, "_hvg.pdf"))),
+        .render(file.path(DIRS$individual, nm, paste0(nm, "_dotplot_markers.pdf")))
+      ),
+      title     = paste0(nm, " — Highly Variable Genes & Top 5 Markers per Cluster"),
+      caption   = .two_caps("Variable Genes|Highly Variable",
+                             "Top.*Marker.*Dot|Dot.*Top.*Marker"),
+      landscape = FALSE, ncols = 1L
+    )
+  }
+
+  # ------------------------------------------------------------------ #
+  # 5. Harmony before / after — landscape                               #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "harmony_before_after.pdf"))),
+    title     = "Harmony Batch Correction — UMAP Before & After",
+    landscape = TRUE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 6. UMAP by sample (left) + UMAP cell type (right) — landscape 2-up #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(
+      .render(file.path(DIRS$integrated, "integrated_umap_sample.pdf")),
+      .render(file.path(DIRS$integrated, "integrated_umap_celltype.pdf"))
+    ),
+    title     = "Integrated UMAP — Sample Origin (left) & Cell Type (right)",
+    landscape = TRUE, ncols = 2L
+  )
+
+  # ------------------------------------------------------------------ #
+  # 7. UMAP split by sample — landscape                                 #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "umap_split_by_sample.pdf"))),
+    title     = "Integrated UMAP — Split by Sample",
+    landscape = TRUE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 8. UMAP triptych — landscape                                        #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "umap_triptych.pdf"))),
+    title     = "UMAP Triptych — Clusters / Cell Types / Sample Origin",
+    landscape = TRUE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 9. Canonical PBMC dot plot — landscape                              #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "integrated_dotplot.pdf"))),
+    title     = "Canonical PBMC Markers Dot Plot",
+    landscape = TRUE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 10. Heatmap top-3 markers per cluster — landscape                  #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "integrated_heatmap.pdf"))),
+    title     = "Heatmap — Top 3 DE Markers per Cluster",
+    landscape = TRUE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 11. Cell type composition — portrait                                #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "celltype_composition_combined.pdf"))),
+    title     = "Cell Type Composition — Proportion & Count per Sample",
+    landscape = FALSE
+  )
+
+  # ------------------------------------------------------------------ #
+  # 12. Violin key lineage markers — landscape                          #
+  # ------------------------------------------------------------------ #
+  .add(
+    list(.render(file.path(DIRS$integrated, "violin_key_markers.pdf"))),
+    title     = "Key Lineage Marker Expression by Cell Type",
+    landscape = TRUE
+  )
+
+  # Combine all temp pages into the final PDF
+  valid <- Filter(file.exists, pages)
+  if (length(valid) == 0) {
+    message("  No pages rendered for Overall_report.pdf — check source files exist.")
+    return(FALSE)
+  }
+  .combine_pdfs(valid, output_path)
+  unlink(valid[startsWith(valid, tempdir())])
+  message("  Overall_report.pdf: ", length(valid), " pages -> ", output_path)
+  TRUE
+}
+
+# Run A4-formatted Overall_report; fall back to simple PDF merge if pdftools absent
+if (!make_overall_report(file.path(DIRS$reports, "Overall_report.pdf"))) {
+  message("  Falling back to simple PDF merge for Overall_report.pdf")
+  combine(
+    c(
+      file.path(DIRS$qc,       "qc_report.pdf"),
+      file.path(DIRS$doublets, "doublets_report.pdf"),
+      file.path(DIRS$annotation, "singler_scores_heatmap.pdf"),
+      unlist(lapply(SAMPLE_NAMES, function(nm) c(
+        file.path(DIRS$individual, nm, paste0(nm, "_hvg.pdf")),
+        file.path(DIRS$individual, nm, paste0(nm, "_dotplot_markers.pdf"))
+      ))),
+      file.path(DIRS$integrated, "harmony_before_after.pdf"),
+      file.path(DIRS$integrated, "integrated_umap_sample.pdf"),
+      file.path(DIRS$integrated, "integrated_umap_celltype.pdf"),
+      file.path(DIRS$integrated, "umap_split_by_sample.pdf"),
+      file.path(DIRS$integrated, "umap_triptych.pdf"),
+      file.path(DIRS$integrated, "integrated_dotplot.pdf"),
+      file.path(DIRS$integrated, "integrated_heatmap.pdf"),
+      file.path(DIRS$integrated, "celltype_composition_combined.pdf"),
+      file.path(DIRS$integrated, "violin_key_markers.pdf")
+    ),
+    file.path(DIRS$reports, "Overall_report.pdf")
+  )
+}
 
 message("\nFinal reports in: ", DIRS$reports)
 message("  01-QC_report.pdf")
