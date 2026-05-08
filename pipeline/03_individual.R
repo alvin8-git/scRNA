@@ -134,10 +134,21 @@ process_individual <- function(seu, sample_name) {
 report_plots <- list()
 
 for (nm in SAMPLE_NAMES) {
-  seu <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds")))
-  res <- process_individual(seu, nm)
-  report_plots <- c(report_plots, res$plots)
-  saveRDS(res$seu, file.path(DIRS$individual, nm, paste0(nm, "_seurat.rds")))
+  out_path   <- file.path(DIRS$individual, nm, paste0(nm, "_seurat.rds"))
+  cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_seurat.rds"))
+  if (file.exists(cache_path)) {
+    message("  [CACHE] ", nm, ": loading _seurat.rds from sample_cache/ (skipping individual processing)")
+    message("         (individual plots for this sample are in the original run's results dir)")
+    file.copy(cache_path, out_path, overwrite = TRUE)
+  } else {
+    seu <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds")))
+    res <- process_individual(seu, nm)
+    report_plots <- c(report_plots, res$plots)
+    saveRDS(res$seu, out_path)
+    dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
+    file.copy(out_path, cache_path)
+    message("  [CACHE] Saved ", nm, "_seurat.rds to sample_cache/")
+  }
 }
 
 save_report_pdf(report_plots, file.path(DIRS$individual, "individual_report.pdf"))

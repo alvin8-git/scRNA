@@ -92,13 +92,50 @@ report_plots[["UMAP Triptych  -  Clusters / Sample / Cell Type"]] <-
 # =============================================================================
 if (!SINGLE_SAMPLE) {
   message("\n--- Plot Set 2: Split by sample ---")
-  p_split <- DimPlot(merged, group.by = "cell_type", split.by = "sample",
-                      cols = ct_cols, reduction = "umap",
-                      pt.size = PLOT$pt_size, ncol = 2) +
-    labs(title = "Cell Types  -  split by Sample") + theme_pub
-  ggsave(file.path(DIRS$integrated, "umap_split_by_sample.pdf"),
-         p_split, width = 16, height = 7, dpi = PLOT$dpi)
-  report_plots[["UMAP  -  Cell Types Split by Sample"]] <- set_page(p_split, pw = 11, ph = 5)
+
+  # Shared legend from the full merged object — ensures one consistent legend
+  # across all pages regardless of which cell types appear in each sample subset.
+  p_for_legend <- DimPlot(merged, group.by = "cell_type", cols = ct_cols,
+                           reduction = "umap", pt.size = PLOT$pt_size) +
+    theme(legend.text  = element_text(size = 8),
+          legend.title = element_text(size = 9, face = "bold"),
+          legend.key.size = unit(0.35, "cm"))
+  shared_legend <- cowplot::get_legend(p_for_legend)
+
+  # Per-sample plots — no individual legend (shared_legend added per page below)
+  per_sample_plots <- lapply(SAMPLE_NAMES, function(nm) {
+    sub <- merged[, merged$sample == nm]
+    DimPlot(sub, group.by = "cell_type", cols = ct_cols, reduction = "umap",
+            pt.size = PLOT$pt_size, label = TRUE, label.size = 2.5) +
+      labs(title = nm) + theme_pub + NoLegend()
+  })
+
+  # Paginate: at most 2 samples per page
+  chunks  <- split(per_sample_plots, ceiling(seq_along(per_sample_plots) / 2))
+  n_pages <- length(chunks)
+
+  .make_split_page <- function(pg_plots) {
+    p_grid <- cowplot::plot_grid(plotlist = pg_plots,
+                                 ncol = min(2L, length(pg_plots)))
+    cowplot::plot_grid(p_grid, shared_legend, ncol = 2L,
+                       rel_widths = c(0.84, 0.16))
+  }
+
+  pdf(file.path(DIRS$integrated, "umap_split_by_sample.pdf"), width = 16, height = 7)
+  for (pg in chunks) {
+    title_row <- cowplot::ggdraw() +
+      cowplot::draw_label("Cell Types  -  Split by Sample",
+                          fontface = "bold", x = 0.03, hjust = 0)
+    print(cowplot::plot_grid(title_row, .make_split_page(pg),
+                             ncol = 1L, rel_heights = c(0.05, 0.95)))
+  }
+  dev.off()
+
+  for (i in seq_along(chunks)) {
+    lbl <- if (n_pages == 1) "UMAP  -  Cell Types Split by Sample" else
+             sprintf("UMAP  -  Cell Types Split by Sample (%d/%d)", i, n_pages)
+    report_plots[[lbl]] <- set_page(.make_split_page(chunks[[i]]), pw = 11, ph = 5)
+  }
 }
 
 # =============================================================================

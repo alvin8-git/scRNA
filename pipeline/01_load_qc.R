@@ -105,9 +105,16 @@ filter_cells <- function(seu, sample_name) {
 # MAIN
 # =============================================================================
 
-seu_list <- mapply(load_sample, names(SAMPLE_PATHS), SAMPLE_PATHS,
-                   SIMPLIFY = FALSE)
-seu_list <- lapply(seu_list, add_qc_metrics)
+seu_list <- setNames(vector("list", length(SAMPLE_NAMES)), SAMPLE_NAMES)
+for (nm in SAMPLE_NAMES) {
+  cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_filtered.rds"))
+  if (file.exists(cache_path)) {
+    message("[CACHE] ", nm, ": loading _filtered.rds from sample_cache/ (skipping load + QC filter)")
+    seu_list[[nm]] <- readRDS(cache_path)
+  } else {
+    seu_list[[nm]] <- add_qc_metrics(load_sample(nm, SAMPLE_PATHS[[nm]]))
+  }
+}
 
 # Capture counts BEFORE QC (after CreateSeuratObject load-filter)
 n_gem_vec    <- sapply(seu_list, function(s) s$n_gem[1])
@@ -132,7 +139,14 @@ n_qc_vec <- sapply(seu_list, ncol)
 for (nm in SAMPLE_NAMES) {
   outdir <- file.path(DIRS$individual, nm)
   dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
-  saveRDS(seu_list[[nm]], file.path(outdir, paste0(nm, "_filtered.rds")))
+  rds_path <- file.path(outdir, paste0(nm, "_filtered.rds"))
+  saveRDS(seu_list[[nm]], rds_path)
+  cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_filtered.rds"))
+  if (!file.exists(cache_path)) {
+    dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
+    file.copy(rds_path, cache_path)
+    message("  [CACHE] Saved ", nm, "_filtered.rds to sample_cache/")
+  }
 }
 
 qc_summary <- data.frame(

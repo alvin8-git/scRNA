@@ -33,9 +33,19 @@ report_plots <- list()
 # =============================================================================
 message("\n--- Running SingleR ---")
 
-ref            <- HumanPrimaryCellAtlasData()
+.ref_name <- if (exists("SINGLER_REF")) SINGLER_REF else "HumanPrimaryCellAtlas"
+if (.ref_name == "MonacoImmune") {
+  ref        <- MonacoImmuneData()
+  ref_labels <- ref$label.main
+  message("  Reference: MonacoImmuneData (blood-optimised, 29 types)")
+} else {
+  ref        <- HumanPrimaryCellAtlasData()
+  ref_labels <- ref$label.main
+  message("  Reference: HumanPrimaryCellAtlasData (broad)")
+}
+
 expr_mat       <- GetAssayData(merged, assay = "RNA", layer = "data")
-singler_result <- SingleR(test = expr_mat, ref = ref, labels = ref$label.main,
+singler_result <- SingleR(test = expr_mat, ref = ref, labels = ref_labels,
                            fine.tune = TRUE, prune = TRUE, BPPARAM = bp_param)
 
 merged$singler_label  <- singler_result$labels
@@ -44,6 +54,72 @@ merged$singler_delta  <- apply(singler_result$scores, 1,
                                 function(x) { s <- sort(x, decreasing = TRUE); s[1] - s[2] })
 merged$singler_label_clean <- ifelse(is.na(merged$singler_pruned),
                                       "Unassigned", merged$singler_pruned)
+
+# Normalise raw SingleR labels to match CELLTYPE_COLORS canonical names
+SINGLER_NORM <- c(
+  # --- HumanPrimaryCellAtlas labels ---
+  # Platelet / megakaryocyte
+  "Platelets"              = "Platelet",
+  "Megakaryocyte"          = "Platelet",
+  # Neutrophil / granulocyte precursors
+  "Neutrophils"            = "Neutrophil",
+  "Neutrophil_-G-CSF"      = "Neutrophil",
+  "GMP"                    = "Neutrophil",
+  "Pro-Myelocyte"          = "Neutrophil",
+  "Myelocyte"              = "Neutrophil",
+  # Basophil / eosinophil / mast
+  "Basophils"              = "Basophil",
+  "Eosinophils"            = "Eosinophil",
+  "Mast_cells"             = "Mast cell",
+  # RBC / erythroid
+  "Erythrocyte"            = "RBC",
+  "Erythroblast"           = "RBC",
+  "BFU-E"                  = "RBC",
+  "CFU-E"                  = "RBC",
+  "MEP"                    = "RBC",
+  # HSPC
+  "CMP"                    = "HSPC",
+  "HSC_-G-CSF"             = "HSPC",
+  "HSC_CD34+"              = "HSPC",
+  # Lymphoid
+  "NK_cell"                = "NK",
+  "T_cells"                = "CD4 T",
+  "B_cell"                 = "B cell",
+  "Pro-B_cell_CD34+"       = "B cell",
+  "Pre-B_cell_CD34-"       = "B cell",
+  # Stromal / tissue contamination
+  "Endothelial_cells"      = "Endothelial",
+  "Epithelial_cells"       = "Epithelial",
+  "Fibroblasts"            = "Fibroblast",
+  "Smooth_muscle_cells"    = "Smooth Muscle",
+  # --- MonacoImmuneData labels ---
+  "CD4+ T cells"           = "CD4 T",
+  "CD8+ T cells"           = "CD8 T",
+  "T regulatory cells"     = "Treg",
+  "Vd2 gd T cells"         = "γδ T",
+  "Non Vd2 gd T cells"     = "γδ T",
+  "MAIT cells"             = "CD8 T",
+  "NK cells"               = "NK",
+  "B cells"                = "B cell",
+  "Plasmablasts"           = "Plasma",
+  "Classical monocytes"    = "CD14+ Mono",
+  "Intermediate monocytes" = "CD14+ Mono",
+  "Non-classical monocytes" = "FCGR3A+ Mono",
+  "Plasmacytoid DC"        = "DC",
+  "Myeloid DC"             = "DC",
+  "Progenitor cells"       = "HSPC",
+  "Low-density neutrophils" = "Neutrophil",
+  "Low-density basophils"  = "Basophil",
+  # Monaco label.main catch-alls (coarser labels returned for ambiguous cells)
+  "Monocytes"              = "CD14+ Mono",
+  "T cells"                = "CD4 T",
+  "Dendritic cells"        = "DC",
+  "B cells"                = "B cell",
+  "NK"                     = "NK"
+)
+idx <- merged$singler_label_clean %in% names(SINGLER_NORM)
+merged$singler_label_clean[idx] <- SINGLER_NORM[merged$singler_label_clean[idx]]
+
 
 # SingleR score heatmap (base R via pheatmap  -  save file, include in report)
 singler_heatmap_path <- file.path(DIRS$annotation, "singler_scores_heatmap.pdf")
@@ -67,7 +143,7 @@ singler_cols   <- setNames(
 p_singler <- DimPlot(merged, group.by = "singler_label_clean", reduction = "umap",
                       cols = singler_cols,
                       label = TRUE, label.size = 3, pt.size = PLOT$pt_size, repel = TRUE) +
-  labs(title = "SingleR  -  HumanPrimaryCellAtlasData") + theme_classic() +
+  labs(title = paste0("SingleR  -  ", .ref_name)) + theme_classic() +
   theme(legend.position = "right", legend.text = element_text(size = 8))
 ggsave(file.path(DIRS$annotation, "singler_labels_umap.pdf"),
        p_singler, width = 10, height = 7, dpi = PLOT$dpi)
@@ -90,6 +166,105 @@ cluster_singler <- merged@meta.data %>%
   rename(majority_singler = singler_label_clean)
 message("  SingleR majority labels per cluster:")
 print(as.data.frame(cluster_singler))
+
+# =============================================================================
+# PART 1b: scType marker-based annotation (no cross-species reference needed)
+# =============================================================================
+message("\n--- Running scType (marker-based, bat overrides applied automatically) ---")
+
+# Build positive marker gene sets from config MARKERS (bat overrides already applied)
+.gs_pos <- list(
+  "CD4 T"        = unique(c(MARKERS$T_pan, MARKERS$CD4_T)),
+  "CD8 T"        = unique(c(MARKERS$T_pan, MARKERS$CD8_T)),
+  "Treg"         = unique(c(MARKERS$T_pan, MARKERS$Treg)),
+  "NK"           = MARKERS$NK,
+  "B cell"       = MARKERS$B_cell,
+  "Plasma"       = MARKERS$Plasma,
+  "CD14+ Mono"   = MARKERS$CD14_mono,
+  "FCGR3A+ Mono" = MARKERS$FCGR3A_mono,
+  "Neutrophil"   = MARKERS$Neutrophil,
+  "DC"           = MARKERS$DC,
+  "Platelet"     = MARKERS$Platelet
+)
+if (!is.null(MARKERS$gamma_delta_T))
+  .gs_pos[["γδ T"]] <- MARKERS$gamma_delta_T
+
+# Keep only genes present in the dataset
+.gs_pos <- lapply(.gs_pos, function(g) intersect(g, rownames(merged)))
+.gs_pos <- Filter(function(g) length(g) > 0, .gs_pos)
+
+# Get scaled data (scType requires scaled expression)
+.scale_mat <- tryCatch(
+  GetAssayData(merged, assay = "RNA", layer = "scale.data"),
+  error = function(e) matrix(nrow = 0, ncol = 0)
+)
+if (nrow(.scale_mat) == 0) {
+  message("  scale.data absent — scaling all genes for scType")
+  merged <- ScaleData(merged, features = rownames(merged), verbose = FALSE)
+  .scale_mat <- GetAssayData(merged, assay = "RNA", layer = "scale.data")
+}
+
+# Marker sensitivity weight: genes shared by fewer cell types score higher
+.gene_freq   <- table(unlist(.gs_pos))
+.gene_weight <- setNames(1 / as.numeric(.gene_freq), names(.gene_freq))
+
+# Per-cell scores for each cell type (weighted sum of scaled expression)
+# Filter each gene set to rows actually present in scale.data (scale.data contains HVGs only)
+.score_mat <- do.call(cbind, lapply(names(.gs_pos), function(ct) {
+  genes <- intersect(.gs_pos[[ct]], rownames(.scale_mat))
+  if (length(genes) == 0) return(rep(0, ncol(.scale_mat)))
+  w <- .gene_weight[genes]
+  as.numeric(colSums(sweep(.scale_mat[genes, , drop = FALSE], 1, w, "*")))
+}))
+colnames(.score_mat) <- names(.gs_pos)
+
+# Assign per-cluster label: cell type with highest aggregate score wins
+.cl_sctype <- do.call(rbind, lapply(levels(merged$seurat_clusters), function(cl) {
+  cells     <- which(merged$seurat_clusters == cl)
+  cl_scores <- colSums(.score_mat[cells, , drop = FALSE])
+  data.frame(cluster = cl, sctype = names(which.max(cl_scores)),
+             score = max(cl_scores), n_cells = length(cells),
+             stringsAsFactors = FALSE)
+}))
+.cl_sctype <- .cl_sctype[order(as.integer(.cl_sctype$cluster)), ]
+
+merged$sctype_label <- .cl_sctype$sctype[match(as.character(merged$seurat_clusters),
+                                                .cl_sctype$cluster)]
+message("  scType cluster assignments:")
+print(.cl_sctype[, c("cluster", "sctype", "n_cells")])
+
+# UMAP coloured by scType labels
+.sctype_u    <- unique(merged$sctype_label)
+.sctype_cols <- setNames(
+  ifelse(.sctype_u %in% names(CELLTYPE_COLORS),
+         CELLTYPE_COLORS[.sctype_u],
+         scales::hue_pal()(length(.sctype_u))[seq_along(.sctype_u)]),
+  .sctype_u)
+p_sctype <- DimPlot(merged, group.by = "sctype_label", reduction = "umap",
+                     cols = .sctype_cols, label = TRUE, label.size = 3,
+                     pt.size = PLOT$pt_size, repel = TRUE) +
+  labs(title = "scType  -  Marker-based Annotation") + theme_classic() +
+  theme(legend.position = "right", legend.text = element_text(size = 8))
+ggsave(file.path(DIRS$annotation, "sctype_labels_umap.pdf"),
+       p_sctype, width = 10, height = 7, dpi = PLOT$dpi)
+report_plots[["scType  -  Marker-based Labels on UMAP"]] <- set_page(p_sctype, 8.5, 7.5)
+
+# SingleR vs scType comparison table per cluster
+.comparison <- merge(
+  cluster_singler[, c("seurat_clusters", "majority_singler")],
+  .cl_sctype[, c("cluster", "sctype", "n_cells")],
+  by.x = "seurat_clusters", by.y = "cluster"
+)
+.comparison$agreement <- .comparison$majority_singler == .comparison$sctype
+.comparison <- .comparison[order(as.integer(as.character(.comparison$seurat_clusters))), ]
+message("\n  SingleR vs scType comparison per cluster:")
+print(.comparison)
+write.csv(.comparison,
+          file.path(DIRS$annotation, "singler_vs_sctype_comparison.csv"),
+          row.names = FALSE)
+
+rm(.scale_mat, .score_mat, .gs_pos, .gene_freq, .gene_weight, .cl_sctype,
+   .sctype_u, .sctype_cols, .comparison)
 
 # =============================================================================
 # PART 2: Canonical marker plots for manual annotation
@@ -138,6 +313,11 @@ plot_marker_group(c(MARKERS$CD14_mono, MARKERS$FCGR3A_mono),
 plot_marker_group(c(MARKERS$DC, MARKERS$Platelet),
                   "Feature Plot  -  DC & Platelet Markers (FCER1A, CLEC9A, PPBP, PF4)",
                   "feature_DC_platelet.pdf")
+if (!is.null(MARKERS$gamma_delta_T)) {
+  plot_marker_group(MARKERS$gamma_delta_T,
+                    "Feature Plot  -  γδ T Cell Markers (TRDC, TRGC1, TRGC2)",
+                    "feature_gamma_delta_T.pdf")
+}
 
 # =============================================================================
 # PART 3: Assign final cell_type labels
@@ -146,13 +326,95 @@ message("\n--- Assigning cell type labels ---")
 
 if (!is.null(CLUSTER_CELLTYPE_MAP)) {
   merged$cell_type <- unname(CLUSTER_CELLTYPE_MAP[as.character(merged$seurat_clusters)])
-  merged$cell_type[is.na(merged$cell_type)] <- "Unknown"
-  message("  Using manual CLUSTER_CELLTYPE_MAP")
+  # Fall back to SingleR per-cell label for any cluster not in the map
+  unmapped <- is.na(merged$cell_type)
+  if (any(unmapped)) {
+    merged$cell_type[unmapped] <- merged$singler_label_clean[unmapped]
+    n_mapped   <- sum(!unmapped)
+    n_unmapped <- sum(unmapped)
+    cl_unmapped <- sort(unique(merged$seurat_clusters[unmapped]))
+    message("  Manual CLUSTER_CELLTYPE_MAP: ", n_mapped, " cells mapped manually; ",
+            n_unmapped, " cells (clusters ", paste(cl_unmapped, collapse = ", "),
+            ") fall back to SingleR labels")
+  } else {
+    message("  Using manual CLUSTER_CELLTYPE_MAP (all clusters mapped)")
+  }
 } else {
-  # Assign per-cell SingleR labels directly so rare types (Neutrophils, Unassigned)
-  # are not absorbed into the cluster majority and are visible in the cell type UMAP
-  merged$cell_type <- merged$singler_label_clean
-  message("  Using per-cell SingleR labels (set CLUSTER_CELLTYPE_MAP in config.R for manual labels)")
+  # Auto-generate cluster-level labels from SingleR majority vote per cluster.
+  # This gives coherent, cluster-level annotations without any manual config.
+  # A copy-pasteable CLUSTER_CELLTYPE_MAP is printed to the log for review.
+  cl_majority <- merged@meta.data %>%
+    group_by(seurat_clusters) %>%
+    summarise(auto_label = names(which.max(table(singler_label_clean))), .groups = "drop")
+  label_map <- setNames(cl_majority$auto_label, as.character(cl_majority$seurat_clusters))
+
+  # --- Sub-type refinement ---
+  # For clusters whose majority label is a generic type (e.g. "CD4 T", "B cell",
+  # "Monocyte"), score sub-type-specific markers by average expression per cluster
+  # and assign the best-matching specific sub-type label.
+  if (!is.null(SUBTYPE_MARKERS)) {
+    generic_clusters <- names(label_map)[label_map %in% names(SUBTYPE_MARKERS)]
+
+    if (length(generic_clusters) > 0) {
+      all_st_genes <- unique(unlist(lapply(SUBTYPE_MARKERS, unlist)))
+      all_st_genes <- intersect(all_st_genes, rownames(merged))
+
+      if (length(all_st_genes) > 0) {
+        avg_expr <- AverageExpression(merged, features = all_st_genes,
+                                      group.by = "seurat_clusters", assay = "RNA")$RNA
+        # Seurat prepends "g" to numeric cluster names — strip it for consistent indexing
+        colnames(avg_expr) <- sub("^g", "", colnames(avg_expr))
+
+        n_refined <- 0
+        for (cl in generic_clusters) {
+          major   <- label_map[cl]
+          subtypes <- SUBTYPE_MARKERS[[major]]
+
+          scores <- sapply(names(subtypes), function(st) {
+            genes <- intersect(subtypes[[st]], rownames(avg_expr))
+            if (length(genes) == 0) return(0)
+            mean(avg_expr[genes, cl, drop = TRUE])
+          })
+
+          best <- names(which.max(scores))
+          if (max(scores) > 0.05) {
+            label_map[cl] <- best
+            n_refined <- n_refined + 1
+          }
+        }
+
+        if (n_refined > 0)
+          message("  Sub-type refinement: ", n_refined,
+                  " cluster(s) refined from generic to specific labels.")
+      }
+    }
+  }
+
+  merged$cell_type <- unname(label_map[as.character(merged$seurat_clusters)])
+
+  # Override cluster-majority label for contamination/rare types — ensures scattered
+  # cells (e.g. 3 Neutrophils inside a Monocyte cluster) keep their per-cell SingleR
+  # identity on the UMAP instead of being silently absorbed into the majority label.
+  n_overridden <- 0L
+  for (ct in CONTAMINATION_TYPES) {
+    ct_cells <- which(merged$singler_label_clean == ct)
+    if (length(ct_cells) > 0) {
+      merged$cell_type[ct_cells] <- ct
+      message("  [CONTAM] Preserved ", length(ct_cells), " ", ct,
+              " cell(s) using per-cell SingleR label.")
+      n_overridden <- n_overridden + length(ct_cells)
+    }
+  }
+  if (n_overridden > 0)
+    message("  Total contamination/rare cells relabelled: ", n_overridden)
+
+  message("  Auto-annotated using SingleR majority label per cluster.")
+  message("  To override, copy the suggested CLUSTER_CELLTYPE_MAP below into config.R:\n")
+  message("  CLUSTER_CELLTYPE_MAP <- c(")
+  for (cl in sort(as.integer(names(label_map)))) {
+    message("    \"", cl, "\" = \"", label_map[as.character(cl)], "\",")
+  }
+  message("  )")
 }
 
 annot_table <- merged@meta.data %>%
@@ -184,6 +446,47 @@ p_ct <- DimPlot(merged, group.by = "cell_type", reduction = "umap",
 ggsave(file.path(DIRS$annotation, "celltype_umap.pdf"),
        p_ct, width = PLOT$width + 2, height = PLOT$height, dpi = PLOT$dpi)
 report_plots[["Integrated  -  Cell Type UMAP"]] <- set_page(p_ct, 8.5, 7.5)
+
+# =============================================================================
+# Contamination / rare cell type summary plot (per sample)
+# =============================================================================
+contam_present <- intersect(CONTAMINATION_TYPES, unique(merged$cell_type))
+if (length(contam_present) > 0) {
+  contam_df <- merged@meta.data %>%
+    group_by(sample) %>%
+    mutate(total_cells = n()) %>%
+    ungroup() %>%
+    filter(cell_type %in% CONTAMINATION_TYPES) %>%
+    group_by(sample, cell_type) %>%
+    summarise(n = n(), total_cells = first(total_cells), .groups = "drop") %>%
+    mutate(pct = round(n / total_cells * 100, 2),
+           label = ifelse(pct >= 1, paste0(pct, "%"), ""))
+
+  contam_cols <- CELLTYPE_COLORS[names(CELLTYPE_COLORS) %in% contam_present]
+  missing_col <- setdiff(contam_present, names(contam_cols))
+  if (length(missing_col) > 0)
+    contam_cols <- c(contam_cols, setNames(hue_pal()(length(missing_col)), missing_col))
+
+  p_contam <- ggplot(contam_df,
+                     aes(x = sample, y = pct, fill = cell_type, label = label)) +
+    geom_col(position = "stack", width = 0.6) +
+    geom_text(position = position_stack(vjust = 0.5), size = 3, color = "white",
+              fontface = "bold") +
+    scale_fill_manual(values = contam_cols) +
+    labs(title = "Contamination & Rare Cell Types — % per Sample",
+         x = NULL, y = "% of cells", fill = "Cell Type") +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10))
+
+  ggsave(file.path(DIRS$annotation, "contamination_summary.pdf"),
+         p_contam, width = max(5, length(SAMPLE_NAMES) * 1.8), height = 5,
+         dpi = PLOT$dpi)
+  report_plots[["Contamination & Rare Cell Types"]] <- set_page(p_contam, pw = 8, ph = 5)
+  message("\n  Contamination/rare cell types detected:")
+  print(as.data.frame(select(contam_df, sample, cell_type, n, pct)))
+} else {
+  message("\n  No contamination/rare cell types detected — samples appear clean.")
+}
 
 # =============================================================================
 # PART 4: DC and monocyte sub-type presence check

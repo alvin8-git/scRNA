@@ -4,8 +4,10 @@
 # =============================================================================
 
 # --- Base paths ---
-BASE_DIR     <- "/data/alvin/scRNA"
-PIPELINE_DIR <- file.path(BASE_DIR, "pipeline")
+BASE_DIR          <- "/data/alvin/scRNA"
+PIPELINE_DIR      <- file.path(BASE_DIR, "pipeline")
+# Per-sample RDS cache — shared across all combo runs; delete a subfolder to force recompute
+SAMPLE_CACHE_DIR  <- file.path(BASE_DIR, "sample_cache")
 
 # --- Dynamic sample path resolution ---
 # Override with environment variables (supports any number of samples):
@@ -123,7 +125,7 @@ CLUSTER <- list(
 SUBCLUSTER <- list(
   enabled    = TRUE,
   t_patterns = "T[_ ]cell|T cell|CD4|CD8|Treg|cytotox",
-  resolution = 1.2,    # higher res → more sub-clusters
+  resolution = 0.8,    # higher res → more sub-clusters
   min_cells  = 20      # skip if fewer T cells than this
 )
 
@@ -159,39 +161,169 @@ MARKERS <- list(
 
 ALL_MARKERS <- unique(unlist(MARKERS))
 
+# --- SingleR Reference ---
+# "HumanPrimaryCellAtlas" (default, broad) | "MonacoImmune" (blood-optimised, resolves CD4/CD8/γδ)
+SINGLER_REF <- "HumanPrimaryCellAtlas"
+
+# --- Sub-type Refinement Markers ---
+# Used by 05_annotate.R to refine generic SingleR labels into biologically
+# meaningful sub-types (e.g. "CD4 T" → "CD4 T (naive)" / "(memory)" / "(effector)").
+# Each top-level key must match a label that SingleR (after SINGLER_NORM) can produce.
+# Scoring: average expression of listed genes per cluster; highest score wins.
+# Set to NULL to disable sub-type refinement entirely.
+SUBTYPE_MARKERS <- list(
+  "CD4 T" = list(
+    "CD4 T (naive)"    = c("CCR7", "SELL", "TCF7", "LEF1"),
+    "CD4 T (effector)" = c("GZMK", "GZMB", "TNFRSF4", "PRF1"),
+    "CD4 T (memory)"   = c("IL7R", "AQP3", "GPR183", "S100A4")
+  ),
+  "B cell" = list(
+    "B cell (naive)"   = c("IGHD", "IGHM", "TCL1A", "IL4R"),
+    "B cell (memory)"  = c("IGHG1", "IGHG2", "IGHA1", "TNFRSF13B"),
+    "Plasma"           = c("MZB1", "JCHAIN", "SDC1")
+  ),
+  "Monocyte" = list(
+    "CD14+ Mono"       = c("CD14", "S100A8", "S100A9", "LYZ"),
+    "FCGR3A+ Mono"     = c("FCGR3A", "CDKN1C", "MS4A7")
+  )
+)
+
 # --- Parallelism ---
 # Workers: all cores minus 2 (keep system responsive), capped at 8
 PARALLEL <- list(
   workers          = min(8L, max(1L, parallel::detectCores() - 2L)),
-  # Memory per future worker — reduce if OOM errors occur
-  future_mem_gb    = 4L
+  # Memory per future worker — increase for large merged datasets (>30k cells needs >8 GB)
+  future_mem_gb    = 16L
 )
 
 # --- Manual Cluster → Cell Type Map ---
-# Fill after inspecting 05_annotate.R outputs.
-# Set NULL to use SingleR majority labels as fallback.
-CLUSTER_CELLTYPE_MAP <- NULL
+# NULL  → auto-annotate using SingleR majority vote per cluster (recommended for first run).
+#         The log (logs/05_annotate.log) will print a copy-pasteable map you can paste below.
+# c(...) → use the map below; any cluster NOT listed falls back to SingleR automatically.
+#
+# NOTE: cluster numbers change between datasets — do not copy a map from one sample to another.
+#
+# Verified map for DemoScRNA_filtered (13 clusters, res=0.5):
+#   "0"  = "CD4 T (naive)"    CCR7, TCF7, LEF1, IL7R
+#   "1"  = "CD4 T (effector)" CD3D/E, GZMK, TNFRSF4 (OX40)
+#   "2"  = "CD4 T (memory)"   CD3D/E, lower CCR7/LEF1
+#   "3"  = "NK"               GNLY, NKG7, KLRD1, GZMB
+#   "4"  = "B cell (naive)"   TCL1A, IGHD, IGHM, CD79A
+#   "5"  = "FCGR3A+ Mono"     CDKN1C, FCGR3A, MS4A7
+#   "6"  = "CD14+ Mono"       S100A8, LYZ, CD14, FCAR
+#   "7"  = "Neutrophil"       S100A12, S100A9, BST1, G0S2
+#   "8"  = "B cell (memory)"  IGHG1/G2, IGHA1, TNFRSF13B
+#   "9"  = "γδ T"             TRGC2, TRGC1
+#   "10" = "CD8 T"            CD8A, CD8B, CCR7, LEF1
+#   "11" = "DC"               FCER1A, CLEC10A, FLT3
+#   "12" = "Platelet"         PPBP, PF4, ITGB3, GP9
+# Verified map for ES03_newkit + ES12_newkit (bat, 17 clusters, res=1.0, MonacoImmune)
+# NK clusters 4/7/11/13 confirmed CD3+ cytotoxic T cells by marker check (CD3D 50-70%, CD3E 85-89%)
+# Cluster 16 confirmed Platelet by PF4 89%, ITGA2B 72%, GP9 50%
+# All other clusters fall back to SingleR (Monaco) automatically
+# NOTE: set to NULL for fresh multi-sample runs — cluster numbers change between datasets
+# 4-sample run (Sample6, Sample7, 10, ES03_newkit): clusters 3/11/15 confirmed CD8 T (CTL)
+# by CD3E 90.7%, NCAM1 0.5% — SingleR incorrectly calls these NK
+CLUSTER_CELLTYPE_MAP <- c("3"="CD8 T", "11"="CD8 T", "15"="CD8 T",
+                           "13"="DC", "18"="DC",
+                           "17"="Neutrophil")
 
 # --- Color Palettes ---
 SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
 
+# Cell types always preserved at per-cell level — never overridden by cluster majority vote.
+# These are contamination or rare types expected in low-quality or sorted samples.
+# Add / remove types to control which populations bypass the majority-vote labelling.
+CONTAMINATION_TYPES <- c("Neutrophil", "RBC", "HSPC", "Platelet",
+                          "Basophil", "Eosinophil", "Mast cell")
+
 CELLTYPE_COLORS <- c(
-  "CD4 T"        = "#E64B35",
-  "CD8 T"        = "#4DBBD5",
-  "Treg"         = "#FF7F0E",
-  "NK"           = "#00A087",
-  "B cell"       = "#3C5488",
-  "Plasma"       = "#7B4F9E",
-  "CD14+ Mono"   = "#F39B7F",
-  "FCGR3A+ Mono" = "#8491B4",
-  "Neutrophil"   = "#E377C2",   # pink — distinct from NK teal
-  "DC"           = "#91D1C2",
-  "Platelet"     = "#DC0000",
+  # CD4 T subtypes — red family
+  "CD4 T"              = "#E64B35",
+  "CD4 T (naive)"      = "#E64B35",
+  "CD4 T (memory)"     = "#FF7043",
+  "CD4 T (effector)"   = "#FF8A65",
+  # CD8 T — blue
+  "CD8 T"              = "#4DBBD5",
+  # Other T
+  "Treg"               = "#FF7F0E",
+  "γδ T"               = "#FFC107",
+  "NKT"                = "#17BECF",
+  # NK — teal
+  "NK"                 = "#00A087",
+  # B cell subtypes — dark blue family
+  "B cell"             = "#3C5488",
+  "B cell (naive)"     = "#3C5488",
+  "B cell (memory)"    = "#5C74A8",
+  "Plasma"             = "#7B4F9E",
+  # Monocyte subtypes — salmon/purple family
+  "Monocyte"           = "#F39B7F",
+  "CD14+ Mono"         = "#F39B7F",
+  "FCGR3A+ Mono"       = "#8491B4",
+  # Myeloid
+  "Neutrophil"         = "#E377C2",   # pink — distinct from NK teal
+  "DC"                 = "#91D1C2",
+  "Platelet"           = "#DC0000",
   # Contamination / rare populations
-  "RBC"          = "#A52A2A",
-  "HSPC"         = "#8C564B",   # brown — distinct from Monocyte salmon
-  "Unknown"      = "#B09C85"
+  "RBC"                = "#A52A2A",
+  "HSPC"               = "#8C564B",   # brown — distinct from Monocyte salmon
+  "Basophil"           = "#B5B000",
+  "Eosinophil"         = "#F4A460",
+  "Mast cell"          = "#9400D3",
+  # Non-immune / stromal (tissue contamination)
+  "Endothelial"        = "#636363",
+  "Epithelial"         = "#969696",
+  "Fibroblast"         = "#BDBDBD",
+  "Smooth Muscle"      = "#D9D9D9",
+  "Unknown"            = "#B09C85"
 )
+
+
+# =============================================================================
+# Species overrides — read SCRNA_SPECIES env var (set by run_pipeline.sh)
+# Supported: "human" (default) | "bat" (Eonycteris spelaea whole blood)
+# =============================================================================
+.species <- Sys.getenv("SCRNA_SPECIES", unset = "human")
+
+if (.species == "bat") {
+  message("[Species] bat (Eonycteris spelaea) — applying whole-blood overrides")
+
+  # ---- Markers: substitute the 3 genes absent from bat GTF ------------------
+  MARKERS$CD14_mono   <- c("CD14", "LYZ", "S100A8", "S100A9", "CSF1R")  # drop CST3; add CSF1R (M-CSF receptor)
+  MARKERS$FCGR3A_mono <- c("FCGR2A", "FCGR3B", "MS4A7")                 # drop FCGR3A
+  MARKERS$Neutrophil  <- c("FCGR3B", "CSF3R", "CXCR2", "CEACAM6", "IDO1") # drop CEACAM8; add IDO1
+  ALL_MARKERS <- unique(unlist(MARKERS))
+
+  # ---- Contamination: RBC and Neutrophil are expected in bat whole blood -----
+  CONTAMINATION_TYPES <- c("Basophil", "Eosinophil", "Mast cell")
+
+  # ---- SingleR: Monaco resolves CD4/CD8/γδ T cells in blood ------------------
+  SINGLER_REF <- "MonacoImmune"
+
+  # ---- Clustering: higher resolution for whole-blood diversity ----------------
+  CLUSTER$resolutions  <- c(0.3, 0.5, 0.8, 1.0)
+  CLUSTER$default_res  <- 1.0
+  CLUSTER$compare_res  <- c(0.5, 0.8, 1.0)
+
+  # ---- γδ T markers (TCR delta/gamma constant regions now in merged GTF) ------
+  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
+  ALL_MARKERS <- unique(unlist(MARKERS))
+
+  # ---- Sub-type markers: remove isotype genes absent from bat GTF ------------
+  # B cell isotype genes (IGHD, IGHM, IGHG1) not in bat annotation
+  SUBTYPE_MARKERS[["B cell"]] <- list(
+    "B cell (naive)"  = c("TCL1A", "IL4R", "CD24", "FCER2"),
+    "B cell (memory)" = c("CD27", "TNFRSF13B", "AIM2"),
+    "Plasma"          = c("MZB1", "JCHAIN", "SDC1")
+  )
+  # FCGR3A absent — use FCGR2A for FCGR3A+ Mono subtyping
+  SUBTYPE_MARKERS[["Monocyte"]] <- list(
+    "CD14+ Mono"   = c("CD14", "S100A8", "S100A9", "LYZ"),
+    "FCGR3A+ Mono" = c("FCGR2A", "FCGR3B", "CDKN1C", "MS4A7")
+  )
+}
+
+rm(.species)
 
 # --- Plot Defaults ---
 PLOT <- list(
@@ -211,9 +343,10 @@ DIRS <- list(
   doublets   = file.path(RESULTS_DIR, "doublets"),
   individual = file.path(RESULTS_DIR, "individual"),
   integrated = file.path(RESULTS_DIR, "integrated"),
-  annotation = file.path(RESULTS_DIR, "annotation"),
-  logs       = file.path(RESULTS_DIR, "logs"),
-  reports    = RESULTS_DIR
+  annotation   = file.path(RESULTS_DIR, "annotation"),
+  differential = file.path(RESULTS_DIR, "differential"),
+  logs         = file.path(RESULTS_DIR, "logs"),
+  reports      = RESULTS_DIR
 )
 
 invisible(lapply(DIRS, dir.create, recursive = TRUE, showWarnings = FALSE))

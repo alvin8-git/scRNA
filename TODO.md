@@ -26,54 +26,71 @@
 - [x] **Doublet UMAP title** — includes count and % e.g. `H1 - Doublet UMAP (31 in 400 cells (7.8%))`
 - [x] **Violin key lineage markers** — each sub-plot titled with cell type association e.g. `PPBP (Platelet)`, `CD3D (T cells)`
 - [x] **Cell fate tracking** — `cell_fate.csv` saved to `results/qc/`; accounts for every GEM barcode: load losses (min.features < 200) → QC losses → doublet removal → final retained cells + %
+- [x] **SingleR label normalisation** — `SINGLER_NORM` lookup in `05_annotate.R` maps raw SingleR labels to canonical pipeline names (Platelets→Platelet, Neutrophils→Neutrophil, NK_cell→NK, B_cell→B cell, Endothelial_cells→Endothelial, etc.); prevents split colours in UMAP
+- [x] **Sub-type refinement** — `SUBTYPE_MARKERS` in `config.R`; after SingleR majority vote, generic labels (CD4 T, B cell, Monocyte) are refined to sub-types (naive/memory/effector, CD14+/FCGR3A+) using average expression of lineage markers; resolves cluster collapse problem
+- [x] **Non-immune stromal labels** — Endothelial, Epithelial, Fibroblast, Smooth Muscle added to `CELLTYPE_COLORS` (grey scale); appear as named contamination labels instead of "Unknown"
+- [x] **Auto-annotation implemented** — `05_annotate.R` uses SingleR majority per cluster when `CLUSTER_CELLTYPE_MAP = NULL`; prints copy-pasteable suggested map to `logs/05_annotate.log`
+- [x] **Fallback logic** — partial `CLUSTER_CELLTYPE_MAP` entries override specific clusters; unmapped clusters fall back to SingleR automatically
+- [x] **DemoScRNA independently verified** — all 13 clusters annotated by marker evidence; 3 errors in H1/H2 map caught; 4 SingleR mislabels corrected (clusters 7→Neutrophil, 11→DC, 12→Platelet, 9→γδ T)
+- [x] **New cell type labels & colors** — added `CD4 T (effector)`, `γδ T`, `B cell (naive)`, `B cell (memory)` to `CELLTYPE_COLORS`
+- [x] **Step 06b — Differential Expression** — `06b_differential.R` runs `FindMarkers` (Wilcoxon) per cell type between 2 samples; saves per-cell-type CSVs, volcano plots, inflammatory/interferon/T-activation module score violin plots, `DE_summary.csv`, `differential_report.pdf`; auto-skipped for single-sample runs
+- [x] **Per-sample RDS cache** — steps 01–03 save results to `sample_cache/<name>/`; subsequent integration runs with the same sample skip reprocessing; cache invalidation by deleting `sample_cache/<name>/`
+- [x] **future.globals.maxSize raised to 16 GB** — `config.R` `future_mem_gb = 16L`; prevents future worker memory limit errors with large merged objects (>40 K cells)
+- [x] **Contamination cell type override** — `CONTAMINATION_TYPES` vector in `config.R`; after majority-vote labelling, per-cell SingleR labels for Neutrophil/RBC/HSPC/Platelet/Basophil/Eosinophil/Mast cell override cluster label so all contamination cells appear on UMAP
+- [x] **SINGLER_NORM extended to 30 entries** — covers full granulocyte/erythroid lineage (Megakaryocyte, Neutrophil_-G-CSF, Pro-Myelocyte, Myelocyte, Basophils, Eosinophils, Mast_cells, Erythrocyte, BFU-E, CFU-E)
+- [x] **Split-by-sample UMAP pagination** — at most 2 panels per page; 3+ samples produce multiple pages; `pdftools::pdf_length()` loop in `07_finalize_reports.R` includes all pages in reports
+- [x] **Shared legend on split UMAP** — `cowplot::get_legend()` from full merged object; `NoLegend()` on each per-sample panel; eliminates duplicate legends caused by differing factor levels between subsets
+- [x] **Step 08 — Comparison Report** — `08_comparison_report.R` generates `Comparison_report.pdf` with cover, sample quality, doublet rates, composition, integrated UMAP, and DE sections; runs via `bash run_pipeline.sh <samples> 08`
 
 ---
 
-## Immediate — Manual Cell Type Annotation
+## 4-Sample Bat Analysis (Sample6, Sample7, 10, ES03_newkit)
 
-The pipeline ran with SingleR automated labels as a fallback. T cells (~60%) are not yet split into CD4+/CD8+ subtypes. Complete manual annotation:
-
-- [ ] Open `results_*/annotation/canonical_markers_dotplot.pdf`
-- [ ] Open `results_*/annotation/singler_labels_umap.pdf` (reference)
-- [ ] Open `results_*/annotation/cluster_annotation_table.csv`
-- [ ] Map each cluster to a specific PBMC cell type
-- [ ] Fill `CLUSTER_CELLTYPE_MAP` in `pipeline/config.R`:
-  ```r
-  CLUSTER_CELLTYPE_MAP <- c(
-    "0" = "CD4 T",
-    "1" = "CD8 T",
-    "2" = "NK",
-    # ... complete for all clusters
-  )
-  ```
-- [ ] Re-run: `bash pipeline/run_pipeline.sh H1 H2 05 06 07`
-- [ ] Verify `results_*/integrated/integrated_umap_celltype.pdf` looks biologically correct
+- [x] **scType annotation** — marker-based scoring added to `05_annotate.R` Part 1b alongside SingleR; inverse marker-frequency weighting; HVG-safe scale.data filtering; outputs `sctype_labels_umap.pdf` + `singler_vs_sctype_comparison.csv`
+- [x] **Bat marker additions** — IDO1 added to Neutrophil panel (bat-specific granulocyte marker confirmed at 43% expression); CSF1R added to CD14_mono panel
+- [x] **NK → CD8 T cluster override** — clusters 3, 11, 15 confirmed CD3E 90.7%, NCAM1 0.5% → relabelled CD8 T; true NK is 0–0.7% as expected
+- [x] **DC cluster restoration** — clusters 13, 18 confirmed FLT3 72.8%/48%, HLA-DRA ~98%/80% → relabelled DC; SingleR incorrectly called Monocyte
+- [x] **Neutrophil cluster fix** — cluster 17 confirmed S100A8/A9 100%, CSF3R 39.6% → relabelled Neutrophil; SingleR called HSPC
+- [x] **Bootstrap proportions** — `09_bootstrap_proportions.R` added; 1000× downsampling to n_min=3604 (Sample6); all 6 pairwise chi-squared p << 0.001; Sample10 outlier (CD4 T 43.6%, CD8 T 20.1%)
+- [x] **Rarefaction analysis** — `10_rarefaction.R` added; ES03_newkit (n=6520) as ground truth; recommendation ≥5000 cells per sample for ±1% CI
+- [x] **Cell proportion comparison vs reference image** — CellProportions_4samples.png compared; NK→CD8 T correction resolves CTL/NK discrepancy; neutrophil gap is bat-biology (human references lack bat granulocyte signatures); DC now restored
 
 ---
+
+## Bat (*Eonycteris spelaea*) Support
+
+- [x] **Bat species parameter** — `run_pipeline.sh` accepts `bat` or `human` keyword; exports `SCRNA_SPECIES`; `config.R` reads it and applies whole-blood overrides automatically
+- [x] **Bat whole-blood overrides in config.R** — substitutes 3 absent marker genes (CST3→drop, FCGR3A→FCGR2A, CEACAM8→CEACAM6); removes RBC/Neutrophil from `CONTAMINATION_TYPES` (expected in whole blood); bat-specific B cell and Monocyte `SUBTYPE_MARKERS`
+- [x] **γδ T cell markers** — `MARKERS$gamma_delta_T = c("TRDC", "TRGC1", "TRGC2")` added to bat override block; TRDC/TRGC1/TRGC2 present in merged bat GTF
+- [x] **MonacoImmuneData reference for bat** — `SINGLER_REF <- "MonacoImmune"` set in bat block; resolves CD4 T, CD8 T, Treg, γδ T, classical/non-classical monocytes, pDC/mDC in a single pass (29 blood cell types vs 4 from HumanPrimaryCell)
+- [x] **Higher clustering resolution for bat** — `CLUSTER$resolutions`, `CLUSTER$default_res = 1.0`, `CLUSTER$compare_res` all overridden in bat block; ensures sufficient clusters for whole-blood diversity
+- [x] **Bat reference GTF** — merged old `finalsort_gtf4MT_recalc.gtf` (30,011 genes) with new TCR GTF `ESpe_Peaks2UTRed_genome_tcellgenes_ZF_Dec2024_v2.gtf`; result: `ESpe_merged_fullref.gtf` (30,180 genes = 30,011 + 169 new TCR loci); 38 TCR genes already present in old reference
+- [x] **GTF gene count clarification** — new GTF has only 207 `gene`-level feature lines (TCR genes) but 30,156 unique `gene_name` values across transcript/exon/CDS features; gene count does not affect GEM (STAR counts via exon features)
+- [x] **Bat pipeline run** — ES03_newkit + ES12_newkit (7,725 cells) analysed successfully; 4 initial cell types at res=0.5 (CD14+ Mono, CD4 T (memory), NK, B cell (memory)); re-running at res=1.0 with Monaco reference for improved type resolution
 
 ## Analysis Improvements
 
-- [ ] **Split CD4/CD8 T cells** — sub-cluster T cell cluster at higher resolution to separate CD4 naive, CD4 memory, CD8 effector, Tregs
-- [ ] **Monocyte sub-typing** — confirm both CD14+ and FCGR3A+ monocytes are resolved; may need `res = 0.6` or `0.8`
-- [ ] **Dendritic cells** — low abundance; check FCER1A/CLEC9A expression; may be absent in small samples
-- [ ] **Tune Harmony integration** — inspect `harmony_before_after.pdf`; if H1/H2 still separate, increase `HARMONY$theta` from 2 → 3–5
-- [ ] **Adjust clustering resolution** — `res = 0.5` gives ~7 clusters; try `res = 0.6` or `0.8` to better separate T cell subtypes
-
----
-
-## Differential Expression
-
-- [ ] Compare H1 vs H2 within each cell type (donor effect vs biology)
-- [ ] Run `FindMarkers(group.by = "sample")` per cell type to find donor-specific genes
-- [ ] Check for inflammatory signature differences between H1 and H2
+- [x] **Split CD4/CD8 T cells** — `05_annotate.R` PART 5: `FindSubCluster()` on T cell clusters (matching `SUBCLUSTER$t_patterns`); outputs `tcell_subclusters_umap.pdf`, `tcell_subclusters_dotplot.pdf`, `tcell_subcluster_summary.csv`. At res=1.2 gave 18 sub-clusters (over-split); suggest lowering `SUBCLUSTER$resolution` to 0.6–0.8
+- [x] **Monocyte sub-typing** — `05_annotate.R` PART 4: per-cluster CD14 vs FCGR3A expression %; found FCGR3A monocytes dominant (~17.9%); CD14 monocytes at ~7%; both subtypes resolved
+- [x] **Dendritic cells** — `05_annotate.R` PART 4: FCER1A/CLEC9A check; DC essentially absent (<0.3%); normal for small/healthy PBMC samples
+- [x] **Harmony mixing quality** — `04_integrate.R`: per-cluster max sample % calculated; WARNING emitted if any cluster >80% from one sample with theta tuning suggestion
+- [x] **Adjust clustering resolution** — `04_integrate.R`: `CLUSTER$compare_res = c(0.5, 0.6, 0.8)` produces side-by-side UMAP comparison saved as `cluster_resolution_comparison.pdf`
+- [x] **Gene set scoring** — implemented in `06b_differential.R`: `AddModuleScore` for Inflammatory, Interferon, and T_Activation gene sets; violin+boxplot per cell type per sample
 
 ---
 
 ## QC Review
 
-- [ ] Review `cell_fate.csv` — confirm removal counts at each stage per sample
-- [ ] H1 has only ~360 post-QC cells; confirm QC thresholds are not too aggressive
-- [ ] Check doublet score histograms — should be bimodal (clear singlet peak near 0)
+- [x] **H1 QC thresholds confirmed OK** — H1 started with 386 GEMs; 0 cells failed QC; MT% median 0.04%; H1 is a genuinely small library, not over-filtered
+- [x] **Doublet rates reviewed** — H1: 7.0% (27/386), H2: 10.8% (103/951); both within expected range for 10x Genomics
+- [x] **cell_fate.csv reviewed** — all removal counts confirmed: H1 retained 93%, H2 87.7%, DemoScRNA 88.2%
+
+---
+
+## Differential Expression
+
+- [x] **Step 06b implemented** — `FindMarkers` per cell type (≥20 cells per group); volcano plots; DE CSVs; module scores
+- [x] **Inflammatory signatures** — Inflammatory, Interferon, T_Activation gene sets scored and plotted per cell type × sample
 
 ---
 
@@ -103,9 +120,11 @@ The pipeline ran with SingleR automated labels as a fallback. T cells (~60%) are
 
 ## Environment
 
-- [ ] Install `qpdf` R package for PDF merging: `install.packages("qpdf")`
-- [ ] Add `scDblFinder` to `setup_env.sh` for fresh environment installs:
+- [x] Install `qpdf` R package for PDF merging: `install.packages("qpdf")`
+- [x] Add `scDblFinder` to `setup_env.sh` for fresh environment installs:
   ```bash
   mamba install -n scrna_seurat -c conda-forge -c bioconductor bioconductor-scdblfinder -y
   ```
-- [ ] Remove DoubletFinder GitHub install from `setup_env.sh` (replaced by scDblFinder)
+- [x] Remove DoubletFinder GitHub install from `setup_env.sh` (replaced by scDblFinder)
+- [x] Install `r-pdftools` — required for A4 Overall_report rasterization: `mamba install -n scrna_seurat -c conda-forge r-pdftools -y`
+- [x] Install `r-magick` — required by `cowplot::draw_image()` for A4 page composition: `mamba install -n scrna_seurat -c conda-forge r-magick -y`

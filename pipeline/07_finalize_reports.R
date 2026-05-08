@@ -43,7 +43,8 @@ combine(
 )
 
 combine(
-  c(file.path(DIRS$annotation, "annotation_report.pdf")),
+  c(file.path(DIRS$annotation, "annotation_report.pdf"),
+    file.path(DIRS$annotation, "contamination_summary.pdf")),
   file.path(DIRS$reports, "04-Annotation_report.pdf")
 )
 
@@ -259,6 +260,20 @@ make_overall_report <- function(output_path) {
   )
 
   # ------------------------------------------------------------------ #
+  # 3b. Contamination & rare cell type summary — portrait               #
+  # ------------------------------------------------------------------ #
+  {
+    contam_pdf <- file.path(DIRS$annotation, "contamination_summary.pdf")
+    if (file.exists(contam_pdf)) {
+      .add(
+        list(.render(contam_pdf)),
+        title     = "Contamination & Rare Cell Type Summary",
+        landscape = FALSE
+      )
+    }
+  }
+
+  # ------------------------------------------------------------------ #
   # 4. HVG + Top-5 Markers per sample — each caption below its image   #
   # ------------------------------------------------------------------ #
   for (nm in SAMPLE_NAMES) {
@@ -294,13 +309,17 @@ make_overall_report <- function(output_path) {
   )
 
   # ------------------------------------------------------------------ #
-  # 7. UMAP split by sample — landscape                                 #
+  # 7. UMAP split by sample — landscape (one page per 2 samples)       #
   # ------------------------------------------------------------------ #
-  .add(
-    list(.render(file.path(DIRS$integrated, "umap_split_by_sample.pdf"))),
-    title     = "Integrated UMAP — Split by Sample",
-    landscape = TRUE
-  )
+  {
+    split_pdf  <- file.path(DIRS$integrated, "umap_split_by_sample.pdf")
+    n_split    <- tryCatch(pdftools::pdf_length(split_pdf), error = function(e) 0L)
+    for (pg in seq_len(n_split)) {
+      lbl <- if (n_split == 1L) "Integrated UMAP — Split by Sample" else
+               sprintf("Integrated UMAP — Split by Sample (%d/%d)", pg, n_split)
+      .add(list(.render(split_pdf, page = pg)), title = lbl, landscape = TRUE)
+    }
+  }
 
   # ------------------------------------------------------------------ #
   # 8. UMAP triptych — landscape                                        #
@@ -367,6 +386,7 @@ if (!make_overall_report(file.path(DIRS$reports, "Overall_report.pdf"))) {
       file.path(DIRS$qc,       "qc_report.pdf"),
       file.path(DIRS$doublets, "doublets_report.pdf"),
       file.path(DIRS$annotation, "singler_scores_heatmap.pdf"),
+      file.path(DIRS$annotation, "contamination_summary.pdf"),
       unlist(lapply(SAMPLE_NAMES, function(nm) c(
         file.path(DIRS$individual, nm, paste0(nm, "_hvg.pdf")),
         file.path(DIRS$individual, nm, paste0(nm, "_dotplot_markers.pdf"))

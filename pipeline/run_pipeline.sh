@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# run_pipeline.sh — Master runner for the PBMC scRNA-seq Seurat pipeline.
+# run_pipeline.sh — Master runner for the scRNA-seq Seurat pipeline.
 #
 # Usage:
 #   # Run all steps on hardcoded defaults in config.R:
@@ -12,8 +12,12 @@
 #   # Two samples → Harmony integration enabled:
 #   bash run_pipeline.sh /path/to/sampleA /path/to/sampleB
 #
+#   # Species flag (default: human) — applies bat-specific marker/QC overrides:
+#   bash run_pipeline.sh bat /path/to/ES03 /path/to/ES12
+#   bash run_pipeline.sh human /path/to/H1 /path/to/H2
+#
 #   # Specific steps only:
-#   bash run_pipeline.sh /path/to/sampleA 01 02 03
+#   bash run_pipeline.sh bat /path/to/ES03 /path/to/ES12 01 02 03
 #   bash run_pipeline.sh 05 06 07
 #
 # Outputs:
@@ -43,15 +47,20 @@ step_hdr() { echo -e "\n${CYAN}${BOLD}+$(printf '=%.0s' {1..54})+${NC}"
 # =============================================================================
 SAMPLE_PATHS=()
 STEPS_ARGS=()
+SPECIES="human"   # default; overridden by 'bat' or 'human' keyword in args
 
 for arg in "$@"; do
+  if [[ "$arg" == "bat" || "$arg" == "human" ]]; then
+    SPECIES="$arg"
   # Treat as sample path if absolute, relative directory, or starts with ./ or ../
-  if [[ "$arg" == /* ]] || [[ -d "$arg" ]] || [[ "$arg" == ./* ]] || [[ "$arg" == ../* ]]; then
+  elif [[ "$arg" == /* ]] || [[ -d "$arg" ]] || [[ "$arg" == ./* ]] || [[ "$arg" == ../* ]]; then
     SAMPLE_PATHS+=("$(realpath "$arg")")
   else
     STEPS_ARGS+=("$arg")
   fi
 done
+
+export SCRNA_SPECIES="$SPECIES"
 
 # Export as SCRNA_SAMPLE1, SCRNA_SAMPLE2, ... so R config.R picks them up
 for idx in "${!SAMPLE_PATHS[@]}"; do
@@ -152,7 +161,9 @@ declare -A STEP_NAME=(
   ["04"]="Integration (Harmony)"
   ["05"]="Cell Type Annotation"
   ["06"]="Visualisation"
+  ["06b"]="Differential Expression"
   ["07"]="Finalise PDF Reports"
+  ["08"]="Comparison Report"
 )
 
 declare -A STEP_SCRIPT=(
@@ -162,7 +173,9 @@ declare -A STEP_SCRIPT=(
   ["04"]="04_integrate.R"
   ["05"]="05_annotate.R"
   ["06"]="06_visualize.R"
+  ["06b"]="06b_differential.R"
   ["07"]="07_finalize_reports.R"
+  ["08"]="08_comparison_report.R"
 )
 
 # =============================================================================
@@ -173,7 +186,7 @@ if [[ ${#STEPS_ARGS[@]} -gt 0 ]]; then
 elif [[ "$SINGLE_SAMPLE" == "true" ]]; then
   STEPS=("01" "02" "03" "04" "05" "06" "07")
 else
-  STEPS=("01" "02" "03" "04" "05" "06" "07")
+  STEPS=("01" "02" "03" "04" "05" "06" "06b" "07")
 fi
 
 # =============================================================================
@@ -218,6 +231,7 @@ if [[ $N_SAMPLES -gt 0 ]]; then
 else
   echo "  Samples: from config.R defaults"
 fi
+echo "  Species: ${SPECIES}"
 echo "  Steps: ${STEPS[*]}"
 echo "=============================================="
 echo ""
@@ -226,7 +240,7 @@ TOTAL_START=$(date +%s)
 
 for step in "${STEPS[@]}"; do
   if [[ -z "${STEP_SCRIPT[$step]+_}" ]]; then
-    err "Unknown step: ${step}. Valid: 01 02 03 04 05 06 07"
+    err "Unknown step: ${step}. Valid: 01 02 03 04 05 06 06b 07 08"
     exit 1
   fi
   run_step "${step}"

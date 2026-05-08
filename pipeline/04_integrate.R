@@ -23,8 +23,18 @@ report_plots <- list()
 
 # Load all per-sample processed objects
 seu_list <- setNames(
-  lapply(SAMPLE_NAMES, function(nm)
-    readRDS(file.path(DIRS$individual, nm, paste0(nm, "_seurat.rds")))),
+  lapply(SAMPLE_NAMES, function(nm) {
+    normal_path <- file.path(DIRS$individual, nm, paste0(nm, "_seurat.rds"))
+    cache_path  <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_seurat.rds"))
+    if (file.exists(normal_path)) {
+      readRDS(normal_path)
+    } else if (file.exists(cache_path)) {
+      message("  [CACHE] Loading ", nm, " from sample_cache/")
+      readRDS(cache_path)
+    } else {
+      stop("No seurat object for '", nm, "'. Run steps 01-03 first.")
+    }
+  }),
   SAMPLE_NAMES
 )
 
