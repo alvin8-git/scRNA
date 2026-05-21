@@ -479,13 +479,20 @@ report_plots[["Integrated  -  Cell Type UMAP"]] <- set_page(p_ct, 8.5, 7.5)
 # =============================================================================
 # Contamination / rare cell type summary plot (per sample)
 # =============================================================================
-contam_present <- intersect(CONTAMINATION_TYPES, unique(merged$cell_type))
+# Always include Monaco-blind types (RBC, Platelet, Eosinophil, Mast cell)
+# if present in cell_type — they are labelled via scType not CONTAMINATION_TYPES,
+# so they would otherwise be silently excluded from this summary.
+.monaco_blind_present <- intersect(c("RBC", "Platelet", "Eosinophil", "Mast cell"),
+                                    unique(merged$cell_type))
+.summary_types  <- unique(c(CONTAMINATION_TYPES, .monaco_blind_present))
+contam_present  <- intersect(.summary_types, unique(merged$cell_type))
+rm(.monaco_blind_present, .summary_types)
 if (length(contam_present) > 0) {
   contam_df <- merged@meta.data %>%
     group_by(sample) %>%
     mutate(total_cells = n()) %>%
     ungroup() %>%
-    filter(cell_type %in% CONTAMINATION_TYPES) %>%
+    filter(cell_type %in% contam_present) %>%
     group_by(sample, cell_type) %>%
     summarise(n = n(), total_cells = first(total_cells), .groups = "drop") %>%
     mutate(pct = round(n / total_cells * 100, 2),

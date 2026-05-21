@@ -195,7 +195,7 @@ SUBTYPE_MARKERS <- list(
 PARALLEL <- list(
   workers          = min(8L, max(1L, parallel::detectCores() - 2L)),
   # Memory per future worker — increase for large merged datasets (>30k cells needs >8 GB)
-  future_mem_gb    = 16L
+  future_mem_gb    = 32L
 )
 
 # --- Manual Cluster → Cell Type Map ---
