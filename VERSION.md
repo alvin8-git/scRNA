@@ -1,5 +1,25 @@
 # Version History
 
+## v0.7.0 — 2026-05-21
+
+### RBC/Platelet Detection, Monaco-Blind Cell Type Propagation, Composition Pagination
+
+#### New features
+
+- **scType Monaco-blind propagation** — `05_annotate.R`: after SingleR/manual assignment, any cluster scType labels as RBC, Platelet, Eosinophil, or Mast cell (types MonacoImmune lacks in its reference) is overridden in `cell_type`; emits `[scType override]` log message per cluster; uses `.sctype_monaco_blind` saved before the scType rm() cleanup block
+- **RBC detection restored** — `MARKERS$RBC` (HBB, HBA1, HBA2, GYPA) added to scType `.gs_pos`; HBB/HBA1/HBA2/GYPA confirmed present in bat 10x feature matrix; previously cluster 10 (1,180 cells) was silently misidentified as B cell by MonacoImmune
+- **Platelet detection restored** — `MARKERS$Platelet` now propagated to `cell_type` via Monaco-blind mechanism; previously cluster 14 (587 cells) was misidentified as CD14+ Mono
+- **Eosinophil & Mast cell markers** — added to base `config.R` `MARKERS`: Eosinophil = (SIGLEC8, CCR3, EPX), Mast_cell = (TPSAB1, CPA3, MS4A2, KIT); added to scType `.gs_pos`; Monaco-blind propagation applies when clusters are identified by scType
+- **HSPC added to scType** — `MARKERS$HSPC` (CD34, GATA2, AVP) now included in scType scoring; dual-detected by both scType and MonacoImmune "Progenitor cells" → SINGLER_NORM → HSPC
+- **Composition plots paginated** — `06_visualize.R`: at most 3 samples per page; page titles include "(N/total)" suffix when >3 samples; `celltype_composition_combined.pdf` is a multi-page PDF merged via `.combine_pdfs()`
+- **Overall_report multi-page composition** — `07_finalize_reports.R`: composition section loops over all pages of `celltype_composition_combined.pdf` (same pattern as split UMAP); each page titled "Cell Type Composition — Proportion & Count per Sample (N/total)"
+- **`limitsize = FALSE` on individual feature plots** — `03_individual.R`: added to dotplot and feature plot ggsave calls; prevents crash when `ALL_MARKERS` grows beyond ~50 unique genes (feat_h formula can exceed ggplot2's 50-inch safety cap)
+
+#### Bug fixes
+
+- **scType propagation never ran** — `.cl_sctype` was cleaned up by `rm()` at line 267 before the propagation block at line 424; fixed by saving `.sctype_monaco_blind` before the rm() call
+- **feat_h dimension crash** — adding Eosinophil/Mast cell markers pushed `ALL_MARKERS` from ~47 to ~54 genes; `feat_h = ceiling(54/4)*4 = 56` exceeded ggplot2's 50-inch cap; fixed with `limitsize = FALSE`
+
 ## v0.6.0 — 2026-05-08
 
 ### Bat 4-Sample Analysis, scType Annotation, Bootstrap & Rarefaction

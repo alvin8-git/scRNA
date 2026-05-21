@@ -349,13 +349,17 @@ make_overall_report <- function(output_path) {
   )
 
   # ------------------------------------------------------------------ #
-  # 11. Cell type composition — portrait                                #
+  # 11. Cell type composition — portrait (one page per ≤3 samples)    #
   # ------------------------------------------------------------------ #
-  .add(
-    list(.render(file.path(DIRS$integrated, "celltype_composition_combined.pdf"))),
-    title     = "Cell Type Composition — Proportion & Count per Sample",
-    landscape = FALSE
-  )
+  {
+    comp_pdf  <- file.path(DIRS$integrated, "celltype_composition_combined.pdf")
+    n_comp    <- tryCatch(pdftools::pdf_length(comp_pdf), error = function(e) 0L)
+    for (pg in seq_len(n_comp)) {
+      lbl <- if (n_comp == 1L) "Cell Type Composition — Proportion & Count per Sample" else
+               sprintf("Cell Type Composition — Proportion & Count per Sample (%d/%d)", pg, n_comp)
+      .add(list(.render(comp_pdf, page = pg)), title = lbl, landscape = FALSE)
+    }
+  }
 
   # ------------------------------------------------------------------ #
   # 12. Violin key lineage markers — landscape                          #

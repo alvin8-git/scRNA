@@ -44,6 +44,20 @@
 
 ---
 
+## RBC / Cell Type Detection Fixes (v0.7.0)
+
+- [x] **RBC detection fixed** — `MARKERS$RBC` added to scType `.gs_pos`; cluster 10 (1,180 cells) correctly relabelled from "B cell" to "RBC" via Monaco-blind propagation
+- [x] **Platelet detection fixed** — cluster 14 (587 cells) correctly relabelled from "CD14+ Mono" to "Platelet" via Monaco-blind propagation
+- [x] **Monaco-blind propagation** — generalised override for RBC, Platelet, Eosinophil, Mast cell: scType label wins when MonacoImmune cannot detect the type; `.sctype_monaco_blind` saved before scType cleanup `rm()` call (bug fix)
+- [x] **Eosinophil & Mast cell markers added** — to base `config.R` MARKERS and scType `.gs_pos`; all marker genes confirmed present in bat 10x feature matrix
+- [x] **HSPC added to scType** — `MARKERS$HSPC` now in scType gene sets; dual-detection via scType + MonacoImmune "Progenitor cells"
+- [x] **Composition plots paginated** — `06_visualize.R`: ≤3 samples per page; "(N/total)" title suffix; `celltype_composition_combined.pdf` is multi-page
+- [x] **Overall_report composition pagination** — `07_finalize_reports.R` loops over all composition pages (same pattern as split UMAP)
+- [x] **`limitsize = FALSE` fix** — `03_individual.R`: prevents ggsave crash when `ALL_MARKERS` exceeds ~50 unique genes
+- [x] **Cross-species marker accuracy audit** — Tier 1 (CD3, CD14, CD79A): reliable; Tier 2 (NKG7, HBB): moderate; Tier 3 (CCR7, SIGLEC8): less reliable; NCAM1/CEACAM8/CST3/FCGR3A confirmed non-functional in bat
+
+---
+
 ## 4-Sample Bat Analysis (Sample6, Sample7, 10, ES03_newkit)
 
 - [x] **scType annotation** — marker-based scoring added to `05_annotate.R` Part 1b alongside SingleR; inverse marker-frequency weighting; HVG-safe scale.data filtering; outputs `sctype_labels_umap.pdf` + `singler_vs_sctype_comparison.csv`

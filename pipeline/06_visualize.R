@@ -297,34 +297,62 @@ p_bar_legend <- cowplot::get_legend(
           legend.box       = "horizontal")
 )
 
-combined_w <- max(7, length(unique(prop_df$sample)) * 5)
+# Paginate: at most 3 samples per page
+.comp_samples  <- unique(prop_df$sample)
+.n_per_page    <- 3L
+.page_chunks   <- split(.comp_samples,
+                         ceiling(seq_along(.comp_samples) / .n_per_page))
+.n_pages       <- length(.page_chunks)
+.comp_pdfs     <- character(0)
 
+for (.pg in seq_along(.page_chunks)) {
+  .samps  <- .page_chunks[[.pg]]
+  .pg_df  <- prop_df %>% filter(sample %in% .samps) %>%
+    mutate(sample = factor(sample, levels = .samps))
+  .pg_w   <- max(6, length(.samps) * 3.5)
+  .suffix <- if (.n_pages > 1) paste0(" (", .pg, "/", .n_pages, ")") else ""
+
+  .p_pct <- ggplot(.pg_df, aes(x = sample, y = prop, fill = cell_type)) +
+    geom_bar(stat = "identity", width = 0.7) +
+    geom_text(aes(label = ifelse(prop >= 0.02,
+                                 paste0(cell_type, " ", round(prop * 100), "%"), "")),
+              position = position_stack(vjust = 0.5),
+              size = 2.5, colour = "white", fontface = "bold", lineheight = 0.85) +
+    scale_fill_manual(values = ct_cols) +
+    scale_y_continuous(labels = percent_format()) +
+    labs(title = paste0("Cell Type  -  % of Sample", .suffix), x = NULL, y = "Proportion") +
+    theme_pub + theme(legend.position = "none")
+
+  .p_cnt <- ggplot(.pg_df, aes(x = cell_type, y = n, fill = cell_type)) +
+    geom_bar(stat = "identity", width = 0.7) +
+    facet_wrap(~ sample, nrow = 1) +
+    scale_fill_manual(values = ct_cols, guide = "none") +
+    labs(title = paste0("Cell Type  -  Number of Cells", .suffix), x = NULL, y = "Cell Count") +
+    theme_pub + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+
+  .p_combined <- plot_grid(
+    .p_pct, p_bar_legend, .p_cnt,
+    ncol = 1, rel_heights = c(1, 0.12, 0.85),
+    align = "v", axis = "lr"
+  )
+
+  .tf <- tempfile(fileext = ".pdf")
+  ggsave(.tf, .p_combined, width = .pg_w, height = 10, dpi = PLOT$dpi)
+  .comp_pdfs <- c(.comp_pdfs, .tf)
+
+  .rkey <- if (.n_pages > 1)
+    paste0("Cell Type Composition  -  % and Count (", .pg, "/", .n_pages, ")")
+  else
+    "Cell Type Composition  -  % (top) and Cell Count (bottom)"
+  report_plots[[.rkey]] <- set_page(.p_combined, pw = .pg_w, ph = 10)
+}
+
+.combine_pdfs(.comp_pdfs, file.path(DIRS$integrated, "celltype_composition_combined.pdf"))
 ggsave(file.path(DIRS$integrated, "celltype_proportions_bar.pdf"),
-       p_bar, width = combined_w, height = 6, dpi = PLOT$dpi)
-
-p_bar_n <- ggplot(prop_df, aes(x = cell_type, y = n, fill = cell_type)) +
-  geom_bar(stat = "identity", width = 0.7) +
-  facet_wrap(~ sample, nrow = 1) +
-  scale_fill_manual(values = ct_cols, guide = "none") +
-  labs(title = "Cell Type  -  Number of Cells", x = NULL, y = "Cell Count") +
-  theme_pub +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
-ggsave(file.path(DIRS$integrated, "celltype_counts_bar.pdf"),
-       p_bar_n, width = combined_w, height = 5, dpi = PLOT$dpi)
-
-# Combined: stacked % | compact legend strip | counts
-p_bar_combined <- plot_grid(
-  p_bar, p_bar_legend, p_bar_n,
-  ncol = 1, rel_heights = c(1, 0.12, 0.85),
-  labels = c("", "", ""),
-  align = "v", axis = "lr"
-)
-
-ggsave(file.path(DIRS$integrated, "celltype_composition_combined.pdf"),
-       p_bar_combined, width = combined_w, height = 10, dpi = PLOT$dpi)
-
-report_plots[["Cell Type Composition  -  % (top) and Cell Count (bottom)"]] <-
-  set_page(p_bar_combined, pw = combined_w, ph = 10)
+       p_bar, width = max(7, length(.comp_samples) * 2), height = 6, dpi = PLOT$dpi)
+unlink(.comp_pdfs)
+rm(.comp_samples, .n_per_page, .page_chunks, .n_pages, .comp_pdfs,
+   .pg, .samps, .pg_df, .pg_w, .suffix, .p_pct, .p_cnt, .p_combined, .tf, .rkey)
 
 # =============================================================================
 # PLOT SET 7: Violin plots  -  key lineage markers

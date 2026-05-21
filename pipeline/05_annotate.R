@@ -184,7 +184,11 @@ message("\n--- Running scType (marker-based, bat overrides applied automatically
   "FCGR3A+ Mono" = MARKERS$FCGR3A_mono,
   "Neutrophil"   = MARKERS$Neutrophil,
   "DC"           = MARKERS$DC,
-  "Platelet"     = MARKERS$Platelet
+  "Platelet"     = MARKERS$Platelet,
+  "RBC"          = MARKERS$RBC,
+  "HSPC"         = MARKERS$HSPC,
+  "Eosinophil"   = MARKERS$Eosinophil,
+  "Mast cell"    = MARKERS$Mast_cell
 )
 if (!is.null(MARKERS$gamma_delta_T))
   .gs_pos[["γδ T"]] <- MARKERS$gamma_delta_T
@@ -263,8 +267,12 @@ write.csv(.comparison,
           file.path(DIRS$annotation, "singler_vs_sctype_comparison.csv"),
           row.names = FALSE)
 
+# Save cluster→type mapping for cell types MonacoImmune cannot label.
+# These are propagated to merged$cell_type after the SingleR-based assignment.
+.monaco_blind <- c("RBC", "Platelet", "Eosinophil", "Mast cell")
+.sctype_monaco_blind <- .cl_sctype[.cl_sctype$sctype %in% .monaco_blind, , drop = FALSE]
 rm(.scale_mat, .score_mat, .gs_pos, .gene_freq, .gene_weight, .cl_sctype,
-   .sctype_u, .sctype_cols, .comparison)
+   .sctype_u, .sctype_cols, .comparison, .monaco_blind)
 
 # =============================================================================
 # PART 2: Canonical marker plots for manual annotation
@@ -415,6 +423,27 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
     message("    \"", cl, "\" = \"", label_map[as.character(cl)], "\",")
   }
   message("  )")
+}
+
+# Propagate scType "RBC" label to cell_type for clusters scType identifies as RBC
+# but SingleR (MonacoImmune) cannot detect (Monaco has no erythroid reference types).
+# Skipped if the cluster is already set in CLUSTER_CELLTYPE_MAP.
+# Propagate scType labels for cell types MonacoImmune cannot detect
+# (RBC, Platelet, Eosinophil, Mast cell) to merged$cell_type.
+# Only applies to clusters not already set in CLUSTER_CELLTYPE_MAP.
+if (exists(".sctype_monaco_blind") && nrow(.sctype_monaco_blind) > 0) {
+  .mapped <- names(CLUSTER_CELLTYPE_MAP %||% c())
+  for (.i in seq_len(nrow(.sctype_monaco_blind))) {
+    .ct <- .sctype_monaco_blind$sctype[.i]
+    .cl <- .sctype_monaco_blind$cluster[.i]
+    if (!(.cl %in% .mapped)) {
+      .cells <- as.character(merged$seurat_clusters) == .cl
+      merged$cell_type[.cells] <- .ct
+      message("  [scType override] Cluster ", .cl, ": labelled ", sum(.cells),
+              " cells as '", .ct, "' (MonacoImmune cannot detect this type)")
+    }
+  }
+  rm(.sctype_monaco_blind, .mapped, .i, .ct, .cl, .cells)
 }
 
 annot_table <- merged@meta.data %>%

@@ -154,6 +154,8 @@ MARKERS <- list(
   Neutrophil  = c("FCGR3B", "CSF3R", "CXCR2", "CEACAM8"),  # inflammation marker
   DC          = c("FCER1A", "CLEC9A"),
   Platelet    = c("PPBP", "PF4"),
+  Eosinophil  = c("SIGLEC8", "CCR3", "EPX"),           # granulocyte; rare in healthy blood
+  Mast_cell   = c("TPSAB1", "CPA3", "MS4A2", "KIT"),   # tissue-resident; contamination if present
   # Contamination indicators — presence signals poor sample quality
   RBC         = c("HBB", "HBA1", "HBA2", "GYPA"),    # red blood cell contamination
   HSPC        = c("CD34", "GATA2", "AVP")             # haematopoietic progenitors

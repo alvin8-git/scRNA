@@ -106,7 +106,7 @@ process_individual <- function(seu, sample_name) {
     labs(title = paste0(sample_name, "  -  Top 5 Markers per Cluster")) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7))
   ggsave(file.path(outdir, paste0(sample_name, "_dotplot_markers.pdf")),
-         p_dot, width = max(12, length(top5) * 0.4), height = 7)
+         p_dot, width = max(12, length(top5) * 0.4), height = 7, limitsize = FALSE)
   plots[[paste0(sample_name, "  -  Top Marker Dot Plot")]] <-
     set_page(p_dot, pw = 11, ph = 7)
 
@@ -119,7 +119,7 @@ process_individual <- function(seu, sample_name) {
           axis.text = element_blank(), axis.ticks = element_blank())
   feat_h <- ceiling(length(markers_present) / 4) * 4
   ggsave(file.path(outdir, paste0(sample_name, "_umap_markers.pdf")),
-         p_feat, width = 16, height = feat_h)
+         p_feat, width = 16, height = feat_h, limitsize = FALSE)
   plots[[paste0(sample_name, "  -  Canonical Marker Feature Plots")]] <-
     set_page(p_feat, pw = 11, ph = min(feat_h * 11 / 16, 10))
 
