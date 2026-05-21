@@ -265,11 +265,12 @@ make_overall_report <- function(output_path) {
   {
     contam_pdf <- file.path(DIRS$annotation, "contamination_summary.pdf")
     if (file.exists(contam_pdf)) {
-      .add(
-        list(.render(contam_pdf)),
-        title     = "Contamination & Rare Cell Type Summary",
-        landscape = FALSE
-      )
+      n_contam <- tryCatch(pdftools::pdf_length(contam_pdf), error = function(e) 1L)
+      for (pg in seq_len(n_contam)) {
+        .lbl <- if (n_contam == 1L) "Contamination & Rare Cell Type Summary" else
+          sprintf("Contamination & Rare Cell Type Summary (%d/%d)", pg, n_contam)
+        .add(list(.render(contam_pdf, page = pg)), title = .lbl, landscape = FALSE)
+      }
     }
   }
 

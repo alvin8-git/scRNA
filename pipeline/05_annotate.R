@@ -503,21 +503,60 @@ if (length(contam_present) > 0) {
   if (length(missing_col) > 0)
     contam_cols <- c(contam_cols, setNames(hue_pal()(length(missing_col)), missing_col))
 
-  p_contam <- ggplot(contam_df,
-                     aes(x = sample, y = pct, fill = cell_type, label = label)) +
-    geom_col(position = "stack", width = 0.6) +
-    geom_text(position = position_stack(vjust = 0.5), size = 3, color = "white",
-              fontface = "bold") +
-    scale_fill_manual(values = contam_cols) +
-    labs(title = "Contamination & Rare Cell Types — % per Sample",
-         x = NULL, y = "% of cells", fill = "Cell Type") +
-    theme_classic() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10))
+  .n_per_row   <- 8L
+  .n_per_page  <- 16L   # 2 rows × 8 samples per page
+  .page_chunks <- split(SAMPLE_NAMES, ceiling(seq_along(SAMPLE_NAMES) / .n_per_page))
+  .n_pages     <- length(.page_chunks)
+  .contam_pdfs <- character(0)
 
-  ggsave(file.path(DIRS$annotation, "contamination_summary.pdf"),
-         p_contam, width = max(5, length(SAMPLE_NAMES) * 1.8), height = 5,
-         dpi = PLOT$dpi)
-  report_plots[["Contamination & Rare Cell Types"]] <- set_page(p_contam, pw = 8, ph = 5)
+  for (.pg in seq_along(.page_chunks)) {
+    .samps <- .page_chunks[[.pg]]
+    .pg_df <- contam_df %>%
+      filter(sample %in% .samps) %>%
+      mutate(
+        sample    = factor(sample, levels = .samps),
+        row_group = factor(
+          ifelse(as.integer(factor(sample, levels = .samps)) <= .n_per_row,
+                 "Row 1", "Row 2"),
+          levels = c("Row 1", "Row 2")
+        )
+      )
+    if (nrow(.pg_df) == 0) next
+
+    .suffix <- if (.n_pages > 1) paste0(" (", .pg, "/", .n_pages, ")") else ""
+    .n_rg   <- length(unique(.pg_df$row_group))
+    .pg_w   <- max(5, min(.n_per_row, length(.samps)) * 1.8)
+    .pg_h   <- 3.5 * .n_rg
+
+    .p <- ggplot(.pg_df,
+                 aes(x = sample, y = pct, fill = cell_type, label = label)) +
+      geom_col(position = "stack", width = 0.6) +
+      geom_text(position = position_stack(vjust = 0.5), size = 3, color = "white",
+                fontface = "bold") +
+      scale_fill_manual(values = contam_cols) +
+      scale_x_discrete(drop = TRUE) +
+      facet_wrap(~row_group, nrow = 2, scales = "free_x") +
+      labs(title = paste0("Contamination & Rare Cell Types — % per Sample", .suffix),
+           x = NULL, y = "% of cells", fill = "Cell Type") +
+      theme_classic() +
+      theme(axis.text.x     = element_text(angle = 45, hjust = 1, size = 10),
+            strip.text       = element_blank(),
+            strip.background = element_blank())
+
+    .tmp <- tempfile(fileext = ".pdf")
+    ggsave(.tmp, .p, width = .pg_w, height = .pg_h, dpi = PLOT$dpi, limitsize = FALSE)
+    .contam_pdfs <- c(.contam_pdfs, .tmp)
+
+    .key <- if (.pg == 1) "Contamination & Rare Cell Types" else
+      paste0("Contamination & Rare Cell Types (", .pg, "/", .n_pages, ")")
+    report_plots[[.key]] <- set_page(.p, pw = 8, ph = min(.pg_h * 8 / .pg_w, 9))
+  }
+
+  .combine_pdfs(.contam_pdfs,
+                file.path(DIRS$annotation, "contamination_summary.pdf"))
+  rm(.n_per_row, .n_per_page, .page_chunks, .n_pages, .contam_pdfs,
+     .pg, .samps, .pg_df, .suffix, .n_rg, .pg_w, .pg_h, .p, .tmp, .key)
+
   message("\n  Contamination/rare cell types detected:")
   print(as.data.frame(select(contam_df, sample, cell_type, n, pct)))
 } else {
