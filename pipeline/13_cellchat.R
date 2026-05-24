@@ -9,7 +9,12 @@ suppressPackageStartupMessages({
   library(CellChat); library(Seurat); library(dplyr)
   library(ggplot2); library(patchwork); library(pdftools); library(magick)
 })
-source(file.path(dirname(sys.frame(1)$ofilename %||% "."), "config.R"))
+.pipeline_dir <- {
+  args <- commandArgs(trailingOnly = FALSE)
+  f <- grep("^--file=", args, value = TRUE)
+  if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else "."
+}
+source(file.path(.pipeline_dir, "config.R"))
 
 if (length(CONDITION_LEVELS) < 2) {
   message("Only one condition — skipping 13_cellchat.R")

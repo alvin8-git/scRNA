@@ -10,7 +10,12 @@ suppressPackageStartupMessages({
   library(ggplot2); library(dplyr); library(pdftools); library(magick)
 })
 
-source(file.path(dirname(sys.frame(1)$ofilename %||% "."), "config.R"))
+.pipeline_dir <- {
+  args <- commandArgs(trailingOnly = FALSE)
+  f <- grep("^--file=", args, value = TRUE)
+  if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else "."
+}
+source(file.path(.pipeline_dir, "config.R"))
 
 dir.create(DIRS$pathways, showWarnings = FALSE, recursive = TRUE)
 
