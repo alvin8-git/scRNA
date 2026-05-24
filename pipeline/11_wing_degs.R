@@ -114,7 +114,11 @@ if (length(score_cols) > 0) {
 # =============================================================================
 # PART 2: FindMarkers DEG per cell type (MAST, recovering vs healthy)
 # =============================================================================
-message("Running FindMarkers per cell type (MAST)...")
+.test_method <- if (requireNamespace("MAST", quietly = TRUE)) "MAST" else {
+  message("  MAST not installed — falling back to wilcox")
+  "wilcox"
+}
+message("Running FindMarkers per cell type (", .test_method, ")...")
 de_list <- list()
 
 for (ct in cell_types) {
@@ -129,7 +133,7 @@ for (ct in cell_types) {
   tryCatch({
     de <- FindMarkers(merged,
                       ident.1 = cells_b, ident.2 = cells_a,
-                      test.use = "MAST", logfc.threshold = 0.1,
+                      test.use = .test_method, logfc.threshold = 0.1,
                       min.pct = 0.05, verbose = FALSE)
     de$gene      <- rownames(de)
     de$cell_type <- ct
