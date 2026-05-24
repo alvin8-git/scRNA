@@ -79,12 +79,12 @@ for (ct in cell_types) {
     if (!is.null(ego_up) && nrow(ego_up) > 0) {
       write.csv(as.data.frame(ego_up),
                 file.path(ct_dir, "GO_BP_up.csv"), row.names = FALSE)
-      tmp <- tempfile(fileext = ".pdf")
-      p   <- dotplot(ego_up, showCategory = 15) +
+      p        <- dotplot(ego_up, showCategory = 15) +
         labs(title = paste0(ct, " — GO BP (up in recovering)")) +
         theme_classic(base_size = 9)
-      ggsave(tmp, p, width = 8, height = 6)
-      all_pdfs <- c(all_pdfs, tmp)
+      pdf_file <- file.path(ct_dir, "GO_BP_up.pdf")
+      ggsave(pdf_file, p, width = 8, height = 6)
+      all_pdfs <- c(all_pdfs, pdf_file)
       all_enrich[[paste0(ct, "_GO_up")]] <- as.data.frame(ego_up) %>%
         dplyr::mutate(cell_type = ct, direction = "up")
     }
@@ -108,12 +108,12 @@ for (ct in cell_types) {
     if (!is.null(ego_dn) && nrow(ego_dn) > 0) {
       write.csv(as.data.frame(ego_dn),
                 file.path(ct_dir, "GO_BP_down.csv"), row.names = FALSE)
-      tmp <- tempfile(fileext = ".pdf")
-      p   <- dotplot(ego_dn, showCategory = 15) +
+      p        <- dotplot(ego_dn, showCategory = 15) +
         labs(title = paste0(ct, " — GO BP (up in healthy)")) +
         theme_classic(base_size = 9)
-      ggsave(tmp, p, width = 8, height = 6)
-      all_pdfs <- c(all_pdfs, tmp)
+      pdf_file <- file.path(ct_dir, "GO_BP_down.pdf")
+      ggsave(pdf_file, p, width = 8, height = 6)
+      all_pdfs <- c(all_pdfs, pdf_file)
     }
   }
 
@@ -133,12 +133,12 @@ for (ct in cell_types) {
       ekegg <- setReadable(ekegg, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
       write.csv(as.data.frame(ekegg),
                 file.path(ct_dir, "KEGG_up.csv"), row.names = FALSE)
-      tmp <- tempfile(fileext = ".pdf")
-      p   <- dotplot(ekegg, showCategory = 15) +
+      p        <- dotplot(ekegg, showCategory = 15) +
         labs(title = paste0(ct, " — KEGG (up in recovering)")) +
         theme_classic(base_size = 9)
-      ggsave(tmp, p, width = 8, height = 6)
-      all_pdfs <- c(all_pdfs, tmp)
+      pdf_file <- file.path(ct_dir, "KEGG_up.pdf")
+      ggsave(pdf_file, p, width = 8, height = 6)
+      all_pdfs <- c(all_pdfs, pdf_file)
     }
   }
 
@@ -177,14 +177,14 @@ for (ct in cell_types) {
       top_ids <- head(
         gsea_res@result$ID[order(abs(gsea_res@result$NES), decreasing = TRUE)], 5
       )
-      tmp <- tryCatch({
-        p   <- gseaplot2(gsea_res, geneSetID = top_ids,
-                         title = paste0(ct, " — GSEA top pathways"))
-        out <- tempfile(fileext = ".pdf")
-        ggsave(out, p, width = 10, height = 6)
-        out
+      pdf_gsea <- tryCatch({
+        p        <- gseaplot2(gsea_res, geneSetID = top_ids,
+                              title = paste0(ct, " — GSEA top pathways"))
+        pdf_file <- file.path(ct_dir, "GSEA_GO_BP.pdf")
+        ggsave(pdf_file, p, width = 10, height = 6)
+        pdf_file
       }, error = function(e) { message("  gseaplot2 failed: ", e$message); NA_character_ })
-      if (!is.na(tmp)) all_pdfs <- c(all_pdfs, tmp)
+      if (!is.na(pdf_gsea)) all_pdfs <- c(all_pdfs, pdf_gsea)
     }
   }
 }
@@ -203,7 +203,6 @@ if (length(all_enrich) > 0) {
 # Combined PDF report
 if (length(all_pdfs) > 0) {
   .combine_pdfs(all_pdfs, file.path(DIRS$pathways, "pathways_report.pdf"))
-  unlink(all_pdfs)
   message("Saved pathways_report.pdf")
 }
 
