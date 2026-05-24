@@ -41,7 +41,7 @@ if (!file.exists(rds_path))
   stop("Missing: ", rds_path, " — run steps 04+05 first")
 merged <- readRDS(rds_path)
 
-merged$condition <- SAMPLE_CONDITIONS[merged$sample]
+merged$condition <- unname(SAMPLE_CONDITIONS[merged$sample])
 if (anyNA(merged$condition))
   warning("Some cells have no condition label — check SCRNA_CONDITION")
 

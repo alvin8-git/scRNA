@@ -33,7 +33,7 @@ rds_path <- file.path(DIRS$integrated, "integrated_annotated.rds")
 if (!file.exists(rds_path))
   stop("Missing: ", rds_path, " — run steps 04+05 first")
 merged <- readRDS(rds_path)
-merged$condition <- SAMPLE_CONDITIONS[merged$sample]
+merged$condition <- unname(SAMPLE_CONDITIONS[merged$sample])
 
 # =============================================================================
 # PART 1: Full dataset trajectory
