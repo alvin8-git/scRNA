@@ -1,12 +1,14 @@
 # =============================================================================
 # 12_pathways.R — GO/KEGG pathway enrichment and GSEA per cell type
 # Requires: all_DEG_combined.csv from step 11
-# Outputs:  enrichment CSVs, dot plots, GSEA plots → DIRS$pathways
+# Outputs:  enrichment CSVs, bar plots, pathways_report.pdf → DIRS$pathways
 # Note:     Bat genome uses human gene names — org.Hs.eg.db and hsa KEGG apply
+#           Visualization uses ggplot2 directly (avoids enrichplot/ggtree
+#           incompatibility with ggplot2 ≥ 4.0)
 # =============================================================================
 
 suppressPackageStartupMessages({
-  library(clusterProfiler); library(org.Hs.eg.db); library(enrichplot)
+  library(clusterProfiler); library(org.Hs.eg.db)
   library(ggplot2); library(dplyr); library(pdftools); library(magick)
 })
 
@@ -30,11 +32,41 @@ dir.create(DIRS$pathways, showWarnings = FALSE, recursive = TRUE)
                       out, format = "pdf")
 }
 
+# Bar chart from enrichResult — does not require enrichplot/ggtree
+.enrich_barplot <- function(enrich_obj, title, n = 15) {
+  df <- as.data.frame(enrich_obj)
+  if (nrow(df) == 0) return(NULL)
+  df <- head(df[order(df$p.adjust), ], n)
+  df$Description <- factor(df$Description, levels = rev(df$Description))
+  ggplot(df, aes(x = -log10(p.adjust), y = Description, fill = -log10(p.adjust))) +
+    geom_col() +
+    scale_fill_gradient(low = "steelblue", high = "firebrick") +
+    labs(title = title, x = "-log10(adj p)", y = NULL, fill = "-log10\n(adj p)") +
+    theme_classic(base_size = 9) +
+    theme(legend.position = "none")
+}
+
+# NES bar chart from gseaResult — does not require enrichplot/ggtree
+.gsea_barplot <- function(gsea_res, title, n = 15) {
+  df <- as.data.frame(gsea_res)
+  if (nrow(df) == 0) return(NULL)
+  df <- df[order(abs(df$NES), decreasing = TRUE), ]
+  df <- head(df, n)
+  df$Description <- factor(df$Description, levels = df$Description[order(df$NES)])
+  ggplot(df, aes(x = NES, y = Description,
+                 fill = ifelse(NES > 0, "Up in recovering", "Up in healthy"))) +
+    geom_col() +
+    scale_fill_manual(values = c("Up in recovering" = "tomato",
+                                 "Up in healthy"    = "steelblue")) +
+    geom_vline(xintercept = 0, colour = "grey30") +
+    labs(title = title, x = "NES", y = NULL, fill = NULL) +
+    theme_classic(base_size = 9)
+}
+
 de_path <- file.path(DIRS$differential, "all_DEG_combined.csv")
 if (!file.exists(de_path)) stop("Missing: ", de_path, " — run step 11 first")
 all_de <- read.csv(de_path)
 
-# Silence clusterProfiler verbose output
 options(clusterProfiler.download.method = "wget")
 
 # Helper: gene symbols → Entrez IDs (bat uses human gene names)
@@ -46,9 +78,9 @@ options(clusterProfiler.download.method = "wget")
   res$ENTREZID
 }
 
-cell_types  <- unique(all_de$cell_type)
-all_enrich  <- list()
-all_pdfs    <- character(0)
+cell_types <- unique(all_de$cell_type)
+all_enrich <- list()
+all_pdfs   <- character(0)
 
 for (ct in cell_types) {
   de_ct <- all_de %>% dplyr::filter(cell_type == ct, p_val_adj < 0.05)
@@ -66,88 +98,74 @@ for (ct in cell_types) {
   ct_dir   <- file.path(DIRS$pathways, ct_label)
   dir.create(ct_dir, showWarnings = FALSE)
 
-  # --- GO enrichment (up-regulated) -----------------------------------------
+  # --- GO enrichment (up-regulated) -------------------------------------------
   if (length(up_genes) >= 5) {
     ego_up <- tryCatch(
       suppressMessages(
-        enrichGO(gene          = .to_entrez(up_genes),
-                 universe      = .to_entrez(universe),
-                 OrgDb         = org.Hs.eg.db,
-                 ont           = "BP",
-                 pAdjustMethod = "BH",
-                 pvalueCutoff  = 0.05,
-                 qvalueCutoff  = 0.2,
-                 readable      = TRUE)
+        enrichGO(gene = .to_entrez(up_genes), universe = .to_entrez(universe),
+                 OrgDb = org.Hs.eg.db, ont = "BP",
+                 pAdjustMethod = "BH", pvalueCutoff = 0.05,
+                 qvalueCutoff = 0.2, readable = TRUE)
       ),
       error = function(e) { message("  GO up failed: ", e$message); NULL }
     )
     if (!is.null(ego_up) && nrow(ego_up) > 0) {
-      write.csv(as.data.frame(ego_up),
-                file.path(ct_dir, "GO_BP_up.csv"), row.names = FALSE)
-      p        <- dotplot(ego_up, showCategory = 15) +
-        labs(title = paste0(ct, " — GO BP (up in recovering)")) +
-        theme_classic(base_size = 9)
-      pdf_file <- file.path(ct_dir, "GO_BP_up.pdf")
-      ggsave(pdf_file, p, width = 8, height = 6)
-      all_pdfs <- c(all_pdfs, pdf_file)
+      write.csv(as.data.frame(ego_up), file.path(ct_dir, "GO_BP_up.csv"), row.names = FALSE)
+      p <- .enrich_barplot(ego_up, paste0(ct, " — GO BP (up in recovering)"))
+      if (!is.null(p)) {
+        pdf_file <- file.path(ct_dir, "GO_BP_up.pdf")
+        ggsave(pdf_file, p, width = 8, height = 6)
+        all_pdfs <- c(all_pdfs, pdf_file)
+      }
       all_enrich[[paste0(ct, "_GO_up")]] <- as.data.frame(ego_up) %>%
         dplyr::mutate(cell_type = ct, direction = "up")
     }
   }
 
-  # --- GO enrichment (down-regulated) ----------------------------------------
+  # --- GO enrichment (down-regulated) -----------------------------------------
   if (length(down_genes) >= 5) {
     ego_dn <- tryCatch(
       suppressMessages(
-        enrichGO(gene          = .to_entrez(down_genes),
-                 universe      = .to_entrez(universe),
-                 OrgDb         = org.Hs.eg.db,
-                 ont           = "BP",
-                 pAdjustMethod = "BH",
-                 pvalueCutoff  = 0.05,
-                 qvalueCutoff  = 0.2,
-                 readable      = TRUE)
+        enrichGO(gene = .to_entrez(down_genes), universe = .to_entrez(universe),
+                 OrgDb = org.Hs.eg.db, ont = "BP",
+                 pAdjustMethod = "BH", pvalueCutoff = 0.05,
+                 qvalueCutoff = 0.2, readable = TRUE)
       ),
       error = function(e) { message("  GO down failed: ", e$message); NULL }
     )
     if (!is.null(ego_dn) && nrow(ego_dn) > 0) {
-      write.csv(as.data.frame(ego_dn),
-                file.path(ct_dir, "GO_BP_down.csv"), row.names = FALSE)
-      p        <- dotplot(ego_dn, showCategory = 15) +
-        labs(title = paste0(ct, " — GO BP (up in healthy)")) +
-        theme_classic(base_size = 9)
-      pdf_file <- file.path(ct_dir, "GO_BP_down.pdf")
-      ggsave(pdf_file, p, width = 8, height = 6)
-      all_pdfs <- c(all_pdfs, pdf_file)
+      write.csv(as.data.frame(ego_dn), file.path(ct_dir, "GO_BP_down.csv"), row.names = FALSE)
+      p <- .enrich_barplot(ego_dn, paste0(ct, " — GO BP (up in healthy)"))
+      if (!is.null(p)) {
+        pdf_file <- file.path(ct_dir, "GO_BP_down.pdf")
+        ggsave(pdf_file, p, width = 8, height = 6)
+        all_pdfs <- c(all_pdfs, pdf_file)
+      }
     }
   }
 
-  # --- KEGG enrichment (up-regulated) ----------------------------------------
+  # --- KEGG enrichment (up-regulated) ------------------------------------------
   if (length(up_genes) >= 5) {
     ekegg <- tryCatch(
       suppressMessages(
-        enrichKEGG(gene          = .to_entrez(up_genes),
-                   universe      = .to_entrez(universe),
-                   organism      = "hsa",
-                   pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.05)
+        enrichKEGG(gene = .to_entrez(up_genes), universe = .to_entrez(universe),
+                   organism = "hsa", pAdjustMethod = "BH", pvalueCutoff = 0.05)
       ),
       error = function(e) { message("  KEGG failed: ", e$message); NULL }
     )
     if (!is.null(ekegg) && nrow(ekegg) > 0) {
       ekegg <- setReadable(ekegg, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
-      write.csv(as.data.frame(ekegg),
-                file.path(ct_dir, "KEGG_up.csv"), row.names = FALSE)
-      p        <- dotplot(ekegg, showCategory = 15) +
-        labs(title = paste0(ct, " — KEGG (up in recovering)")) +
-        theme_classic(base_size = 9)
-      pdf_file <- file.path(ct_dir, "KEGG_up.pdf")
-      ggsave(pdf_file, p, width = 8, height = 6)
-      all_pdfs <- c(all_pdfs, pdf_file)
+      write.csv(as.data.frame(ekegg), file.path(ct_dir, "KEGG_up.csv"), row.names = FALSE)
+      p <- .enrich_barplot(ekegg, paste0(ct, " — KEGG (up in recovering)"))
+      if (!is.null(p)) {
+        pdf_file <- file.path(ct_dir, "KEGG_up.pdf")
+        ggsave(pdf_file, p, width = 8, height = 6)
+        all_pdfs <- c(all_pdfs, pdf_file)
+      }
     }
   }
 
-  # --- GSEA on full ranked gene list -----------------------------------------
+  # --- GSEA on full ranked gene list -------------------------------------------
   de_all_ct <- all_de %>% dplyr::filter(cell_type == ct) %>%
     dplyr::arrange(dplyr::desc(avg_log2FC))
   ranked_sym <- setNames(de_all_ct$avg_log2FC, de_all_ct$gene)
@@ -166,30 +184,21 @@ for (ct in cell_types) {
 
     gsea_res <- tryCatch(
       suppressMessages(
-        gseGO(geneList     = ranked_entrez,
-              OrgDb        = org.Hs.eg.db,
-              ont          = "BP",
-              minGSSize    = 10,
-              maxGSSize    = 500,
-              pvalueCutoff = 0.05,
-              verbose      = FALSE)
+        gseGO(geneList = ranked_entrez, OrgDb = org.Hs.eg.db, ont = "BP",
+              minGSSize = 10, maxGSSize = 500, pvalueCutoff = 0.05,
+              verbose = FALSE)
       ),
       error = function(e) { message("  GSEA failed: ", e$message); NULL }
     )
     if (!is.null(gsea_res) && nrow(gsea_res) > 0) {
       write.csv(as.data.frame(gsea_res),
                 file.path(ct_dir, "GSEA_GO_BP.csv"), row.names = FALSE)
-      top_ids <- head(
-        gsea_res@result$ID[order(abs(gsea_res@result$NES), decreasing = TRUE)], 5
-      )
-      pdf_gsea <- tryCatch({
-        p        <- gseaplot2(gsea_res, geneSetID = top_ids,
-                              title = paste0(ct, " — GSEA top pathways"))
+      p <- .gsea_barplot(gsea_res, paste0(ct, " — GSEA top pathways (NES)"))
+      if (!is.null(p)) {
         pdf_file <- file.path(ct_dir, "GSEA_GO_BP.pdf")
         ggsave(pdf_file, p, width = 10, height = 6)
-        pdf_file
-      }, error = function(e) { message("  gseaplot2 failed: ", e$message); NA_character_ })
-      if (!is.na(pdf_gsea)) all_pdfs <- c(all_pdfs, pdf_gsea)
+        all_pdfs <- c(all_pdfs, pdf_file)
+      }
     }
   }
 }
