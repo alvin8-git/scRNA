@@ -73,6 +73,25 @@ rm(.env_paths, .i, .val, .FILTERED_DIRS, .RAW_DIRS, .MATRIX_DIRS,
 
 SINGLE_SAMPLE <- length(SAMPLE_NAMES) == 1
 
+# --- Condition labels (for DEG / CellChat / trajectory steps) ---
+# Set via SCRNA_CONDITION env var: comma-separated name=label pairs
+# Example: SCRNA_CONDITION="ADay0_healthy=healthy,BDay1_recovering=recovering"
+.cond_raw <- Sys.getenv("SCRNA_CONDITION", unset = "")
+if (nchar(.cond_raw) > 0) {
+  .pairs <- strsplit(.cond_raw, ",")[[1]]
+  .kv    <- strsplit(.pairs, "=")
+  SAMPLE_CONDITIONS <- setNames(
+    sapply(.kv, `[[`, 2),
+    sapply(.kv, `[[`, 1)
+  )
+} else {
+  SAMPLE_CONDITIONS <- setNames(rep("condition1", length(SAMPLE_NAMES)), SAMPLE_NAMES)
+}
+CONDITION_LEVELS <- unique(SAMPLE_CONDITIONS)
+rm(.cond_raw)
+if (exists(".pairs")) rm(.pairs)
+if (exists(".kv"))    rm(.kv)
+
 # --- Results directory — named after samples for easy identification ---
 # Single sample  : results_H1/
 # Multiple samples: results_H1andH2/  or  results_H1andH2andH3/
@@ -283,7 +302,7 @@ CELLTYPE_COLORS <- c(
 
 # =============================================================================
 # Species overrides — read SCRNA_SPECIES env var (set by run_pipeline.sh)
-# Supported: "human" (default) | "bat" (Eonycteris spelaea whole blood)
+# Supported: "human" (default) | "bat" (whole blood) | "bat_wing" (wing tissue)
 # =============================================================================
 .species <- Sys.getenv("SCRNA_SPECIES", unset = "human")
 
@@ -323,7 +342,66 @@ if (.species == "bat") {
     "CD14+ Mono"   = c("CD14", "S100A8", "S100A9", "LYZ"),
     "FCGR3A+ Mono" = c("FCGR2A", "FCGR3B", "CDKN1C", "MS4A7")
   )
+} else if (.species == "bat_wing") {
+  message("[Species] bat_wing (Eonycteris spelaea wing tissue) — applying wound-tissue overrides")
+
+  # ---- Reference: broad tissue atlas, not blood-optimised -------------------
+  SINGLER_REF <- "HumanPrimaryCellAtlas"
+
+  # ---- Wing tissue markers --------------------------------------------------
+  MARKERS$Fibroblast         <- c("COL1A1", "COL1A2", "COL3A1", "VIM", "PDGFRA", "FAP")
+  MARKERS$Myofibroblast      <- c("ACTA2", "TAGLN", "MYL9", "CNN1")
+  MARKERS$Keratinocyte       <- c("KRT5", "KRT14", "KRT1", "KRT10", "EPCAM")
+  MARKERS$Wound_keratinocyte <- c("KRT6A", "KRT16", "KRT17", "MMP1")
+  MARKERS$Endothelial        <- c("PECAM1", "CDH5", "VWF", "KDR", "FLT1")
+  MARKERS$Pericyte           <- c("PDGFRB", "RGS5", "CSPG4", "NOTCH3")
+  MARKERS$Macrophage         <- c("CD68", "CSF1R", "MRC1", "CD163")
+  MARKERS$Melanocyte         <- c("MLANA", "DCT", "TYRP1", "MITF")
+  MARKERS$FCGR3A_mono        <- NULL
+  MARKERS$Neutrophil         <- c("S100A8", "S100A9", "FCGR3B", "CSF3R")
+  ALL_MARKERS <- unique(unlist(MARKERS[!sapply(MARKERS, is.null)]))
+
+  # ---- No blood contamination types in wing tissue --------------------------
+  CONTAMINATION_TYPES <- c("RBC", "HSPC", "Platelet")
+
+  # ---- Clustering: moderate resolution for tissue heterogeneity -------------
+  CLUSTER$resolutions <- c(0.3, 0.5, 0.8)
+  CLUSTER$default_res <- 0.5
+  CLUSTER$compare_res <- c(0.3, 0.5, 0.8)
+
+  # ---- γδ T markers ---------------------------------------------------------
+  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
+  ALL_MARKERS <- unique(unlist(MARKERS[!sapply(MARKERS, is.null)]))
+
+  # ---- Sub-type markers for wing tissue -------------------------------------
+  SUBTYPE_MARKERS[["Fibroblast"]] <- list(
+    "Fibroblast (resting)" = c("PDGFRA", "DCN", "LUM", "CFD"),
+    "Myofibroblast"        = c("ACTA2", "TAGLN", "MYL9", "POSTN"),
+    "Fibroblast (wound)"   = c("COL3A1", "FN1", "SPARC", "CTGF")
+  )
+  SUBTYPE_MARKERS[["Macrophage"]] <- list(
+    "Macrophage (M1/inflam)"  = c("IL1B", "TNF", "CXCL8", "CCL3"),
+    "Macrophage (M2/repair)"  = c("MRC1", "CD163", "ARG1", "TGFB1"),
+    "Macrophage (proliferat)" = c("MKI67", "TOP2A", "CDK1")
+  )
+  SUBTYPE_MARKERS[["Keratinocyte"]] <- list(
+    "Keratinocyte (basal)"      = c("KRT5", "KRT14", "TP63", "COL17A1"),
+    "Keratinocyte (suprabasal)" = c("KRT1", "KRT10", "LOR", "FLG"),
+    "Keratinocyte (wound)"      = c("KRT6A", "KRT16", "MMP1", "LAMC2")
+  )
+
+  # ---- Wound-healing gene module sets (used by 11_wing_degs.R) --------------
+  WOUND_MODULES <- list(
+    Inflammatory     = c("IL1B", "TNF", "CXCL8", "CCL2", "IL6", "S100A8", "S100A9", "PTGS2"),
+    ECM_remodeling   = c("COL1A1", "COL3A1", "MMP1", "MMP2", "MMP9", "TIMP1", "TIMP2", "LOXL2", "POSTN"),
+    Angiogenesis     = c("VEGFA", "VEGFB", "FGF2", "ANGPT1", "ANGPT2", "KDR", "NRP1"),
+    Proliferation    = c("MKI67", "TOP2A", "PCNA", "CDK1", "CCNB1", "CCNA2"),
+    Re_epithelialize = c("KRT6A", "KRT16", "MMP1", "MMP3", "LAMC2", "ITGA3", "ITGB4"),
+    Myofibroblast    = c("ACTA2", "MYL9", "TAGLN", "CNN1", "POSTN", "CTGF")
+  )
 }
+
+if (!exists("WOUND_MODULES")) WOUND_MODULES <- list()
 
 rm(.species)
 
@@ -341,12 +419,15 @@ PLOT <- list(
 
 # --- Output Subdirectories ---
 DIRS <- list(
-  qc         = file.path(RESULTS_DIR, "qc"),
-  doublets   = file.path(RESULTS_DIR, "doublets"),
-  individual = file.path(RESULTS_DIR, "individual"),
-  integrated = file.path(RESULTS_DIR, "integrated"),
+  qc           = file.path(RESULTS_DIR, "qc"),
+  doublets     = file.path(RESULTS_DIR, "doublets"),
+  individual   = file.path(RESULTS_DIR, "individual"),
+  integrated   = file.path(RESULTS_DIR, "integrated"),
   annotation   = file.path(RESULTS_DIR, "annotation"),
   differential = file.path(RESULTS_DIR, "differential"),
+  pathways     = file.path(RESULTS_DIR, "pathways"),
+  cellchat     = file.path(RESULTS_DIR, "cellchat"),
+  trajectory   = file.path(RESULTS_DIR, "trajectory"),
   logs         = file.path(RESULTS_DIR, "logs"),
   reports      = RESULTS_DIR
 )
