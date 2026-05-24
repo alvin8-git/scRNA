@@ -226,9 +226,9 @@ PARALLEL <- list(
 # NOTE: set to NULL for fresh multi-sample runs — cluster numbers change between datasets
 # 4-sample run (Sample6, Sample7, 10, ES03_newkit): clusters 3/11/15 confirmed CD8 T (CTL)
 # by CD3E 90.7%, NCAM1 0.5% — SingleR incorrectly calls these NK
-CLUSTER_CELLTYPE_MAP <- c("3"="CD8 T", "11"="CD8 T", "15"="CD8 T",
-                           "13"="DC", "18"="DC",
-                           "17"="Neutrophil")
+# ARCHIVED — do not reuse; cluster numbers change between datasets:
+#   c("3"="CD8 T", "11"="CD8 T", "15"="CD8 T", "13"="DC", "18"="DC", "17"="Neutrophil")
+CLUSTER_CELLTYPE_MAP <- NULL  # reset for each new analysis
 
 # --- Color Palettes ---
 SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
