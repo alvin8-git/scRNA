@@ -193,8 +193,10 @@ for (ct in names(de_list)) {
   ggsave(tmp, p, width = 6, height = 5, dpi = 150)
   vol_pdfs <- c(vol_pdfs, tmp)
 }
-if (length(vol_pdfs) > 0)
+if (length(vol_pdfs) > 0) {
   .combine_pdfs(vol_pdfs, file.path(DIRS$differential, "volcano_plots.pdf"))
+  unlink(vol_pdfs)
+}
 
 # =============================================================================
 # PART 4: Top DEG heatmap across cell types
