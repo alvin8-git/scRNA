@@ -32,12 +32,40 @@ mamba create -n ${ENV_NAME} \
     r-ggrepel \
     r-pdftools \
     r-magick \
+    bioconductor-deseq2 \
+    bioconductor-clusterprofilr \
+    bioconductor-enrichplot \
+    bioconductor-org.hs.eg.db \
+    bioconductor-fgsea \
+    r-igraph \
+    r-nnls \
+    r-circlize \
     -y
+
+echo ""
+echo "Installing CellChat v2 and Monocle3 via R (not on conda)..."
+conda run -n ${ENV_NAME} Rscript - <<'REOF'
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!requireNamespace("CellChat", quietly = TRUE)) {
+  remotes::install_github("jinworks/CellChat", upgrade = "never", quiet = TRUE)
+}
+if (!requireNamespace("monocle3", quietly = TRUE)) {
+  BiocManager::install("cole-trapnell-lab/monocle3", update = FALSE, ask = FALSE)
+}
+if (!requireNamespace("SeuratWrappers", quietly = TRUE)) {
+  remotes::install_github("satijalab/seurat-wrappers", upgrade = "never", quiet = TRUE)
+}
+cat("CellChat:", as.character(packageVersion("CellChat")), "\n")
+cat("monocle3:", as.character(packageVersion("monocle3")), "\n")
+cat("SeuratWrappers:", as.character(packageVersion("SeuratWrappers")), "\n")
+REOF
 
 echo ""
 echo "Verifying all key packages..."
 conda run -n ${ENV_NAME} Rscript - <<'EOF'
 pkgs <- c("Seurat", "harmony", "SingleR", "celldex", "scDblFinder",
+          "DESeq2", "clusterProfiler", "org.Hs.eg.db", "enrichplot", "fgsea",
+          "CellChat", "monocle3", "SeuratWrappers",
           "ggplot2", "patchwork", "cowplot", "pheatmap", "viridis", "dplyr",
           "pdftools", "magick")
 for (p in pkgs) {
