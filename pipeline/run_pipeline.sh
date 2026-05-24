@@ -50,8 +50,10 @@ STEPS_ARGS=()
 SPECIES="human"   # default; overridden by 'bat' or 'human' keyword in args
 
 for arg in "$@"; do
-  if [[ "$arg" == "bat" || "$arg" == "human" ]]; then
+  if [[ "$arg" == "bat" || "$arg" == "human" || "$arg" == "bat_wing" ]]; then
     SPECIES="$arg"
+  elif [[ "$arg" == condition=* ]]; then
+    export SCRNA_CONDITION="${arg#condition=}"
   # Treat as sample path if absolute, relative directory, or starts with ./ or ../
   elif [[ "$arg" == /* ]] || [[ -d "$arg" ]] || [[ "$arg" == ./* ]] || [[ "$arg" == ../* ]]; then
     SAMPLE_PATHS+=("$(realpath "$arg")")
@@ -164,6 +166,10 @@ declare -A STEP_NAME=(
   ["06b"]="Differential Expression"
   ["07"]="Finalise PDF Reports"
   ["08"]="Comparison Report"
+  ["11"]="Wing DEGs & Module Scores"
+  ["12"]="Pathway Enrichment"
+  ["13"]="CellChat Communication"
+  ["14"]="Trajectory Analysis"
 )
 
 declare -A STEP_SCRIPT=(
@@ -176,6 +182,10 @@ declare -A STEP_SCRIPT=(
   ["06b"]="06b_differential.R"
   ["07"]="07_finalize_reports.R"
   ["08"]="08_comparison_report.R"
+  ["11"]="11_wing_degs.R"
+  ["12"]="12_pathways.R"
+  ["13"]="13_cellchat.R"
+  ["14"]="14_trajectory.R"
 )
 
 # =============================================================================
@@ -183,6 +193,8 @@ declare -A STEP_SCRIPT=(
 # =============================================================================
 if [[ ${#STEPS_ARGS[@]} -gt 0 ]]; then
   STEPS=("${STEPS_ARGS[@]}")
+elif [[ "$SPECIES" == "bat_wing" ]]; then
+  STEPS=("01" "02" "03" "04" "05" "06" "06b" "07" "11" "12" "13" "14")
 elif [[ "$SINGLE_SAMPLE" == "true" ]]; then
   STEPS=("01" "02" "03" "04" "05" "06" "07")
 else
@@ -240,7 +252,7 @@ TOTAL_START=$(date +%s)
 
 for step in "${STEPS[@]}"; do
   if [[ -z "${STEP_SCRIPT[$step]+_}" ]]; then
-    err "Unknown step: ${step}. Valid: 01 02 03 04 05 06 06b 07 08"
+    err "Unknown step: ${step}. Valid: 01 02 03 04 05 06 06b 07 08 11 12 13 14"
     exit 1
   fi
   run_step "${step}"
@@ -258,6 +270,14 @@ echo "    ${RESULTS_DIR}/04-Annotation_report.pdf"
 echo "    ${RESULTS_DIR}/05-Integrated_report.pdf"
 echo "    ${RESULTS_DIR}/Overall_report.pdf"
 echo ""
+if [[ "$SPECIES" == "bat_wing" ]]; then
+  echo ""
+  echo -e "  ${CYAN}Wing tissue reports:${NC}"
+  echo "    ${RESULTS_DIR}/differential/  (DEGs, volcano plots, module scores)"
+  echo "    ${RESULTS_DIR}/pathways/      (GO/KEGG/GSEA per cell type)"
+  echo "    ${RESULTS_DIR}/cellchat/cellchat_report.pdf"
+  echo "    ${RESULTS_DIR}/trajectory/trajectory_report.pdf"
+fi
 echo -e "  ${YELLOW}Next step (manual annotation, if needed):${NC}"
 echo "    1. Open ${RESULTS_DIR}/annotation/canonical_markers_dotplot.pdf"
 echo "    2. Fill CLUSTER_CELLTYPE_MAP in pipeline/config.R"
