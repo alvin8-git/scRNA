@@ -33,7 +33,7 @@ mamba create -n ${ENV_NAME} \
     r-pdftools \
     r-magick \
     bioconductor-deseq2 \
-    bioconductor-clusterprofilr \
+    bioconductor-clusterprofiler \
     bioconductor-enrichplot \
     bioconductor-org.hs.eg.db \
     bioconductor-fgsea \
