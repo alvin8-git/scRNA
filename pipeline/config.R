@@ -264,8 +264,11 @@ CELLTYPE_COLORS <- c(
   "CD4 T (naive)"      = "#E64B35",
   "CD4 T (memory)"     = "#FF7043",
   "CD4 T (effector)"   = "#FF8A65",
-  # CD8 T — blue
+  # CD8 T subtypes — blue family
   "CD8 T"              = "#4DBBD5",
+  "CD8 T (naive)"      = "#6ACDE6",
+  "CD8 T (memory)"     = "#3A8BA5",
+  "CD8 T (effector)"   = "#1D6680",
   # Other T
   "Treg"               = "#FF7F0E",
   "γδ T"               = "#FFC107",
@@ -284,6 +287,9 @@ CELLTYPE_COLORS <- c(
   # Myeloid
   "Neutrophil"         = "#E377C2",   # pink — distinct from NK teal
   "DC"                 = "#91D1C2",
+  "cDC1"               = "#70BFB0",
+  "cDC2"               = "#A8E6D8",
+  "pDC"                = "#4FA090",
   "Platelet"           = "#DC0000",
   # Contamination / rare populations
   "RBC"                = "#A52A2A",
@@ -308,39 +314,110 @@ CELLTYPE_COLORS <- c(
 
 if (.species == "bat") {
   message("[Species] bat (Eonycteris spelaea) — applying whole-blood overrides")
+  # Ground truth: Gamage et al. 2022 (Immunity 55, 2187-2205) — E. spelaea scRNA-seq.
+  # All bat-validated markers below unless explicitly noted as ortholog inference.
+  # Gene names follow human HGNC nomenclature via ESpe GTF orthology (Dec 2024).
 
-  # ---- Markers: substitute the 3 genes absent from bat GTF ------------------
-  MARKERS$CD14_mono   <- c("CD14", "LYZ", "S100A8", "S100A9", "CSF1R")  # drop CST3; add CSF1R (M-CSF receptor)
-  MARKERS$FCGR3A_mono <- c("FCGR2A", "FCGR3B", "MS4A7")                 # drop FCGR3A
-  MARKERS$Neutrophil  <- c("FCGR3B", "CSF3R", "CXCR2", "CEACAM6", "IDO1") # drop CEACAM8; add IDO1
+  # ---- T cells ---------------------------------------------------------------
+  # CD8_T: remove GZMK (21% bat cells; shared NK/CD4/CD8 — too broad)
+  # PRF1 validated for E. spelaea effector NK & T (Gamage 2022 Fig 2C)
+  MARKERS$CD8_T <- c("CD8A", "CD8B", "PRF1")
+
+  # ---- NK cells --------------------------------------------------------------
+  # KLRB1 (CD161) replaces KLRD1: KLRB1 defines CD8+CD161+ NK&T in E. spelaea
+  # (Gamage 2022 Fig 2C/3C); NKG2 family (KLRD1) diverged in Chiroptera
+  MARKERS$NK <- c("NKG7", "GNLY", "KLRB1")
+
+  # ---- B cells ---------------------------------------------------------------
+  # CD79B and FCMR (IgM Fc receptor) directly validated in E. spelaea
+  # (Gamage 2022 Fig 2B: "high expression of canonical markers CD79B, MS4A1, FCMR")
+  MARKERS$B_cell <- c("CD79A", "CD79B", "MS4A1", "FCMR")
+
+  # ---- DC: bat-validated markers spanning cDC1 and pDC ----------------------
+  # CLEC9A = cDC1 lineage marker; TCF4/IRF7 = pDC master TFs — all PDF-validated
+  MARKERS$DC <- c("CLEC9A", "TCF4", "IRF7")
+
+  # ---- Classical monocytes ---------------------------------------------------
+  # S100A12 + SIRPA (CD172α) validated against non-classical mono (Gamage 2022 Fig 4F)
+  MARKERS$CD14_mono <- c("CD14", "LYZ", "S100A12", "SIRPA", "CSF1R")
+
+  # ---- Non-classical monocytes -----------------------------------------------
+  # CX3CR1 replaces FCGR2A: CX3CR1 is the definitive non-classical mono marker in
+  # E. spelaea (Gamage 2022 Fig 2C); FCGR3A included (expressed in bat NC mono, Fig 4F)
+  MARKERS$FCGR3A_mono <- c("CX3CR1", "FCGR3A", "CDKN1C", "MS4A7")
+
+  # ---- Neutrophils -----------------------------------------------------------
+  # IDO1, ALAS1, SLC16A10: >30-fold enriched in E. spelaea neutrophils vs all
+  # other immune cell types; validated by bulk RNA-seq on FACS-sorted cells
+  # (Gamage 2022 Fig 6B/C). Tryptophan-degradation axis is bat-specific.
+  # FCGR3B/CEACAM6 removed: FCGR and CEACAM gene families divergent in Chiroptera
+  MARKERS$Neutrophil <- c("CSF3R", "CXCR2", "IDO1", "ALAS1", "SLC16A10")
+
+  # ---- HSPC ------------------------------------------------------------------
+  # Remove AVP (arginine vasopressin — neurohypophyseal hormone, wrong context in PBMC)
+  MARKERS$HSPC <- c("CD34", "GATA2")
+
+  # ---- γδ T ------------------------------------------------------------------
+  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
+
   ALL_MARKERS <- unique(unlist(MARKERS))
 
-  # ---- Contamination: RBC and Neutrophil are expected in bat whole blood -----
+  # ---- Contamination: RBC and Neutrophil expected in bat whole blood ---------
   CONTAMINATION_TYPES <- c("Basophil", "Eosinophil", "Mast cell")
 
   # ---- SingleR: Monaco resolves CD4/CD8/γδ T cells in blood ------------------
   SINGLER_REF <- "MonacoImmune"
 
   # ---- Clustering: higher resolution for whole-blood diversity ----------------
-  CLUSTER$resolutions  <- c(0.3, 0.5, 0.8, 1.0)
-  CLUSTER$default_res  <- 1.0
-  CLUSTER$compare_res  <- c(0.5, 0.8, 1.0)
+  CLUSTER$resolutions <- c(0.3, 0.5, 0.8, 1.0)
+  CLUSTER$default_res <- 1.0
+  CLUSTER$compare_res <- c(0.5, 0.8, 1.0)
 
-  # ---- γδ T markers (TCR delta/gamma constant regions now in merged GTF) ------
-  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
-  ALL_MARKERS <- unique(unlist(MARKERS))
+  # ============================================================================
+  # Sub-type markers — bat ground truth (Gamage 2022 + ortholog confidence)
+  # ============================================================================
 
-  # ---- Sub-type markers: remove isotype genes absent from bat GTF ------------
-  # B cell isotype genes (IGHD, IGHM, IGHG1) not in bat annotation
+  # CD4 T subtypes
+  # naive:    SELL removed (50.4% bat cells; non-discriminating in E. spelaea)
+  # effector: GZMK removed (too broad); GZMB/TNFRSF4/PRF1 retained
+  # memory:   AQP3 removed (no bat validation); S100A4 removed (monocyte cross-expression)
+  SUBTYPE_MARKERS[["CD4 T"]] <- list(
+    "CD4 T (naive)"    = c("CCR7", "TCF7", "LEF1"),
+    "CD4 T (effector)" = c("GZMB", "TNFRSF4", "PRF1"),
+    "CD4 T (memory)"   = c("IL7R", "GPR183", "CD27")
+  )
+
+  # CD8 T subtypes
+  # XCL1: selectively marks effector CD8+ DPP4+ NK&T in E. spelaea,
+  # strongly induced upon viral infection (Gamage 2022 Fig 7I)
+  # GFRA2/DPP4 validated sub-population markers (Gamage 2022 Fig 3C)
+  SUBTYPE_MARKERS[["CD8 T"]] <- list(
+    "CD8 T (effector)" = c("PRF1", "XCL1", "GZMB"),
+    "CD8 T (memory)"   = c("IL7R", "GPR183", "CD27"),
+    "CD8 T (naive)"    = c("TCF7", "LEF1", "CCR7")
+  )
+
+  # B cell subtypes — isotype genes (IGHD, IGHM, IGHG1) absent from bat GTF
   SUBTYPE_MARKERS[["B cell"]] <- list(
     "B cell (naive)"  = c("TCL1A", "IL4R", "CD24", "FCER2"),
     "B cell (memory)" = c("CD27", "TNFRSF13B", "AIM2"),
     "Plasma"          = c("MZB1", "JCHAIN", "SDC1", "CD38", "XBP1", "PRDM1")
   )
-  # FCGR3A absent — use FCGR2A for FCGR3A+ Mono subtyping
+
+  # Monocyte subtypes — S100A12/SIRPA validated for classical (Gamage 2022 Fig 4F)
   SUBTYPE_MARKERS[["Monocyte"]] <- list(
-    "CD14+ Mono"   = c("CD14", "S100A8", "S100A9", "LYZ"),
-    "FCGR3A+ Mono" = c("FCGR2A", "FCGR3B", "CDKN1C", "MS4A7")
+    "CD14+ Mono"   = c("CD14", "S100A12", "SIRPA", "LYZ"),
+    "FCGR3A+ Mono" = c("CX3CR1", "FCGR3A", "CDKN1C", "MS4A7")
+  )
+
+  # DC subtypes — Gamage 2022 Fig 4E/F resolves 3 DC populations in E. spelaea
+  # cDC1: CADM1/CLEC9A/BATF3/IRF8 — validated in bat mDC sub-clustering
+  # cDC2: FCER1A/FCGR2B/S100A12 — CD14-low antigen-presenting population
+  # pDC:  TCF4 (E2-2)/IRF7/IRF8 — constitutive IFN producers; bat immune hallmark
+  SUBTYPE_MARKERS[["DC"]] <- list(
+    "cDC1" = c("CADM1", "CLEC9A", "BATF3", "IRF8"),
+    "cDC2" = c("FCER1A", "FCGR2B", "S100A12"),
+    "pDC"  = c("TCF4", "IRF7", "IRF8")
   )
 } else if (.species == "bat_wing") {
   message("[Species] bat_wing (Eonycteris spelaea wing tissue) — applying wound-tissue overrides")
