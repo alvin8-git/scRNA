@@ -167,7 +167,7 @@ MARKERS <- list(
   Treg        = c("FOXP3", "IL2RA", "CTLA4"),        # regulatory T cells
   NK          = c("NKG7", "GNLY", "KLRD1"),
   B_cell      = c("MS4A1", "CD79A", "CD19"),
-  Plasma      = c("MZB1", "JCHAIN", "SDC1"),          # plasma / plasmablasts
+  Plasma      = c("MZB1", "JCHAIN", "SDC1", "CD38", "XBP1", "PRDM1"),  # plasma / plasmablasts
   CD14_mono   = c("CD14", "LYZ", "CST3", "S100A8"),
   FCGR3A_mono = c("FCGR3A", "MS4A7"),
   Neutrophil  = c("FCGR3B", "CSF3R", "CXCR2", "CEACAM8"),  # inflammation marker
@@ -201,7 +201,7 @@ SUBTYPE_MARKERS <- list(
   "B cell" = list(
     "B cell (naive)"   = c("IGHD", "IGHM", "TCL1A", "IL4R"),
     "B cell (memory)"  = c("IGHG1", "IGHG2", "IGHA1", "TNFRSF13B"),
-    "Plasma"           = c("MZB1", "JCHAIN", "SDC1")
+    "Plasma"           = c("MZB1", "JCHAIN", "SDC1", "CD38", "XBP1", "PRDM1")
   ),
   "Monocyte" = list(
     "CD14+ Mono"       = c("CD14", "S100A8", "S100A9", "LYZ"),
@@ -335,7 +335,7 @@ if (.species == "bat") {
   SUBTYPE_MARKERS[["B cell"]] <- list(
     "B cell (naive)"  = c("TCL1A", "IL4R", "CD24", "FCER2"),
     "B cell (memory)" = c("CD27", "TNFRSF13B", "AIM2"),
-    "Plasma"          = c("MZB1", "JCHAIN", "SDC1")
+    "Plasma"          = c("MZB1", "JCHAIN", "SDC1", "CD38", "XBP1", "PRDM1")
   )
   # FCGR3A absent — use FCGR2A for FCGR3A+ Mono subtyping
   SUBTYPE_MARKERS[["Monocyte"]] <- list(
