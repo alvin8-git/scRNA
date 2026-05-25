@@ -351,7 +351,8 @@ if (.species == "bat") {
   # other immune cell types; validated by bulk RNA-seq on FACS-sorted cells
   # (Gamage 2022 Fig 6B/C). Tryptophan-degradation axis is bat-specific.
   # FCGR3B/CEACAM6 removed: FCGR and CEACAM gene families divergent in Chiroptera
-  MARKERS$Neutrophil <- c("CSF3R", "CXCR2", "IDO1", "ALAS1", "SLC16A10")
+  # MPO/ELANE: canonical azurophilic granule proteins; conserved across mammals (Reviewer 3)
+  MARKERS$Neutrophil <- c("CSF3R", "CXCR2", "IDO1", "ALAS1", "SLC16A10", "MPO", "ELANE")
 
   # ---- HSPC ------------------------------------------------------------------
   # Remove AVP (arginine vasopressin — neurohypophyseal hormone, wrong context in PBMC)
@@ -359,6 +360,9 @@ if (.species == "bat") {
 
   # ---- γδ T ------------------------------------------------------------------
   MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
+
+  # ---- Eosinophil: drop SIGLEC8 (bat orthology unconfirmed; Reviewer 3) ------
+  MARKERS$Eosinophil <- c("CCR3", "EPX")
 
   ALL_MARKERS <- unique(unlist(MARKERS))
 
@@ -390,32 +394,37 @@ if (.species == "bat") {
   # CD8 T subtypes
   # XCL1: selectively marks effector CD8+ DPP4+ NK&T in E. spelaea,
   # strongly induced upon viral infection (Gamage 2022 Fig 7I)
-  # GFRA2/DPP4 validated sub-population markers (Gamage 2022 Fig 3C)
+  # CTSW: cathepsin W; CD8-lineage-specific cysteine protease; conserved (Reviewer 3)
   SUBTYPE_MARKERS[["CD8 T"]] <- list(
-    "CD8 T (effector)" = c("PRF1", "XCL1", "GZMB"),
+    "CD8 T (effector)" = c("PRF1", "XCL1", "GZMB", "CTSW"),
     "CD8 T (memory)"   = c("IL7R", "GPR183", "CD27"),
     "CD8 T (naive)"    = c("TCF7", "LEF1", "CCR7")
   )
 
   # B cell subtypes — isotype genes (IGHD, IGHM, IGHG1) absent from bat GTF
+  # IL4R dropped: shared with T cells, not B-specific (reviewer consensus)
+  # AIM2 dropped: inflammasome sensor; not a core B cell marker
   SUBTYPE_MARKERS[["B cell"]] <- list(
-    "B cell (naive)"  = c("TCL1A", "IL4R", "CD24", "FCER2"),
-    "B cell (memory)" = c("CD27", "TNFRSF13B", "AIM2"),
+    "B cell (naive)"  = c("TCL1A", "CD24", "FCER2"),
+    "B cell (memory)" = c("CD27", "TNFRSF13B"),
     "Plasma"          = c("MZB1", "JCHAIN", "SDC1", "CD38", "XBP1", "PRDM1")
   )
 
   # Monocyte subtypes — S100A12/SIRPA validated for classical (Gamage 2022 Fig 4F)
+  # FCN1: ficolin 1; validated classical monocyte marker (Reviewer 3)
+  # LST1: leukocyte-specific transcript 1; marks non-classical monocytes (Reviewer 3)
   SUBTYPE_MARKERS[["Monocyte"]] <- list(
-    "CD14+ Mono"   = c("CD14", "S100A12", "SIRPA", "LYZ"),
-    "FCGR3A+ Mono" = c("CX3CR1", "FCGR3A", "CDKN1C", "MS4A7")
+    "CD14+ Mono"   = c("CD14", "S100A12", "SIRPA", "LYZ", "FCN1"),
+    "FCGR3A+ Mono" = c("CX3CR1", "FCGR3A", "CDKN1C", "MS4A7", "LST1")
   )
 
   # DC subtypes — Gamage 2022 Fig 4E/F resolves 3 DC populations in E. spelaea
   # cDC1: CADM1/CLEC9A/BATF3/IRF8 — validated in bat mDC sub-clustering
+  #        XCR1: canonical cross-presenting cDC1 marker; conserved (Reviewer 3)
   # cDC2: FCER1A/FCGR2B/S100A12 — CD14-low antigen-presenting population
   # pDC:  TCF4 (E2-2)/IRF7/IRF8 — constitutive IFN producers; bat immune hallmark
   SUBTYPE_MARKERS[["DC"]] <- list(
-    "cDC1" = c("CADM1", "CLEC9A", "BATF3", "IRF8"),
+    "cDC1" = c("CADM1", "CLEC9A", "BATF3", "IRF8", "XCR1"),
     "cDC2" = c("FCER1A", "FCGR2B", "S100A12"),
     "pDC"  = c("TCF4", "IRF7", "IRF8")
   )
