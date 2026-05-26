@@ -421,11 +421,12 @@ if (.species == "bat") {
   # DC subtypes — Gamage 2022 Fig 4E/F resolves 3 DC populations in E. spelaea
   # cDC1: CADM1/CLEC9A/BATF3/IRF8 — validated in bat mDC sub-clustering
   #        XCR1: canonical cross-presenting cDC1 marker; conserved (Reviewer 3)
-  # cDC2: FCER1A/FCGR2B/S100A12 — CD14-low antigen-presenting population
+  # cDC2: FCER1A/CD74 — CD14low, high antigen-presenting genes (Gamage 2022 Fig 4F/text)
+  #        NOTE: FCGR2B and S100A12 are explicitly ABSENT in bat cDC2 (p.2193) — do not use
   # pDC:  TCF4 (E2-2)/IRF7/IRF8 — constitutive IFN producers; bat immune hallmark
   SUBTYPE_MARKERS[["DC"]] <- list(
     "cDC1" = c("CADM1", "CLEC9A", "BATF3", "IRF8", "XCR1"),
-    "cDC2" = c("FCER1A", "FCGR2B", "S100A12"),
+    "cDC2" = c("FCER1A", "CD74"),
     "pDC"  = c("TCF4", "IRF7", "IRF8")
   )
 } else if (.species == "bat_wing") {
