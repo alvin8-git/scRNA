@@ -3,6 +3,10 @@
 # Source this file at the top of every pipeline script.
 # =============================================================================
 
+# --- Suppress noisy but harmless plot warnings ---
+options(Seurat.warn.raster = FALSE)   # rasterizing >100k points is intentional
+suppressWarnings(library(ggplot2))    # silence freetype/systemfonts version mismatch
+
 # --- Base paths ---
 BASE_DIR          <- "/data/alvin/scRNA"
 PIPELINE_DIR      <- file.path(BASE_DIR, "pipeline")

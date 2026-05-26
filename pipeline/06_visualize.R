@@ -211,11 +211,13 @@ plot_features(remaining_markers,
 message("\n--- Plot Set 4: Dot plot ---")
 
 markers_in_data <- ALL_MARKERS[ALL_MARKERS %in% rownames(merged)]
-p_dot <- DotPlot(merged, features = markers_in_data, group.by = "cell_type",
-                  dot.scale = 8, dot.min = 0.01) +
-  scale_color_viridis_c(option = "plasma") +
-  labs(title = "Canonical PBMC Markers × Cell Type", x = NULL, y = NULL) + theme_pub +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8))
+p_dot <- suppressWarnings(
+  DotPlot(merged, features = markers_in_data, group.by = "cell_type",
+          dot.scale = 8, dot.min = 0.01) +
+    scale_color_viridis_c(option = "plasma") +
+    labs(title = "Canonical PBMC Markers × Cell Type", x = NULL, y = NULL) + theme_pub +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8))
+)
 ggsave(file.path(DIRS$integrated, "integrated_dotplot.pdf"),
        p_dot, width = 16, height = 7, dpi = PLOT$dpi)
 report_plots[["Dot Plot  -  Canonical Markers × Cell Type"]] <-

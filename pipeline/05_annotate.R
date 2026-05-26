@@ -281,11 +281,13 @@ message("\n--- Canonical marker plots ---")
 
 markers_present <- lapply(MARKERS, function(g) g[g %in% rownames(merged)])
 
-p_dot_manual <- DotPlot(merged, features = unique(unlist(markers_present)),
-                         group.by = "seurat_clusters", dot.scale = 8, dot.min = 0.01) +
-  scale_color_viridis_c(option = "plasma") + RotatedAxis() +
-  labs(title = "Canonical PBMC Markers  -  use this to fill CLUSTER_CELLTYPE_MAP",
-       x = NULL, y = "Cluster")
+p_dot_manual <- suppressWarnings(
+  DotPlot(merged, features = unique(unlist(markers_present)),
+          group.by = "seurat_clusters", dot.scale = 8, dot.min = 0.01) +
+    scale_color_viridis_c(option = "plasma") + RotatedAxis() +
+    labs(title = "Canonical PBMC Markers  -  use this to fill CLUSTER_CELLTYPE_MAP",
+         x = NULL, y = "Cluster")
+)
 ggsave(file.path(DIRS$annotation, "canonical_markers_dotplot.pdf"),
        p_dot_manual, width = 16, height = 8, dpi = PLOT$dpi)
 report_plots[["Canonical PBMC Markers Dot Plot (for manual cluster annotation)"]] <-
@@ -667,12 +669,14 @@ if (isTRUE(SUBCLUSTER$enabled)) {
     Idents(merged_t) <- "sub.cluster"
 
     if (length(t_markers) > 0 && length(unique(Idents(merged_t))) > 1) {
-      p_sub_dot <- DotPlot(merged_t, features = t_markers,
-                            dot.scale = 8, dot.min = 0.01) +
-        scale_color_viridis_c(option = "plasma") +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)) +
-        labs(title = "T Cell Sub-clusters  -  CD4 / CD8 / Treg Markers",
-             x = NULL, y = "Sub-cluster")
+      p_sub_dot <- suppressWarnings(
+        DotPlot(merged_t, features = t_markers,
+                dot.scale = 8, dot.min = 0.01) +
+          scale_color_viridis_c(option = "plasma") +
+          theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7)) +
+          labs(title = "T Cell Sub-clusters  -  CD4 / CD8 / Treg Markers",
+               x = NULL, y = "Sub-cluster")
+      )
       ggsave(file.path(DIRS$annotation, "tcell_subclusters_dotplot.pdf"),
              p_sub_dot, width = 10, height = 6, dpi = PLOT$dpi)
       report_plots[["T Cell Sub-clusters  -  CD4 / CD8 / Treg Marker Dot Plot"]] <-
