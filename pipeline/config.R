@@ -59,8 +59,8 @@ if (length(.env_paths) > 0) {
 } else {
   # ── HARDCODED DEFAULTS (edit here for manual runs) ─────────────────────────
   SAMPLE_PATHS <- list(
-    H1 = file.path(BASE_DIR, "H1", "filter_matrix"),
-    H2 = file.path(BASE_DIR, "H2", "filter_matrix")
+    H1 = file.path(BASE_DIR, "Samples", "H1", "filter_matrix"),
+    H2 = file.path(BASE_DIR, "Samples", "H2", "filter_matrix")
   )
   SAMPLE_NAMES <- c("H1", "H2")
 }
