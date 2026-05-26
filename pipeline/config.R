@@ -92,10 +92,10 @@ rm(.cond_raw)
 if (exists(".pairs")) rm(.pairs)
 if (exists(".kv"))    rm(.kv)
 
-# --- Results directory — named after samples for easy identification ---
-# Single sample  : results_H1/
-# Multiple samples: results_H1andH2/  or  results_H1andH2andH3/
-RESULTS_DIR <- file.path(BASE_DIR,
+# --- Results directory — always under BASE_DIR/Results/ for organisation ---
+# Single sample  : Results/results_H1_filtered/
+# Multiple samples: Results/results_H1andH2_filtered/
+RESULTS_DIR <- file.path(BASE_DIR, "Results",
   paste0("results_", paste(SAMPLE_NAMES, collapse = "and"), "_", .mtag)
 )
 rm(.mtag)

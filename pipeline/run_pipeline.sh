@@ -104,9 +104,9 @@ if [[ $N_SAMPLES -gt 0 ]]; then
   _suffix="${_parts[0]}"
   for (( _j=1; _j<${#_parts[@]}; _j++ )); do _suffix="${_suffix}and${_parts[$_j]}"; done
   $_any_raw && _mtag="raw" || _mtag="filtered"
-  RESULTS_DIR="${BASE_DIR}/results_${_suffix}_${_mtag}"
+  RESULTS_DIR="${BASE_DIR}/Results/results_${_suffix}_${_mtag}"
 else
-  RESULTS_DIR="${BASE_DIR}/results_H1andH2_filtered"  # matches hardcoded config.R defaults
+  RESULTS_DIR="${BASE_DIR}/Results/results_H1andH2_filtered"  # matches hardcoded config.R defaults
 fi
 LOG_DIR="${RESULTS_DIR}/logs"
 mkdir -p "${LOG_DIR}"
