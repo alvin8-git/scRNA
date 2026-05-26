@@ -83,10 +83,10 @@ make_overall_report <- function(output_path) {
     if (is.null(path) || !file.exists(path)) return(NULL)
     n <- tryCatch(pdftools::pdf_length(path), error = function(e) 0L)
     if (n < page) return(NULL)
-    tryCatch(
+    suppressWarnings(tryCatch(
       pdftools::pdf_render_page(path, page = page, dpi = dpi, numeric = FALSE),
       error = function(e) NULL
-    )
+    ))
   }
 
   # ------------------------------------------------------------------
@@ -146,10 +146,10 @@ make_overall_report <- function(output_path) {
     if (is.null(spec)) return(NULL)
     tf <- tempfile(fileext = ".pdf")
     pdf(tf, width = spec$w, height = spec$h)
-    tryCatch(
+    suppressWarnings(tryCatch(
       { print(spec$plot); dev.off(); tf },
       error = function(e) { try(dev.off(), silent = TRUE); NULL }
-    )
+    ))
   }
 
   # Convenience: build + save in one call; appends path to `pages` in parent
