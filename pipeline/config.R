@@ -93,11 +93,17 @@ if (exists(".pairs")) rm(.pairs)
 if (exists(".kv"))    rm(.kv)
 
 # --- Results directory — always under BASE_DIR/Results/ for organisation ---
-# Single sample  : Results/results_H1_filtered/
-# Multiple samples: Results/results_H1andH2_filtered/
+# ≤4 samples : Results/results_H1-H2-H3_filtered/
+# >4 samples : Results/results_H1-H2-H3_+11more_filtered/  (bounded length)
+.name_tag <- if (length(SAMPLE_NAMES) <= 4) {
+  paste(SAMPLE_NAMES, collapse = "-")
+} else {
+  paste0(paste(SAMPLE_NAMES[1:3], collapse = "-"), "_+", length(SAMPLE_NAMES) - 3, "more")
+}
 RESULTS_DIR <- file.path(BASE_DIR, "Results",
-  paste0("results_", paste(SAMPLE_NAMES, collapse = "and"), "_", .mtag)
+  paste0("results_", .name_tag, "_", .mtag)
 )
+rm(.name_tag)
 rm(.mtag)
 
 # --- QC Thresholds ---

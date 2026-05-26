@@ -101,12 +101,17 @@ if [[ $N_SAMPLES -gt 0 ]]; then
     _parts+=("$(_sample_name "$p")")
     [[ "$(_matrix_tag "$p")" == "raw" ]] && _any_raw=true
   done
-  _suffix="${_parts[0]}"
-  for (( _j=1; _j<${#_parts[@]}; _j++ )); do _suffix="${_suffix}and${_parts[$_j]}"; done
+  _n=${#_parts[@]}
+  if (( _n <= 4 )); then
+    _suffix="${_parts[0]}"
+    for (( _j=1; _j<_n; _j++ )); do _suffix="${_suffix}-${_parts[$_j]}"; done
+  else
+    _suffix="${_parts[0]}-${_parts[1]}-${_parts[2]}_+$(( _n - 3 ))more"
+  fi
   $_any_raw && _mtag="raw" || _mtag="filtered"
   RESULTS_DIR="${BASE_DIR}/Results/results_${_suffix}_${_mtag}"
 else
-  RESULTS_DIR="${BASE_DIR}/Results/results_H1andH2_filtered"  # matches hardcoded config.R defaults
+  RESULTS_DIR="${BASE_DIR}/Results/results_H1-H2_filtered"  # matches hardcoded config.R defaults
 fi
 LOG_DIR="${RESULTS_DIR}/logs"
 mkdir -p "${LOG_DIR}"
