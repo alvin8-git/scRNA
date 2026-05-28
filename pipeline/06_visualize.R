@@ -105,9 +105,11 @@ if (!SINGLE_SAMPLE) {
   # Per-sample plots — no individual legend (shared_legend added per page below)
   per_sample_plots <- lapply(SAMPLE_NAMES, function(nm) {
     sub <- merged[, merged$sample == nm]
+    n_cells <- ncol(sub)
     DimPlot(sub, group.by = "cell_type", cols = ct_cols, reduction = "umap",
             pt.size = PLOT$pt_size, label = TRUE, label.size = 2.5) +
-      labs(title = nm) + theme_pub + NoLegend()
+      labs(title = paste0(nm, "  —  ", format(n_cells, big.mark = ","), " cells")) +
+      theme_pub + NoLegend()
   })
 
   # Paginate: at most 2 samples per page
@@ -389,6 +391,156 @@ ggsave(file.path(DIRS$integrated, "violin_key_markers.pdf"),
        p_vln, width = 18, height = vln_h, dpi = PLOT$dpi)
 report_plots[["Violin  -  Key Lineage Markers per Cell Type"]] <-
   set_page(p_vln, pw = 11, ph = min(vln_h * 11 / 18, 8.5))
+
+# =============================================================================
+# PLOT SET 8: Sample comparison text summaries
+# =============================================================================
+message("\n--- Plot Set 8: Comparison summaries ---")
+
+.pfmt <- function(x) sprintf("%.1f%%", x * 100)
+.nfmt <- function(x) format(as.integer(x), big.mark = ",")
+
+.ncells_samp <- as.list(table(merged$sample))
+
+.getprop <- function(nm, ct) {
+  v <- prop_df$prop[prop_df$sample == nm & prop_df$cell_type == ct]
+  if (length(v) == 0) 0 else v[1]
+}
+
+.mk_txt_plot <- function(lines) {
+  txt <- paste(lines, collapse = "\n")
+  ggdraw() + draw_label(txt, x = 0.03, y = 0.97,
+                        hjust = 0, vjust = 1, size = 8, lineheight = 1.4,
+                        fontfamily = "mono")
+}
+
+.hdr <- sprintf("%-24s %8s %9s %7s %9s %8s %8s",
+                "Sample", "Cells", "Neutro%", "RBC%", "Platelet%", "Bcell%", "Mono%")
+.sep <- paste(rep("-", nchar(.hdr)), collapse = "")
+
+.srow <- function(nm, label = nm) {
+  sprintf("%-24s %8s %9s %7s %9s %8s %8s",
+          substr(label, 1, 24), .nfmt(.ncells_samp[[nm]]),
+          .pfmt(.getprop(nm, "Neutrophil")),
+          .pfmt(.getprop(nm, "RBC")),
+          .pfmt(.getprop(nm, "Platelet")),
+          .pfmt(.getprop(nm, "B cell")),
+          .pfmt(.getprop(nm, "CD14+ Mono")))
+}
+
+# ---- 1. minUMI=500 filter comparison ----------------------------------------
+.umi500  <- grep("_500umi$", SAMPLE_NAMES, value = TRUE)
+.umibase <- sub("_500umi$", "", .umi500)
+.keep    <- .umibase %in% SAMPLE_NAMES
+.umi500  <- .umi500[.keep]; .umibase <- .umibase[.keep]
+
+if (length(.umi500) > 0) {
+  .lines500 <- c(
+    "Effect of minUMI=500 Filter",
+    paste(rep("=", 74), collapse = ""),
+    "Raising the minimum UMI threshold removes low-count barcodes:",
+    "empty droplets, ambient RNA, damaged cells, and RBC ghosts.",
+    "Expected: fewer total cells; enriched Mono/T/NK; reduced Neutro/RBC/Platelet.",
+    "",
+    .hdr, .sep
+  )
+  for (i in seq_along(.umi500)) {
+    b <- .umibase[i]; u <- .umi500[i]
+    .lines500 <- c(.lines500,
+      .srow(b, paste0("  base  ", b)),
+      .srow(u, paste0("  500umi ", u)),
+      ""
+    )
+  }
+  report_plots[["Summary  -  minUMI=500 Filter Effect"]] <-
+    set_page(.mk_txt_plot(.lines500), pw = 11, ph = 8)
+}
+
+# ---- 2. Sorting / whole-blood vs PBMC-enriched ------------------------------
+.wb_samps <- SAMPLE_NAMES[sapply(SAMPLE_NAMES, function(nm)
+  .getprop(nm, "Neutrophil") + .getprop(nm, "RBC") > 0.25)]
+
+.lines_sort <- c(
+  "Effect of Sorting: Whole Blood vs PBMC-Enriched",
+  paste(rep("=", 74), collapse = ""),
+  "Samples where (Neutrophil% + RBC%) > 25% are flagged as [WB] = whole blood.",
+  "PBMC isolation (density centrifugation / red cell lysis) removes granulocytes",
+  "and RBCs, enriching lymphocytes and monocytes.",
+  "  Whole blood:    high Neutrophil + high RBC, lower lymphocyte proportion.",
+  "  PBMC-sorted:    low/absent Neutrophil + RBC, enriched T/B/NK/Mono.",
+  "",
+  .hdr, .sep
+)
+for (nm in SAMPLE_NAMES) {
+  tag <- if (nm %in% .wb_samps) " [WB]" else "     "
+  .lines_sort <- c(.lines_sort,
+    sprintf("%-24s %8s %9s %7s %9s %8s %8s",
+            substr(paste0(nm, tag), 1, 24),
+            .nfmt(.ncells_samp[[nm]]),
+            .pfmt(.getprop(nm, "Neutrophil")),
+            .pfmt(.getprop(nm, "RBC")),
+            .pfmt(.getprop(nm, "Platelet")),
+            .pfmt(.getprop(nm, "B cell")),
+            .pfmt(.getprop(nm, "CD14+ Mono")))
+  )
+}
+report_plots[["Summary  -  Sorting Effect (Whole Blood vs Sorted)"]] <-
+  set_page(.mk_txt_plot(.lines_sort), pw = 11, ph = 8)
+
+# ---- 3. B cell analysis -----------------------------------------------------
+.bcell_tbl <- data.frame(
+  sample = SAMPLE_NAMES,
+  bcell  = sapply(SAMPLE_NAMES, function(nm) .getprop(nm, "B cell")),
+  n      = sapply(SAMPLE_NAMES, function(nm) as.integer(.ncells_samp[[nm]])),
+  stringsAsFactors = FALSE
+)
+.bcell_tbl <- .bcell_tbl[order(.bcell_tbl$bcell), ]
+.mean_bc   <- mean(.bcell_tbl$bcell) * 100
+.low_bc    <- .bcell_tbl$sample[.bcell_tbl$bcell < 0.01]
+
+.bc_rows <- vapply(seq_len(nrow(.bcell_tbl)), function(i) {
+  sprintf("  %-24s %8s %8s",
+          .bcell_tbl$sample[i],
+          .nfmt(.bcell_tbl$n[i]),
+          .pfmt(.bcell_tbl$bcell[i]))
+}, character(1L))
+
+.lines_bc <- c(
+  "B Cell Population Analysis",
+  paste(rep("=", 74), collapse = ""),
+  sprintf("Overall mean B cell proportion: %.1f%%", .mean_bc),
+  sprintf("Samples with <1%% B cells: %s",
+          if (length(.low_bc) > 0) paste(.low_bc, collapse = ", ") else "none"),
+  "",
+  "B cell proportion per sample (ascending):",
+  sprintf("  %-24s %8s %8s", "Sample", "N cells", "B cell%"),
+  paste0("  ", paste(rep("-", 42), collapse = "")),
+  .bc_rows,
+  "",
+  "Possible reasons for low B cell proportion:",
+  "  1. Whole blood vs sorted: in unsorted samples, B cells are numerically diluted",
+  "     by the high abundance of Neutrophils and RBCs.",
+  "  2. Bat-specific biology: Eonycteris spelaea has lower circulating B cell",
+  "     frequency than humans; B cells concentrate in lymphoid organs (spleen,",
+  "     lymph nodes), not peripheral blood.",
+  "  3. PBMC isolation efficiency: bat B cell buoyancy may differ from human,",
+  "     causing loss during density gradient centrifugation.",
+  "  4. Cell fragility: B cells are smaller and may be more susceptible to lysis",
+  "     or RNA degradation during processing, reducing capture rate.",
+  "  5. Marker expression: bat MS4A1 (CD20) / CD19 expression may be lower,",
+  "     causing B cells to be annotated as Unassigned rather than B cell.",
+  "  6. Biological variation: immune state, active infection, season, or age",
+  "     all modulate circulating B cell frequency in bats.",
+  "  7. Kit / protocol effect: different library prep kits have cell-size capture",
+  "     biases; compare _newkit pairs where available."
+)
+report_plots[["Summary  -  B Cell Population Analysis"]] <-
+  set_page(.mk_txt_plot(.lines_bc), pw = 11, ph = 9)
+
+rm(.pfmt, .nfmt, .ncells_samp, .getprop, .mk_txt_plot, .hdr, .sep, .srow,
+   .umi500, .umibase, .keep, .wb_samps, .lines_sort,
+   .bcell_tbl, .mean_bc, .low_bc, .bc_rows, .lines_bc)
+if (exists(".lines500")) rm(.lines500)
 
 # =============================================================================
 # SUMMARY
