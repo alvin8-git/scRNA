@@ -221,6 +221,18 @@ PARALLEL <- list(
   future_mem_gb    = 32L
 )
 
+# --- Cache invalidation hash ---
+# Parameters whose change should invalidate the per-sample cache.
+.CACHE_PARAMS <- list(
+  qc       = QC,
+  doublet  = DOUBLET,
+  norm     = NORM,
+  dim_red  = DIM,
+  cluster  = CLUSTER,
+  species  = Sys.getenv("SCRNA_SPECIES", "human")
+)
+cache_hash <- function() digest::digest(.CACHE_PARAMS, algo = "md5")
+
 # --- Manual Cluster → Cell Type Map ---
 # NULL  → auto-annotate using SingleR majority vote per cluster (recommended for first run).
 #         The log (logs/05_annotate.log) will print a copy-pasteable map you can paste below.

@@ -136,17 +136,32 @@ report_plots <- list()
 for (nm in SAMPLE_NAMES) {
   out_path   <- file.path(DIRS$individual, nm, paste0(nm, "_seurat.rds"))
   cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_seurat.rds"))
+  hash_path  <- sub("\\.rds$", ".hash", cache_path)
   if (file.exists(cache_path)) {
-    message("  [CACHE] ", nm, ": loading _seurat.rds from sample_cache/ (skipping individual processing)")
-    message("         (individual plots for this sample are in the original run's results dir)")
-    file.copy(cache_path, out_path, overwrite = TRUE)
+    stored <- if (file.exists(hash_path)) readLines(hash_path) else ""
+    if (stored == cache_hash()) {
+      message("  [CACHE HIT] ", nm, ": loading _seurat.rds from sample_cache/ (skipping individual processing)")
+      message("         (individual plots for this sample are in the original run's results dir)")
+      file.copy(cache_path, out_path, overwrite = TRUE)
+    } else {
+      message("  [CACHE STALE] ", nm, ": config changed — recomputing")
+      seu <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds")))
+      res <- process_individual(seu, nm)
+      report_plots <- c(report_plots, res$plots)
+      saveRDS(res$seu, out_path)
+      dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
+      file.copy(out_path, cache_path, overwrite = TRUE)
+      writeLines(cache_hash(), hash_path)
+      message("  [CACHE] Saved ", nm, "_seurat.rds to sample_cache/")
+    }
   } else {
     seu <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds")))
     res <- process_individual(seu, nm)
     report_plots <- c(report_plots, res$plots)
     saveRDS(res$seu, out_path)
     dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
-    file.copy(out_path, cache_path)
+    file.copy(out_path, cache_path, overwrite = TRUE)
+    writeLines(cache_hash(), hash_path)
     message("  [CACHE] Saved ", nm, "_seurat.rds to sample_cache/")
   }
 }

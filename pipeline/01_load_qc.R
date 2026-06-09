@@ -108,9 +108,16 @@ filter_cells <- function(seu, sample_name) {
 seu_list <- setNames(vector("list", length(SAMPLE_NAMES)), SAMPLE_NAMES)
 for (nm in SAMPLE_NAMES) {
   cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_filtered.rds"))
+  hash_path  <- sub("\\.rds$", ".hash", cache_path)
   if (file.exists(cache_path)) {
-    message("[CACHE] ", nm, ": loading _filtered.rds from sample_cache/ (skipping load + QC filter)")
-    seu_list[[nm]] <- readRDS(cache_path)
+    stored <- if (file.exists(hash_path)) readLines(hash_path) else ""
+    if (stored == cache_hash()) {
+      message("[CACHE HIT] ", nm, ": loading _filtered.rds from sample_cache/ (skipping load + QC filter)")
+      seu_list[[nm]] <- readRDS(cache_path)
+    } else {
+      message("[CACHE STALE] ", nm, ": config changed — recomputing")
+      seu_list[[nm]] <- add_qc_metrics(load_sample(nm, SAMPLE_PATHS[[nm]]))
+    }
   } else {
     seu_list[[nm]] <- add_qc_metrics(load_sample(nm, SAMPLE_PATHS[[nm]]))
   }
@@ -142,11 +149,11 @@ for (nm in SAMPLE_NAMES) {
   rds_path <- file.path(outdir, paste0(nm, "_filtered.rds"))
   saveRDS(seu_list[[nm]], rds_path)
   cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_filtered.rds"))
-  if (!file.exists(cache_path)) {
-    dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
-    file.copy(rds_path, cache_path)
-    message("  [CACHE] Saved ", nm, "_filtered.rds to sample_cache/")
-  }
+  hash_path  <- sub("\\.rds$", ".hash", cache_path)
+  dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
+  file.copy(rds_path, cache_path, overwrite = TRUE)
+  writeLines(cache_hash(), hash_path)
+  message("  [CACHE] Saved ", nm, "_filtered.rds to sample_cache/")
 }
 
 qc_summary <- data.frame(
