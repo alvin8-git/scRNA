@@ -27,6 +27,23 @@ Developed for human PBMC data from the **DNB C4** sequencing platform but adapta
 
 ---
 
+## Documentation
+
+| Document | Type | Description |
+|----------|------|-------------|
+| [Getting Started Tutorial](docs/tutorial-first-run.md) | Tutorial | Install, run, annotate — from raw matrices to a full report |
+| [How to Re-run from a Specific Step](docs/howto-rerun-steps.md) | How-to | Restart the pipeline from step 03, 05, or 07 without reprocessing |
+| [How to Override Cell Type Annotations](docs/howto-override-annotations.md) | How-to | Fill and correct `CLUSTER_CELLTYPE_MAP` after first run |
+| [How to Run on Bat Whole Blood](docs/howto-bat-whole-blood.md) | How-to | Bat-specific overrides, expected proportions, common mislabellings |
+| [How to Add or Replace a Sample](docs/howto-add-sample.md) | How-to | Add a new sample to an existing cohort using the sample cache |
+| [Configuration Reference](docs/reference-config.md) | Reference | Every `config.R` parameter with type, default, and guidance |
+| [Pipeline Steps Reference](docs/reference-pipeline-steps.md) | Reference | Inputs, outputs, and config keys for each of the 10 steps |
+| [Output Files Reference](docs/reference-outputs.md) | Reference | Full directory layout and key file descriptions |
+| [Pipeline Architecture](docs/explanation-architecture.md) | Explanation | Why the modular design, sample cache, and Harmony were chosen |
+| [Annotation Strategy](docs/explanation-annotation.md) | Explanation | How SingleR, contamination overrides, and sub-type refinement interact |
+
+---
+
 ## Pipeline Steps
 
 | Step | Script | Description |
