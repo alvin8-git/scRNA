@@ -4,7 +4,7 @@
 # estimates in bat whole blood scRNA-seq.
 #
 # Approach:
-#   - Use the largest sample (ES03_newkit, n=6520) as ground truth
+#   - Use the largest sample (by cell count) as ground truth
 #   - Subsample at increasing depths (n_depths), 1000 draws each
 #   - For each depth: compute mean proportion, 95% CI width, RMSE vs ground truth
 #   - Fit theoretical CI ~ a/sqrt(n) curve per cell type
