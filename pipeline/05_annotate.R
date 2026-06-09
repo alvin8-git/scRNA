@@ -203,8 +203,11 @@ if (!is.null(MARKERS$gamma_delta_T))
   error = function(e) matrix(nrow = 0, ncol = 0)
 )
 if (nrow(.scale_mat) == 0) {
-  message("  scale.data absent — scaling all genes for scType")
-  merged <- ScaleData(merged, features = rownames(merged), verbose = FALSE)
+  message("  scale.data absent — scaling HVGs for scType")
+  hvg <- VariableFeatures(merged)
+  if (length(hvg) == 0) hvg <- rownames(merged)  # defensive fallback only
+  merged <- ScaleData(merged, features = hvg, verbose = FALSE)
+  message("  scType: scaled ", length(hvg), " features (VariableFeatures)")
   .scale_mat <- GetAssayData(merged, assay = "RNA", layer = "scale.data")
 }
 
