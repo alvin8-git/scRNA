@@ -330,6 +330,24 @@ if (!is.null(MARKERS$gamma_delta_T)) {
 }
 
 # =============================================================================
+# Annotation precedence (highest priority last — later steps override earlier):
+#
+#  [1] SingleR per-cell  ->  singler_label_clean  (baseline for all cells)
+#      |
+#  [2] scType per-cluster  ->  Monaco-blind types only
+#      (RBC, Platelet, Eosinophil, Mast cell: MonacoImmune cannot detect these)
+#      |
+#  [3] CLUSTER_CELLTYPE_MAP  ->  manual cluster override (NULL = auto majority vote)
+#      Unmapped clusters fall back to SingleR majority vote automatically.
+#      |
+#  [4] CONTAMINATION_TYPES  ->  per-cell SingleR label wins over cluster majority
+#      (Neutrophil, RBC, HSPC, Platelet, Basophil... preserved as singletons)
+#
+#  Final label stored in: merged$cell_type -> merged$final_cell_type
+#
+#  To change precedence: reorder the blocks below. Each block sets merged$cell_type
+#  for the cells it covers; later blocks overwrite earlier ones.
+# =============================================================================
 # PART 3: Assign final cell_type labels
 # =============================================================================
 message("\n--- Assigning cell type labels ---")
