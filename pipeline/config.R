@@ -7,6 +7,9 @@
 options(Seurat.warn.raster = FALSE)   # rasterizing >100k points is intentional
 suppressWarnings(library(ggplot2))    # silence freetype/systemfonts version mismatch
 
+# --- Shared PDF helpers (A4P, A4L, .combine_pdfs, .render, .build_page, .save_page) ---
+source(file.path(dirname(sys.frame(1)$ofile %||% "."), "pdf_helpers.R"))
+
 # --- Base paths ---
 BASE_DIR          <- "/data/alvin/scRNA"
 PIPELINE_DIR      <- file.path(BASE_DIR, "pipeline")
@@ -613,25 +616,6 @@ PLOT_CAPTIONS <- list(
   for (pat in names(PLOT_CAPTIONS))
     if (grepl(pat, nm, ignore.case = TRUE, perl = TRUE)) return(PLOT_CAPTIONS[[pat]])
   NULL
-}
-
-# Combine a vector of PDF file paths into one PDF
-.combine_pdfs <- function(files, output) {
-  files <- files[file.exists(files)]
-  if (length(files) == 0) { message("  No PDFs to combine for: ", output); return(invisible(NULL)) }
-  if (length(files) == 1) { file.copy(files, output, overwrite = TRUE); return(invisible(output)) }
-  if (requireNamespace("qpdf", quietly = TRUE)) {
-    qpdf::pdf_combine(files, output)
-  } else if (nchar(Sys.which("pdfunite")) > 0) {
-    system2("pdfunite", c(shQuote(files), shQuote(output)))
-  } else if (nchar(Sys.which("gs")) > 0) {
-    system2("gs", c("-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite",
-                    paste0("-sOutputFile=", shQuote(output)), shQuote(files)))
-  } else {
-    warning("Cannot combine PDFs — install R package 'qpdf' or system 'pdfunite'. Copying first file.")
-    file.copy(files[1], output, overwrite = TRUE)
-  }
-  invisible(output)
 }
 
 # Save a named list of ggplot/patchwork objects to a multi-page PDF.

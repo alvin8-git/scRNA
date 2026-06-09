@@ -10,6 +10,7 @@
 # Output: Comparison_report.pdf in RESULTS_DIR
 # =============================================================================
 source("/data/alvin/scRNA/pipeline/config.R")
+source(file.path(dirname(sys.frame(1)$ofile %||% "."), "pdf_helpers.R"))
 
 suppressPackageStartupMessages({
   library(ggplot2)
@@ -22,65 +23,9 @@ if (!requireNamespace("pdftools", quietly = TRUE))
 
 message("\n=== Building Comparison Report ===")
 
-# A4 dimensions (inches)
-A4P <- c(w = 8.27,  h = 11.69)
-A4L <- c(w = 11.69, h = 8.27)
-
 # =============================================================================
-# HELPERS (same pattern as 07_finalize_reports.R)
+# HELPERS (step-08-specific; A4P/A4L/.render/.build_page/.save_page from pdf_helpers.R)
 # =============================================================================
-
-.render <- function(path, page = 1L, dpi = 150L) {
-  if (is.null(path) || !file.exists(path)) return(NULL)
-  n <- tryCatch(pdftools::pdf_length(path), error = function(e) 0L)
-  if (n < page) return(NULL)
-  tryCatch(
-    pdftools::pdf_render_page(path, page = page, dpi = dpi, numeric = FALSE),
-    error = function(e) NULL
-  )
-}
-
-.build_page <- function(imgs, title = NULL, caption = NULL,
-                         landscape = FALSE, ncols = 1L) {
-  imgs <- Filter(Negate(is.null), imgs)
-  if (length(imgs) == 0) return(NULL)
-  dims <- if (landscape) A4L else A4P
-  has_title   <- !is.null(title)   && nchar(trimws(title))   > 0
-  has_caption <- !is.null(caption) && nchar(trimws(caption)) > 0
-  th <- if (has_title)   0.055 else 0
-  ch <- if (has_caption) 0.16  else 0
-  ih <- 1 - th - ch
-  img_plots <- lapply(imgs, function(img) ggdraw() + draw_image(img))
-  nrows <- ceiling(length(img_plots) / ncols)
-  img_grid <- if (length(img_plots) == 1L) img_plots[[1]] else
-    plot_grid(plotlist = img_plots, ncol = ncols, nrow = nrows)
-  rows <- list(); rel_h <- numeric(0)
-  if (has_title) {
-    rows[[length(rows)+1L]] <- ggdraw() +
-      draw_label(title, fontface = "bold", size = 13,
-                 x = 0.03, y = 0.5, hjust = 0, vjust = 0.5)
-    rel_h <- c(rel_h, th)
-  }
-  rows[[length(rows)+1L]] <- img_grid
-  rel_h <- c(rel_h, ih)
-  if (has_caption) {
-    rows[[length(rows)+1L]] <- ggdraw() +
-      draw_label(caption, size = 7.5, color = "#444444",
-                 x = 0.03, y = 0.95, hjust = 0, vjust = 1, lineheight = 1.3)
-    rel_h <- c(rel_h, ch)
-  }
-  pg <- if (length(rows) == 1L) rows[[1L]] else
-    plot_grid(plotlist = rows, ncol = 1L, rel_heights = rel_h)
-  list(plot = pg, w = unname(dims["w"]), h = unname(dims["h"]))
-}
-
-.save_page <- function(spec) {
-  if (is.null(spec)) return(NULL)
-  tf <- tempfile(fileext = ".pdf")
-  pdf(tf, width = spec$w, height = spec$h)
-  tryCatch({ print(spec$plot); dev.off(); tf },
-           error = function(e) { try(dev.off(), silent = TRUE); NULL })
-}
 
 pages <- character(0)
 .add <- function(imgs, title, caption = NULL, landscape = FALSE, ncols = 1L) {
