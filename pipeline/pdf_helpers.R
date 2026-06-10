@@ -33,7 +33,7 @@ A4L <- c(w = 11.69, h = 8.27)   # landscape
   if (n < page) return(NULL)
   suppressWarnings(tryCatch(
     pdftools::pdf_render_page(path, page = page, dpi = dpi, numeric = FALSE),
-    error = function(e) NULL
+    error = function(e) { warning("PDF render failed (page ", page, " of ", path, "): ", conditionMessage(e)); NULL }
   ))
 }
 
