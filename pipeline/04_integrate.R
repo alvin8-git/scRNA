@@ -87,6 +87,7 @@ if (SINGLE_SAMPLE) {
           project      = "integrated")
   )
   merged <- suppressWarnings(JoinLayers(merged))
+  rm(seu_list); gc()
   message("Merged: ", ncol(merged), " total cells")
 
   # Step 2: Normalize, HVG, Scale, PCA

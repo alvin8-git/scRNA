@@ -225,9 +225,21 @@ SUBTYPE_MARKERS <- list(
 # Workers: all cores minus 2 (keep system responsive), capped at 8
 PARALLEL <- list(
   workers          = min(8L, max(1L, parallel::detectCores() - 2L)),
-  # Memory per future worker — increase for large merged datasets (>30k cells needs >8 GB)
-  future_mem_gb    = 32L
+  # Memory per future worker — 8 GB covers per-sample objects; raise to 16L for >4-sample merges
+  future_mem_gb    = 8L
 )
+
+# --- Serialization ---
+# Opt-in to qs (3-8x faster RDS I/O via LZ4/ZSTD). Falls back to base saveRDS/readRDS.
+IO <- list(use_qs = requireNamespace("qs", quietly = TRUE))
+.save_rds <- function(obj, path, ...) {
+  if (isTRUE(IO$use_qs)) qs::qsave(obj, path, nthreads = min(4L, PARALLEL$workers), ...)
+  else saveRDS(obj, path, ...)
+}
+.read_rds <- function(path, ...) {
+  if (isTRUE(IO$use_qs)) qs::qread(path, nthreads = min(4L, PARALLEL$workers), ...)
+  else readRDS(path, ...)
+}
 
 # --- Cache invalidation hash ---
 # Parameters whose change should invalidate the per-sample cache.

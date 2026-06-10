@@ -47,6 +47,7 @@ if (.ref_name == "MonacoImmune") {
 expr_mat       <- GetAssayData(merged, assay = "RNA", layer = "data")
 singler_result <- SingleR(test = expr_mat, ref = ref, labels = ref_labels,
                            fine.tune = TRUE, prune = TRUE, BPPARAM = bp_param)
+rm(expr_mat); gc()
 
 merged$singler_label  <- singler_result$labels
 merged$singler_pruned <- singler_result$pruned.labels

@@ -155,6 +155,7 @@ for (nm in SAMPLE_NAMES) {
   writeLines(cache_hash(), hash_path)
   message("  [CACHE] Saved ", nm, "_filtered.rds to sample_cache/")
 }
+gc()
 
 qc_summary <- data.frame(
   Sample          = SAMPLE_NAMES,

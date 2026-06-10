@@ -154,6 +154,15 @@ else
 fi
 
 # =============================================================================
+# Pin BLAS/OMP to 1 thread per process — prevents oversubscription when
+# future/BiocParallel workers each inherit the full BLAS thread pool.
+# =============================================================================
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export BLAS_NUM_THREADS=1
+
+# =============================================================================
 # Validate config before running any steps
 # =============================================================================
 echo "[run_pipeline] Validating config..."

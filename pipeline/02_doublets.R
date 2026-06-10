@@ -61,6 +61,7 @@ run_doubletfinder <- function(seu, sample_name) {
   ggsave(file.path(DIRS$doublets, paste0(sample_name, "_doublet_umap.pdf")),
          p_umap, width = 7, height = 6)
   plots[[paste0(sample_name, "  -  Doublet UMAP")]] <- mark_small(p_umap)
+  rm(seu_vis); gc()
 
   p_hist <- ggplot(seu@meta.data, aes(x = doublet_score, fill = doublet_class)) +
     geom_histogram(bins = 40, alpha = 0.8, position = "identity") +
