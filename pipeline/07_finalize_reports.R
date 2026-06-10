@@ -11,7 +11,6 @@
 #   Overall_report.pdf
 # =============================================================================
 source("/data/alvin/scRNA/pipeline/config.R")
-source(file.path(dirname(sys.frame(1)$ofile %||% "."), "pdf_helpers.R"))
 
 combine <- function(inputs, output) {
   existing <- inputs[file.exists(inputs)]
