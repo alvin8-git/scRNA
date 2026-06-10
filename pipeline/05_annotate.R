@@ -207,8 +207,10 @@ if (nrow(.scale_mat) == 0) {
   message("  scale.data absent — scaling HVGs for scType")
   hvg <- VariableFeatures(merged)
   if (length(hvg) == 0) hvg <- rownames(merged)  # defensive fallback only
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] ScaleData (", length(hvg), " HVGs for scType)...")
   merged <- ScaleData(merged, features = hvg, verbose = FALSE)
-  message("  scType: scaled ", length(hvg), " features (VariableFeatures)")
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   .scale_mat <- GetAssayData(merged, assay = "RNA", layer = "scale.data")
 }
 

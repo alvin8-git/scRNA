@@ -48,10 +48,18 @@ if (SINGLE_SAMPLE) {
 
   merged <- NormalizeData(merged, verbose = FALSE)
   merged <- FindVariableFeatures(merged, nfeatures = NORM$n_hvg, verbose = FALSE)
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] ScaleData...")
   merged <- ScaleData(merged, vars.to.regress = "percent.mt", verbose = FALSE)
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   merged <- RunPCA(merged, npcs = DIM$npcs, verbose = FALSE)
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] RunUMAP...")
   merged <- RunUMAP(merged, dims = DIM$dims_use, seed.use = DIM$umap_seed,
                     umap.method = "uwot", verbose = FALSE)
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] FindNeighbors + FindClusters...")
   merged <- FindNeighbors(merged, dims = DIM$dims_use, verbose = FALSE)
 
   for (res in CLUSTER$resolutions) {
@@ -59,6 +67,7 @@ if (SINGLE_SAMPLE) {
                            algorithm = CLUSTER$algorithm, verbose = FALSE)
     message("  res=", res, ": ", length(unique(merged$seurat_clusters)), " clusters")
   }
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   default_col <- paste0("RNA_snn_res.", CLUSTER$default_res)
   Idents(merged) <- default_col
   merged$seurat_clusters <- merged@meta.data[[default_col]]
@@ -94,13 +103,19 @@ if (SINGLE_SAMPLE) {
   merged <- NormalizeData(merged, verbose = FALSE)
   merged <- FindVariableFeatures(merged, selection.method = NORM$hvg_method,
                                   nfeatures = NORM$n_hvg, verbose = FALSE)
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] ScaleData...")
   merged <- ScaleData(merged, vars.to.regress = "percent.mt", verbose = FALSE)
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   merged <- RunPCA(merged, npcs = DIM$npcs, verbose = FALSE)
 
   # Step 3: UMAP before Harmony
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] RunUMAP (pre-Harmony)...")
   merged <- RunUMAP(merged, dims = DIM$dims_use,
                     reduction.name = "umap_uncorrected", reduction.key = "UMAPunc_",
                     seed.use = DIM$umap_seed, umap.method = "uwot", verbose = FALSE)
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
 
   sample_cols <- SAMPLE_COLORS[names(SAMPLE_COLORS) %in% SAMPLE_NAMES]
   if (length(sample_cols) < length(SAMPLE_NAMES)) {
@@ -113,7 +128,8 @@ if (SINGLE_SAMPLE) {
     labs(title = "Before Harmony  -  by sample") + theme_classic()
 
   # Step 4: Harmony
-  message("Running Harmony integration...")
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] RunHarmony...")
   merged <- RunHarmony(merged,
     group.by.vars    = HARMONY$group_by_vars,
     dims.use         = DIM$dims_use,
@@ -124,11 +140,15 @@ if (SINGLE_SAMPLE) {
     reduction        = "pca", reduction.save = "harmony",
     plot_convergence = FALSE, verbose = FALSE
   )
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
 
   # Step 5: UMAP on Harmony embedding
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] RunUMAP (post-Harmony)...")
   merged <- RunUMAP(merged, reduction = "harmony", dims = HARMONY$dims_use,
                     reduction.name = "umap", reduction.key = "UMAP_",
                     seed.use = DIM$umap_seed, umap.method = "uwot", verbose = FALSE)
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
 
   p_after <- DimPlot(merged, reduction = "umap",
                       group.by = "sample", cols = sample_cols, pt.size = PLOT$pt_size) +
@@ -141,6 +161,8 @@ if (SINGLE_SAMPLE) {
     set_page(p_compare, pw = 11, ph = 5)
 
   # Step 6: Cluster on Harmony embedding
+  .t <- proc.time()["elapsed"]
+  message("[", format(Sys.time(), "%H:%M:%S"), "] FindNeighbors + FindClusters...")
   merged <- FindNeighbors(merged, reduction = "harmony",
                            dims = HARMONY$dims_use, verbose = FALSE)
   for (res in CLUSTER$resolutions) {
@@ -148,6 +170,7 @@ if (SINGLE_SAMPLE) {
                            algorithm = CLUSTER$algorithm, verbose = FALSE)
     message("  res=", res, ": ", length(unique(merged$seurat_clusters)), " clusters")
   }
+  message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   default_col <- paste0("RNA_snn_res.", CLUSTER$default_res)
   Idents(merged) <- default_col
   merged$seurat_clusters <- merged@meta.data[[default_col]]
