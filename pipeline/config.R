@@ -257,15 +257,6 @@ cache_hash <- function() digest::digest(.CACHE_PARAMS, algo = "md5")
 #   "10" = "CD8 T"            CD8A, CD8B, CCR7, LEF1
 #   "11" = "DC"               FCER1A, CLEC10A, FLT3
 #   "12" = "Platelet"         PPBP, PF4, ITGB3, GP9
-# Verified map for ES03_newkit + ES12_newkit (bat, 17 clusters, res=1.0, MonacoImmune)
-# NK clusters 4/7/11/13 confirmed CD3+ cytotoxic T cells by marker check (CD3D 50-70%, CD3E 85-89%)
-# Cluster 16 confirmed Platelet by PF4 89%, ITGA2B 72%, GP9 50%
-# All other clusters fall back to SingleR (Monaco) automatically
-# NOTE: set to NULL for fresh multi-sample runs — cluster numbers change between datasets
-# 4-sample run (Sample6, Sample7, 10, ES03_newkit): clusters 3/11/15 confirmed CD8 T (CTL)
-# by CD3E 90.7%, NCAM1 0.5% — SingleR incorrectly calls these NK
-# ARCHIVED — do not reuse; cluster numbers change between datasets:
-#   c("3"="CD8 T", "11"="CD8 T", "15"="CD8 T", "13"="DC", "18"="DC", "17"="Neutrophil")
 CLUSTER_CELLTYPE_MAP <- NULL  # reset for each new analysis
 
 # --- Color Palettes ---
@@ -697,3 +688,19 @@ save_report_pdf <- function(plots, filepath) {
   message("  Report saved: ", filepath)
   invisible(filepath)
 }
+
+# =============================================================================
+# ARCHIVED CLUSTER_CELLTYPE_MAPs — reference only, do NOT activate.
+# Each entry includes the dataset name and run date.
+# Current active map is set in the Manual Cluster -> Cell Type Map section above.
+# =============================================================================
+
+# Verified map for ES03_newkit + ES12_newkit (bat, 17 clusters, res=1.0, MonacoImmune)
+# NK clusters 4/7/11/13 confirmed CD3+ cytotoxic T cells by marker check (CD3D 50-70%, CD3E 85-89%)
+# Cluster 16 confirmed Platelet by PF4 89%, ITGA2B 72%, GP9 50%
+# All other clusters fall back to SingleR (Monaco) automatically
+# NOTE: set to NULL for fresh multi-sample runs — cluster numbers change between datasets
+# 4-sample run (Sample6, Sample7, 10, ES03_newkit): clusters 3/11/15 confirmed CD8 T (CTL)
+# by CD3E 90.7%, NCAM1 0.5% — SingleR incorrectly calls these NK
+# ARCHIVED — do not reuse; cluster numbers change between datasets:
+#   c("3"="CD8 T", "11"="CD8 T", "15"="CD8 T", "13"="DC", "18"="DC", "17"="Neutrophil")
