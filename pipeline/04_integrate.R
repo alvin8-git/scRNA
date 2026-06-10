@@ -223,13 +223,17 @@ if (length(compare_res) >= 2) {
 # =============================================================================
 # Cluster markers (both paths)
 # =============================================================================
-message("Finding integrated cluster markers...")
-integrated_markers <- FindAllMarkers(merged, only.pos = TRUE,
-                                      min.pct = 0.1, logfc.threshold = 0.25,
-                                      verbose = FALSE)
-write.csv(integrated_markers,
-          file.path(DIRS$integrated, "integrated_cluster_markers.csv"),
-          row.names = FALSE)
+if (isTRUE(MARKERS$compute_integrated)) {
+  message("Finding integrated cluster markers (MARKERS$compute_integrated = TRUE)...")
+  integrated_markers <- FindAllMarkers(merged, only.pos = TRUE,
+                                        min.pct = 0.1, logfc.threshold = 0.25,
+                                        verbose = FALSE)
+  write.csv(integrated_markers,
+            file.path(DIRS$integrated, "integrated_cluster_markers.csv"),
+            row.names = FALSE)
+} else {
+  message("Skipping integrated FindAllMarkers (set MARKERS$compute_integrated <- TRUE to enable).")
+}
 
 saveRDS(merged, file.path(DIRS$integrated, "integrated_seurat.rds"))
 

@@ -189,6 +189,11 @@ MARKERS <- list(
 
 ALL_MARKERS <- unique(unlist(MARKERS))
 
+# Set TRUE to run FindAllMarkers on the integrated object after Harmony.
+# Saves to integrated_cluster_markers.csv. Slow: 20-40 min for large datasets.
+# Not consumed by automated downstream steps; useful for manual exploration only.
+MARKERS$compute_integrated <- FALSE
+
 # --- SingleR Reference ---
 # "HumanPrimaryCellAtlas" (default, broad) | "MonacoImmune" (blood-optimised, resolves CD4/CD8/γδ)
 SINGLER_REF <- "HumanPrimaryCellAtlas"
