@@ -20,7 +20,11 @@ load_sample <- function(sample_name, data_path) {
   message("Loading: ", sample_name, " from ", data_path)
   counts <- Read10X(data.dir = data_path, gene.column = 2,
                     cell.column = 1, unique.features = TRUE)
-  if (is.list(counts)) counts <- counts[["Gene Expression"]]
+  if (is.list(counts)) {
+    if (!"Gene Expression" %in% names(counts))
+      stop("'Gene Expression' modality not found in: ", paste(names(counts), collapse = ", "))
+    counts <- counts[["Gene Expression"]]
+  }
 
   n_gem <- ncol(counts)   # raw GEM barcodes before any Seurat filtering
   seu <- CreateSeuratObject(counts = counts, project = sample_name,

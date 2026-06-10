@@ -49,10 +49,10 @@ singler_result <- SingleR(test = expr_mat, ref = ref, labels = ref_labels,
                            fine.tune = TRUE, prune = TRUE, BPPARAM = bp_param)
 rm(expr_mat); gc()
 
-merged$singler_label  <- singler_result$labels
-merged$singler_pruned <- singler_result$pruned.labels
+merged$singler_label  <- singler_result$labels[colnames(merged)]
+merged$singler_pruned <- singler_result$pruned.labels[colnames(merged)]
 merged$singler_delta  <- apply(singler_result$scores, 1,
-                                function(x) { s <- sort(x, decreasing = TRUE); s[1] - s[2] })
+                                function(x) { s <- sort(x, decreasing = TRUE); if (length(s) >= 2) s[1] - s[2] else 0 })
 merged$singler_label_clean <- ifelse(is.na(merged$singler_pruned),
                                       "Unassigned", merged$singler_pruned)
 
@@ -230,7 +230,8 @@ colnames(.score_mat) <- names(.gs_pos)
 
 # Assign per-cluster label: cell type with highest aggregate score wins
 .cl_sctype <- do.call(rbind, lapply(levels(merged$seurat_clusters), function(cl) {
-  cells     <- which(merged$seurat_clusters == cl)
+  cells <- which(merged$seurat_clusters == cl)
+  if (length(cells) == 0) return(NULL)
   cl_scores <- colSums(.score_mat[cells, , drop = FALSE])
   data.frame(cluster = cl, sctype = names(which.max(cl_scores)),
              score = max(cl_scores), n_cells = length(cells),
@@ -379,7 +380,17 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
   # A copy-pasteable CLUSTER_CELLTYPE_MAP is printed to the log for review.
   cl_majority <- merged@meta.data %>%
     group_by(seurat_clusters) %>%
-    summarise(auto_label = names(which.max(table(singler_label_clean))), .groups = "drop")
+    summarise(
+      auto_label = {
+        tbl <- table(singler_label_clean)
+        mx  <- max(tbl)
+        if (sum(tbl == mx) > 1)
+          message("  [TIE] Cluster ", seurat_clusters[1], ": tied at n=", mx,
+                  " — '", names(which.max(tbl)), "' wins (alphabetical)")
+        names(which.max(tbl))
+      },
+      .groups = "drop"
+    )
   label_map <- setNames(cl_majority$auto_label, as.character(cl_majority$seurat_clusters))
 
   # --- Sub-type refinement ---
@@ -401,6 +412,7 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
 
         n_refined <- 0
         for (cl in generic_clusters) {
+          if (!cl %in% colnames(avg_expr)) next
           major   <- label_map[cl]
           subtypes <- SUBTYPE_MARKERS[[major]]
 
@@ -426,22 +438,6 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
 
   merged$cell_type <- unname(label_map[as.character(merged$seurat_clusters)])
 
-  # Override cluster-majority label for contamination/rare types — ensures scattered
-  # cells (e.g. 3 Neutrophils inside a Monocyte cluster) keep their per-cell SingleR
-  # identity on the UMAP instead of being silently absorbed into the majority label.
-  n_overridden <- 0L
-  for (ct in CONTAMINATION_TYPES) {
-    ct_cells <- which(merged$singler_label_clean == ct)
-    if (length(ct_cells) > 0) {
-      merged$cell_type[ct_cells] <- ct
-      message("  [CONTAM] Preserved ", length(ct_cells), " ", ct,
-              " cell(s) using per-cell SingleR label.")
-      n_overridden <- n_overridden + length(ct_cells)
-    }
-  }
-  if (n_overridden > 0)
-    message("  Total contamination/rare cells relabelled: ", n_overridden)
-
   message("  Auto-annotated using SingleR majority label per cluster.")
   message("  To override, copy the suggested CLUSTER_CELLTYPE_MAP below into config.R:\n")
   message("  CLUSTER_CELLTYPE_MAP <- c(")
@@ -450,6 +446,22 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
   }
   message("  )")
 }
+
+# Override cell_type for CONTAMINATION_TYPES — runs for BOTH manual (CLUSTER_CELLTYPE_MAP)
+# and auto-annotation paths so per-cell SingleR identity is never silently absorbed into
+# the cluster-majority label regardless of which annotation path was taken.
+n_overridden <- 0L
+for (ct in CONTAMINATION_TYPES) {
+  ct_cells <- which(merged$singler_label_clean == ct)
+  if (length(ct_cells) > 0) {
+    merged$cell_type[ct_cells] <- ct
+    message("  [CONTAM] Preserved ", length(ct_cells), " ", ct,
+            " cell(s) using per-cell SingleR label.")
+    n_overridden <- n_overridden + length(ct_cells)
+  }
+}
+if (n_overridden > 0)
+  message("  Total contamination/rare cells relabelled: ", n_overridden)
 
 # Propagate scType "RBC" label to cell_type for clusters scType identifies as RBC
 # but SingleR (MonacoImmune) cannot detect (Monaco has no erythroid reference types).
