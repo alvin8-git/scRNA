@@ -4,6 +4,26 @@ The pipeline consists of 10 R scripts in `pipeline/`. Each step reads `.rds` obj
 
 ---
 
+## Pre-flight — `validate_config.R`
+
+**Runs automatically** before step 01 (called by `run_pipeline.sh`). Can also be run standalone:
+
+```bash
+Rscript pipeline/validate_config.R
+```
+
+**What it checks:**
+
+| Check | Failure message |
+|-------|----------------|
+| All types in `CLUSTER_CELLTYPE_MAP` have a colour in `CELLTYPE_COLORS` | `CLUSTER_CELLTYPE_MAP types missing from CELLTYPE_COLORS: <list>` |
+| `CLUSTER_CELLTYPE_MAP` keys are quoted integers (`"0"`, not `0`) | `CLUSTER_CELLTYPE_MAP keys must be quoted integers` |
+| Every path in `SAMPLE_PATHS` exists on disk | `Sample path does not exist: <path>` |
+
+Exits with code 1 on failure. All checks run before reporting, so you see every problem at once rather than one at a time. Uses a `commandArgs()` path fallback so it resolves `config.R` correctly whether sourced by `run_pipeline.sh` or run directly as a top-level `Rscript`.
+
+---
+
 ## Step 01 — `01_load_qc.R`
 
 **Inputs:** 10x Genomics matrix folders (`filter_matrix/` or `filtered_feature_bc_matrix/`)
@@ -79,7 +99,9 @@ The pipeline consists of 10 R scripts in `pipeline/`. Each step reads `.rds` obj
 
 **What it does:** Merges all per-sample objects, runs Harmony batch correction (or direct UMAP/clustering for a single sample), and saves an integrated Seurat object ready for annotation.
 
-**Config keys:** `HARMONY`, `CLUSTER$compare_res`, `DIMS`
+**Config keys:** `HARMONY`, `CLUSTER$compare_res`, `DIMS`, `MARKERS$compute_integrated`
+
+**`MARKERS$compute_integrated`:** When `TRUE`, runs `FindAllMarkers` after integration and writes `integrated/integrated_cluster_markers.csv`. Defaults to `FALSE` — skips the sweep, which saves 20–30 minutes on typical runs. Enable only when you need the full per-cluster marker table.
 
 **Single-sample behaviour:** Skips Harmony; runs UMAP and clustering directly on the individual PCA.
 
@@ -103,6 +125,8 @@ The pipeline consists of 10 R scripts in `pipeline/`. Each step reads `.rds` obj
 | `tcell_subcluster_summary.csv` | Sub-cluster cell counts and parent mapping |
 
 **What it does:** Runs SingleR against the configured reference, normalises raw labels via `SINGLER_NORM` (30-entry mapping), applies per-cell contamination-type overrides, optionally applies `CLUSTER_CELLTYPE_MAP`, refines coarse T/B/mono labels using `REFINEMENT_MARKERS`, and writes `final_cell_type` to cell metadata. Prints a copy-pasteable `CLUSTER_CELLTYPE_MAP` to `logs/05_annotate.log`.
+
+**Memory note:** `ScaleData` in this step scales only the Highly Variable Genes (HVGs) identified by `FindVariableFeatures`, not the full gene matrix. This reduces peak RAM from ~14 GB to ~1 GB on typical PBMC datasets. If `scale.data` is already present in the loaded object, scaling is skipped entirely.
 
 **Config keys:** `SINGLER_REF`, `CLUSTER_CELLTYPE_MAP`, `CONTAMINATION_TYPES`, `REFINEMENT_MARKERS`, `SUBCLUSTER`, `MARKERS`
 

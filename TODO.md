@@ -1,5 +1,13 @@
 # TODO
 
+## Pending
+
+- [ ] **validate_config.R: warning-only mode for SAMPLE_PATHS** — Check 3 in `pipeline/validate_config.R` calls `dir.exists()` for every sample path. If data lives on a NAS or external drive that isn't mounted yet, the validator fails with a confusing error before any pipeline work. Add a `--skip-paths` flag or convert Check 3 to a warning (not an error) so validation can still run on config-only checks before drives are attached. *Surfaced during 2026-06-10 plan-eng-review of T6.*
+
+- [ ] **bat_wing species documentation** — `config.R` advertises `bat_wing` as a supported species alongside `human` and `bat`, but none of the docs (howto-bat-whole-blood.md, reference-config.md) cover it. Add a section to `docs/howto-bat-whole-blood.md` or a stub noting "experimental" if the mode is not yet ready for external use.
+
+---
+
 ## Done
 
 - [x] **Samba share** — installed samba 4.15.13; map from Windows: `\\192.168.1.168\alvin`

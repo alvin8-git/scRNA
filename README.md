@@ -16,7 +16,8 @@ Developed for human PBMC data from the **DNB C4** sequencing platform but adapta
 - **Automatic sample detection** — pass one or more sample folder paths; multi-sample runs trigger Harmony batch correction automatically
 - **9-step modular pipeline** — each step saves intermediate `.rds` objects so you can re-run from any point
 - **Per-sample RDS cache** — steps 01–03 write results to `sample_cache/<name>/`; subsequent runs with the same sample in a different integration combination skip reprocessing automatically
-- **Parallel execution** — `future` multicore (16 GB worker budget) for Seurat steps, `BiocParallel` for scDblFinder and SingleR
+- **Config pre-flight validation** — `pipeline/validate_config.R` runs before any step; exits with a clear error message if `CLUSTER_CELLTYPE_MAP` entries are missing colors, map keys are not quoted integers, or `SAMPLE_PATHS` don't exist on disk — catches config mistakes before wasting 30 minutes of compute
+- **Parallel execution** — `future` multicore (16 GB worker budget) for Seurat steps, `BiocParallel` for scDblFinder and SingleR; OMP/BLAS/MKL thread count pinned to 1 per worker to prevent CPU thrashing on multi-worker runs
 - **Automated cell type annotation** — SingleR majority vote per cluster + scType marker-based scoring (no reference bias, gene-frequency weighted); suggested `CLUSTER_CELLTYPE_MAP` printed to log; partial manual overrides with automatic SingleR fallback for unmapped clusters
 - **Contamination cell type detection** — rare/contaminating populations (Neutrophil, RBC, HSPC, Platelet, Basophil, Eosinophil, Mast cell) override cluster majority-vote labels via per-cell SingleR labels so they always appear on UMAP regardless of how many cells are in the cluster
 - **Extended label normalisation** — 30-entry `SINGLER_NORM` maps all raw HumanPrimaryCellAtlasData labels (including granulocyte/erythroid lineages) to canonical pipeline names
@@ -48,6 +49,7 @@ Developed for human PBMC data from the **DNB C4** sequencing platform but adapta
 
 | Step | Script | Description |
 |------|--------|-------------|
+| 00 | `validate_config.R` | Pre-flight config validator — exits with error before step 01 if config is broken |
 | 01 | `01_load_qc.R` | Load 10x matrices, compute QC metrics, filter low-quality cells |
 | 02 | `02_doublets.R` | Doublet detection with scDblFinder |
 | 03 | `03_individual.R` | Per-sample: normalize, HVG, PCA, UMAP, cluster, markers |
@@ -121,6 +123,9 @@ Or `filtered_feature_bc_matrix/` — the pipeline detects both automatically.
 ### Run the pipeline
 
 ```bash
+# Print usage
+bash pipeline/run_pipeline.sh --help
+
 # Single sample
 bash pipeline/run_pipeline.sh /path/to/SampleA
 
@@ -136,6 +141,9 @@ bash pipeline/run_pipeline.sh human /path/to/H1 /path/to/H2
 
 # Specific steps only (e.g. re-run annotation and visualization)
 bash pipeline/run_pipeline.sh /path/to/SampleA /path/to/SampleB 05 06 07
+
+# Override the base directory without editing config.R
+SCRNA_BASE_DIR=/mnt/nas/project bash pipeline/run_pipeline.sh /path/to/SampleA
 ```
 
 ### Test run (with example data)
@@ -234,6 +242,8 @@ When `CLUSTER_CELLTYPE_MAP = NULL` (the default), the pipeline computes SingleR 
 ### Canonical Marker Genes
 
 These are used only for **feature plots and dot plots** (visual QC). They do not affect clustering or SingleR annotation.
+
+`MARKERS$compute_integrated` gates `FindAllMarkers` in step 04. It defaults to `FALSE` because the full marker sweep takes 20–30 minutes on large datasets and isn't needed for annotation. Set it to `TRUE` if you want cluster marker tables written to `integrated/integrated_cluster_markers.csv`.
 
 ```r
 MARKERS <- list(

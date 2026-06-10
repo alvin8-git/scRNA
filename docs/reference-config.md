@@ -4,6 +4,22 @@ All pipeline behaviour is controlled by `pipeline/config.R`. Every R script sour
 
 ---
 
+## Config validation (`validate_config.R`)
+
+`pipeline/validate_config.R` runs automatically before step 01 (called by `run_pipeline.sh`). It exits with code 1 and a clear error message on any of the following:
+
+| Check | What it catches |
+|-------|----------------|
+| CELLTYPE_COLORS coverage | A type in `CLUSTER_CELLTYPE_MAP` has no colour entry — plots would silently get grey |
+| CLUSTER_CELLTYPE_MAP key format | Keys that are bare integers instead of quoted strings (`0` vs `"0"`) — the map would silently not match |
+| SAMPLE_PATHS existence | A path in `SAMPLE_PATHS` doesn't exist on disk |
+
+You can also run it standalone: `Rscript pipeline/validate_config.R`. It uses a `commandArgs()` path fallback so it works whether sourced or invoked directly without editing hard-coded paths.
+
+> **Pending:** Check 3 (SAMPLE_PATHS) fails if data lives on a NAS or drive that isn't mounted yet. A `--skip-paths` flag is tracked in TODO.md.
+
+---
+
 ## Base paths
 
 ```r
@@ -11,7 +27,13 @@ BASE_DIR        <- dirname(dirname(rstudioapi::getSourceEditorContext()$path))
 SAMPLE_CACHE_DIR <- file.path(BASE_DIR, "sample_cache")
 ```
 
-`BASE_DIR` resolves to the repository root. `SAMPLE_CACHE_DIR` is shared across all sample combinations — deleting a subdirectory forces that sample to be reprocessed from step 01.
+`BASE_DIR` resolves to the repository root. Override it without touching `config.R` by setting the `SCRNA_BASE_DIR` env var:
+
+```bash
+SCRNA_BASE_DIR=/mnt/nas/project bash pipeline/run_pipeline.sh /path/to/SampleA
+```
+
+`SAMPLE_CACHE_DIR` is shared across all sample combinations — deleting a subdirectory forces that sample to be reprocessed from step 01.
 
 ---
 
@@ -24,6 +46,7 @@ Samples are set via environment variables (injected by `run_pipeline.sh`) or har
 | `SCRNA_SAMPLE1` … `SCRNA_SAMPLEN` | path | Absolute paths to sample folders in order |
 | `SCRNA_SPECIES` | string | `human` (default) or `bat` or `bat_wing` |
 | `SCRNA_CONDITION` | string | Comma-separated `name=label` pairs for DEG grouping |
+| `SCRNA_BASE_DIR` | path | Overrides `BASE_DIR` — point outputs at a different root without editing `config.R` |
 
 Example:
 ```bash
@@ -192,6 +215,17 @@ MARKERS <- list(
 ```
 
 For bat whole blood, the `bat` species keyword replaces these with *Eonycteris spelaea*-validated orthologues.
+
+### `MARKERS$compute_integrated`
+
+```r
+MARKERS <- list(
+  ...
+  compute_integrated = FALSE   # set TRUE to run FindAllMarkers after step 04 integration
+)
+```
+
+When `FALSE` (default), step 04 skips `FindAllMarkers` entirely. The full marker sweep on a 20 K-cell integrated dataset takes 20–30 minutes and isn't needed for annotation. Set to `TRUE` to write `integrated/integrated_cluster_markers.csv`. This flag was added because the previous default (always run) made step 04 the slowest step for no benefit on most runs.
 
 ---
 

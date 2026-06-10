@@ -1,5 +1,41 @@
 # Version History
 
+## v0.8.0 — 2026-06-10
+
+### Config Validation, Performance Hardening, Data Integrity Guard Rails, DX Improvements
+
+#### New features
+
+- **`pipeline/validate_config.R`** — pre-flight validator called by `run_pipeline.sh` before any step; catches broken `CLUSTER_CELLTYPE_MAP` color coverage, non-quoted integer keys, and missing `SAMPLE_PATHS` with actionable error messages; can also be run standalone via `Rscript pipeline/validate_config.R`; uses `commandArgs()` path resolution so it doesn't require a hard-coded repo path
+- **`MARKERS$compute_integrated` flag** — gates `FindAllMarkers` in step 04 behind an explicit opt-in (default `FALSE`); previously ran unconditionally and added 20–30 minutes to every integration run; set to `TRUE` to write `integrated/integrated_cluster_markers.csv`
+- **`SCRNA_BASE_DIR` env var** — overrides `BASE_DIR` without editing `config.R`; useful for running against data on NAS mounts or CI runners
+- **`--help` / `-h` flag** on `run_pipeline.sh` — prints usage and exits
+
+#### Performance
+
+- **ScaleData HVG-only in step 05** — `ScaleData` now scales only the Highly Variable Genes (HVGs) instead of the full gene matrix; peak RAM drops from ~14 GB to ~1 GB on typical PBMC datasets; skips scaling entirely if `scale.data` is already present
+- **Thread pinning** — `run_pipeline.sh` sets `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `BLAS_NUM_THREADS` to 1 to prevent CPU thrashing when `future` workers each spawn BLAS thread pools
+- **Memory reclamation** — step 04 calls `rm(seu_list); gc()` after the merge step, freeing 2–4 GB per sample that was held redundantly alongside the merged object; step 05 adds `gc()` calls after the `saveRDS` loop to reclaim buffers before plot rendering
+- **`FindAllMarkers` skip** — step 04 now defaults to not running the 20–30 min marker sweep; output is identical when `compute_integrated = FALSE`
+
+#### Data integrity (7 guard rails — `05_annotate.R`, `01_load_qc.R`)
+
+- **Contamination override now runs for both annotation paths** — previously only ran in the `else` (auto-annotation) branch, silently absorbing Neutrophil/HSPC/Basophil singletons into cluster-majority labels when `CLUSTER_CELLTYPE_MAP` was set
+- **SingleR barcode-indexed assignment** — `singler_result$labels[colnames(merged)]` instead of positional assignment; guards against any worker ordering drift
+- **`singler_delta` OOB guard** — `s[1] - s[2]` on a length-1 score vector now returns `0` instead of `NA`
+- **`avg_expr` column guard** — skips cluster in subtype refinement loop if cluster name is absent from `avg_expr` columns (prevents `subscript out of bounds` crash on non-numeric cluster names)
+- **Tie-breaking warning** — `which.max(table(singler_label_clean))` now emits `[TIE]` message when two labels tie at the same count so silent alphabetical wins are auditable
+- **Empty factor level guard** — scType loop skips clusters with 0 cells instead of producing a 0-row `colSums` result that led to wrong/crash behaviour
+- **`Read10X` modality guard** — fails fast with the names of available modalities if `"Gene Expression"` key is absent from a multi-modal matrix
+
+#### DX
+
+- **Timing messages** around long silent ops in steps 04 and 05 (`ScaleData`, `RunUMAP`, `FindNeighbors+FindClusters`, `SingleR`) with elapsed-seconds readout
+- **PDF render warning** — `pdf_helpers.R` now emits a warning when `pdftools::pdf_render_page` fails for a specific page instead of silently returning `NULL` and producing a blank page
+- Redundant `pdf_helpers.R` source call in step 07 removed
+
+---
+
 ## v0.7.0 — 2026-05-21
 
 ### RBC/Platelet Detection, Monaco-Blind Cell Type Propagation, Composition Pagination
