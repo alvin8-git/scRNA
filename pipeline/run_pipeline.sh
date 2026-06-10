@@ -28,6 +28,11 @@
 # =============================================================================
 set -euo pipefail
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  sed -n '2,/^set -euo pipefail/{/^set -euo pipefail/!p}' "${BASH_SOURCE[0]}"
+  exit 0
+fi
+
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="/data/alvin/scRNA"
 CONDA_ENV="scrna_seurat"
