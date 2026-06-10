@@ -5,13 +5,19 @@
 
 # --- Suppress noisy but harmless plot warnings ---
 options(Seurat.warn.raster = FALSE)   # rasterizing >100k points is intentional
+options(error = function() {
+  msg <- tryCatch(conditionMessage(.GlobalEnv$.Last.error),
+                  error = function(e) geterrmessage())
+  message("\nERROR: ", msg)
+  quit(status = 1, save = "no")
+})
 suppressWarnings(library(ggplot2))    # silence freetype/systemfonts version mismatch
 
 # --- Shared PDF helpers (A4P, A4L, .combine_pdfs, .render, .build_page, .save_page) ---
 source(file.path(dirname(sys.frame(1)$ofile %||% "."), "pdf_helpers.R"))
 
 # --- Base paths ---
-BASE_DIR          <- "/data/alvin/scRNA"
+BASE_DIR          <- Sys.getenv("SCRNA_BASE_DIR", "/data/alvin/scRNA")
 PIPELINE_DIR      <- file.path(BASE_DIR, "pipeline")
 # Per-sample RDS cache — shared across all combo runs; delete a subfolder to force recompute
 SAMPLE_CACHE_DIR  <- file.path(BASE_DIR, "sample_cache")
