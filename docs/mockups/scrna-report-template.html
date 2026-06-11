@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<!--
+  scRNA Run Report — interactive template MOCKUP (office-hours design artifact).
+  Self-contained: no external assets, no network. Plots are placeholder renders
+  (seeded dot clouds + CSS bars) to show LAYOUT and INTERACTION, not real data.
+  Worked example: a pre-sort vs post-sort B-cell depletion QC for the wetlab.
+  Open directly in a browser. This is a mockup, not the production report.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scRNA Run Report — Pre/Post B-cell Sort</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --ink:#1f2733; --muted:#667085;
+    --line:#e4e8ee; --rail:#1b2230; --rail-ink:#cdd5e0; --accent:#3b82f6;
+    --good:#12a150; --warn:#e08a00; --bad:#d23f3f;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  /* top bar */
+  .top{display:flex;align-items:center;gap:14px;background:var(--rail);color:#fff;padding:10px 18px}
+  .top .title{font-weight:600;font-size:15px}
+  .top .chips{display:flex;gap:6px;margin-left:4px}
+  .chip{background:#2b3548;color:#cdd5e0;border-radius:999px;padding:2px 10px;font-size:12px}
+  .top .meta{margin-left:auto;color:#9aa6b5;font-size:12px;display:flex;gap:16px;align-items:center}
+  .btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid #3a4658;color:#cdd5e0}
+  /* layout */
+  .shell{display:flex;min-height:calc(100vh - 44px)}
+  .nav{width:208px;background:#fff;border-right:1px solid var(--line);padding:10px 0;flex:none}
+  .nav a{display:flex;gap:10px;align-items:center;padding:9px 18px;color:var(--muted);text-decoration:none;font-size:13px;cursor:pointer;border-left:3px solid transparent}
+  .nav a .ic{width:16px;text-align:center;opacity:.8}
+  .nav a:hover{background:#f7f9fc;color:var(--ink)}
+  .nav a.active{color:var(--ink);font-weight:600;border-left-color:var(--accent);background:#f2f6ff}
+  .nav .grouplabel{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa6b5;padding:14px 18px 4px}
+  .main{flex:1;padding:22px 26px;overflow:auto}
+  h1{font-size:19px;margin:0 0 2px} .sub{color:var(--muted);margin:0 0 18px;font-size:13px}
+  .view{display:none} .view.active{display:block}
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 10px;font-size:13px;display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .stat{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
+  .stat b{font-variant-numeric:tabular-nums}
+  .delta-up{color:var(--good)} .delta-down{color:var(--bad)}
+  /* comparison grid */
+  .metricbar{display:flex;gap:6px;margin:0 0 14px}
+  .metricbar button{background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer;color:var(--muted)}
+  .metricbar button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .selbar{display:flex;align-items:center;gap:10px;margin:0 0 14px;flex-wrap:wrap}
+  .sellabel{font-size:12px;color:var(--muted)}
+  .selchips{display:flex;flex-wrap:wrap;gap:6px}
+  .selchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:#fff;color:var(--muted)}
+  .selchip.on{border-color:var(--accent);color:var(--ink);background:#f2f6ff}
+  .selchip input{margin:0}
+  .cmpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+  .cmpcol{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+  .cmphead{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);background:#fafbfd}
+  .cmphead .name{font-weight:600}
+  .cmphead .tag{font-size:11px;color:#fff;border-radius:999px;padding:1px 8px}
+  .cmpbody{padding:12px}
+  .plot{width:100%;height:300px;display:block;background:#fff;border-radius:6px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  /* tables */
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{background:#fafbfd;color:var(--muted);font-weight:600;cursor:pointer;user-select:none}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+  .bar{height:9px;border-radius:5px;background:#eef1f6;position:relative;overflow:hidden}
+  .bar > i{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+  .hl{background:#fff7f5}
+  .note{background:#fffaf2;border:1px solid #ffe2bd;border-radius:8px;padding:10px 14px;font-size:13px;color:#7a5a17;margin:14px 0}
+  .stack{display:flex;height:26px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .stack > i{display:block;height:100%}
+  .proprow{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin:8px 0}
+  .proprow .nm{font-size:12px;color:var(--muted)}
+  .pill{font-size:11px;padding:1px 7px;border-radius:999px;background:#eef1f6;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="title">scRNA Run Report</span>
+  <span class="chips">
+    <span class="chip">B-sort QC + donor panel</span>
+  </span>
+  <span class="meta">
+    <span>species: human</span><span>6 samples</span><span>2026-06-12</span>
+    <button class="btn ghost">Share link</button>
+    <button class="btn">Export PDF</button>
+  </span>
+</div>
+
+<div class="shell">
+  <nav class="nav">
+    <div class="grouplabel">Run</div>
+    <a class="active" data-view="overview"><span class="ic">▦</span> Overview</a>
+    <a data-view="compare"><span class="ic">▤▤</span> Sample comparison</a>
+    <div class="grouplabel">Per stage</div>
+    <a data-view="compare" data-metric="qc"><span class="ic">✓</span> QC</a>
+    <a data-view="compare" data-metric="doublets"><span class="ic">⊘</span> Doublets</a>
+    <a data-view="compare" data-metric="umap"><span class="ic">◔</span> UMAP atlas</a>
+    <a data-view="proportions"><span class="ic">▥</span> Cell proportions</a>
+    <a data-view="overview"><span class="ic">Σ</span> Differential expr.</a>
+    <div class="grouplabel">Drilldown</div>
+    <a data-view="overview"><span class="ic">⌕</span> Per-sample</a>
+  </nav>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <section class="view active" id="overview">
+      <h1>Run overview</h1>
+      <p class="sub">Quality and composition at a glance. One card per sample; the table below is sortable.</p>
+      <div class="cards" id="ovCards"></div>
+      <table id="sumTable">
+        <thead><tr>
+          <th data-k="name">Sample</th>
+          <th class="num" data-k="loaded">Cells loaded</th>
+          <th class="num" data-k="qc">Post-QC</th>
+          <th class="num" data-k="ret">% retained</th>
+          <th class="num" data-k="dbl">Doublet %</th>
+          <th class="num" data-k="genes">Median genes</th>
+          <th class="num" data-k="mt">Median %MT</th>
+          <th class="num" data-k="types">Cell types</th>
+          <th data-k="top">Top type</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- SAMPLE COMPARISON (UMAP / QC / DOUBLETS, faceted by sample) -->
+    <section class="view" id="compare">
+      <h1>Sample comparison</h1>
+      <p class="sub">Same metric, selected samples side by side (Partek "data viewer" pattern). With many samples, pick which to compare — the grid renders only the selected ones, so 10+ samples stay legible.</p>
+      <div class="metricbar" id="metricbar">
+        <button data-metric="umap" class="active">UMAP · cell type</button>
+        <button data-metric="qc">QC violins</button>
+        <button data-metric="doublets">Doublets</button>
+      </div>
+      <div class="selbar">
+        <span class="sellabel">Compare (<b id="selCount">0</b>/<span id="selTotal">0</span> selected):</span>
+        <span class="selchips" id="sampleSel"></span>
+      </div>
+      <div class="cmpgrid" id="cmpgrid"></div>
+      <div class="legend" id="cmpLegend"></div>
+    </section>
+
+    <!-- CELL PROPORTIONS -->
+    <section class="view" id="proportions">
+      <h1>Cell-type proportions</h1>
+      <p class="sub">Stacked composition per sample, plus a pre→post delta table. This is the "did the sort work?" view.</p>
+      <div id="stacks"></div>
+      <h3 style="margin:22px 0 8px;font-size:14px">Pre → Post change</h3>
+      <table id="deltaTable">
+        <thead><tr><th>Cell type</th><th class="num">Pre-sort %</th><th class="num">Post-sort %</th><th class="num">Δ</th><th>Change</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="note" id="propNote"></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ---- mock data (representative, not real) ------------------------------- */
+const TYPES = [
+  {k:"B cell",     c:"#e4572e"},
+  {k:"CD4 T",      c:"#3b82f6"},
+  {k:"CD8 T",      c:"#1d4ed8"},
+  {k:"NK",         c:"#12a150"},
+  {k:"CD14+ Mono", c:"#f3a712"},
+  {k:"FCGR3A Mono",c:"#9b5de5"},
+  {k:"DC",         c:"#00b4d8"},
+  {k:"Platelet",   c:"#8d99ae"},
+];
+const SAMPLES = [
+  {name:"Pre-sort (ES03)",  tag:"pre",  color:"#64748b", loaded:1180, qc:1042, dbl:7.1, genes:1850, mt:6.2,
+   prop:{ "B cell":18, "CD4 T":31, "CD8 T":15, "NK":9, "CD14+ Mono":16, "FCGR3A Mono":6, "DC":3, "Platelet":2 }},
+  {name:"Post-sort (ES12)", tag:"post", color:"#3b82f6", loaded:1240, qc:1132, dbl:8.4, genes:1910, mt:5.8,
+   prop:{ "B cell":3,  "CD4 T":37, "CD8 T":18, "NK":11,"CD14+ Mono":18, "FCGR3A Mono":7, "DC":4, "Platelet":2 }},
+  {name:"Donor A",          color:"#0ea5e9", loaded:1320, qc:1190, dbl:6.4, genes:2010, mt:7.1,
+   prop:{ "B cell":12, "CD4 T":34, "CD8 T":17, "NK":8, "CD14+ Mono":19, "FCGR3A Mono":6, "DC":2, "Platelet":2 }},
+  {name:"Donor B",          color:"#22c55e", loaded:980,  qc:864,  dbl:9.0, genes:1620, mt:9.4,
+   prop:{ "B cell":9,  "CD4 T":29, "CD8 T":13, "NK":14,"CD14+ Mono":24, "FCGR3A Mono":7, "DC":2, "Platelet":2 }},
+  {name:"Donor C",          color:"#f59e0b", loaded:1410, qc:1295, dbl:5.8, genes:2150, mt:5.1,
+   prop:{ "B cell":15, "CD4 T":36, "CD8 T":16, "NK":7, "CD14+ Mono":17, "FCGR3A Mono":5, "DC":3, "Platelet":1 }},
+  {name:"Donor D (low QC)", color:"#ef4444", loaded:520,  qc:300,  dbl:14.2,genes:980,  mt:18.5,
+   prop:{ "B cell":7,  "CD4 T":22, "CD8 T":10, "NK":6, "CD14+ Mono":40, "FCGR3A Mono":9, "DC":3, "Platelet":3 }},
+];
+const TAGCOL = {pre:"#64748b", post:"#3b82f6"};
+
+/* seeded RNG so the clouds look stable */
+function rng(seed){let s=seed;return()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};}
+function gauss(r){return (r()+r()+r()-1.5);}
+
+/* draw a UMAP-like cloud: one blob per cell type, blob size ~ proportion */
+function umapSVG(sample, seed){
+  const W=360,H=300,pad=18, r=rng(seed);
+  // fixed cluster centres in [0,1] so both samples are spatially comparable
+  const centres={
+    "B cell":[.20,.24],"CD4 T":[.55,.30],"CD8 T":[.70,.46],"NK":[.82,.22],
+    "CD14+ Mono":[.34,.74],"FCGR3A Mono":[.55,.80],"DC":[.74,.78],"Platelet":[.90,.62]
+  };
+  let dots="";
+  const total=Object.values(sample.prop).reduce((a,b)=>a+b,0);
+  for(const t of TYPES){
+    const p=sample.prop[t.k]||0; const n=Math.max(0,Math.round(p/total*420));
+    const [cx,cy]=centres[t.k];
+    for(let i=0;i<n;i++){
+      const x=pad+(cx+gauss(r)*0.05)*(W-2*pad);
+      const y=pad+(cy+gauss(r)*0.05)*(H-2*pad);
+      dots+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="${t.c}" fill-opacity="0.72"/>`;
+    }
+  }
+  return `<svg class="plot" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#ffffff"/>${dots}
+    <text x="${W-8}" y="${H-8}" text-anchor="end" font-size="10" fill="#b6bfcc">UMAP (mock)</text></svg>`;
+}
+
+/* tiny "violin"/box mock for QC */
+function qcSVG(sample,seed){
+  const W=360,H=300,r=rng(seed);
+  const metrics=[["nFeature",sample.genes/3000],["nCount",0.55],["%MT",sample.mt/25]];
+  let g="";
+  metrics.forEach((m,i)=>{
+    const cx=70+i*110, med=H-40-m[1]*(H-90);
+    let blob="";
+    for(let j=0;j<60;j++){const y=med+gauss(r)*34;const w=24*Math.exp(-(((y-med)/30)**2));
+      blob+=`<rect x="${cx-w/2}" y="${y}" width="${w}" height="2" fill="${sample.color}" fill-opacity=".5"/>`;}
+    g+=blob+`<rect x="${cx-3}" y="${med-1}" width="6" height="3" fill="#111"/>
+      <text x="${cx}" y="${H-14}" text-anchor="middle" font-size="11" fill="#667085">${m[0]}</text>`;
+  });
+  return `<svg class="plot" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#fff"/>${g}</svg>`;
+}
+
+/* doublet rate gauge + scattered reds */
+function doubletSVG(sample,seed){
+  const W=360,H=300,r=rng(seed);let dots="";
+  for(let i=0;i<360;i++){const x=18+r()*324,y=18+r()*230,d=r()<sample.dbl/100;
+    dots+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="${d?'#d23f3f':'#cfd6e0'}" fill-opacity="${d?0.9:0.5}"/>`;}
+  return `<svg class="plot" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#fff"/>${dots}
+    <text x="18" y="${H-12}" font-size="12" fill="#d23f3f">● doublets ${sample.dbl}%</text></svg>`;
+}
+
+/* ---- renderers ---------------------------------------------------------- */
+function renderOverview(){
+  const cards=SAMPLES.map(s=>{
+    const ret=(s.qc/s.loaded*100).toFixed(1);
+    const top=Object.entries(s.prop).sort((a,b)=>b[1]-a[1])[0][0];
+    return `<div class="card"><h3><span class="dot" style="background:${s.color}"></span>${s.name}</h3>
+      <div class="stat"><span>Cells (post-QC)</span><b>${s.qc.toLocaleString()}</b></div>
+      <div class="stat"><span>% retained</span><b>${ret}%</b></div>
+      <div class="stat"><span>Doublet rate</span><b>${s.dbl}%</b></div>
+      <div class="stat"><span>Median genes / cell</span><b>${s.genes.toLocaleString()}</b></div>
+      <div class="stat"><span>Median %MT</span><b>${s.mt}%</b></div>
+      <div class="stat"><span>Dominant type</span><b>${top}</b></div></div>`;
+  }).join("");
+  document.getElementById("ovCards").innerHTML=cards;
+  const rows=SAMPLES.map(s=>{
+    const ret=(s.qc/s.loaded*100).toFixed(1);
+    const top=Object.entries(s.prop).sort((a,b)=>b[1]-a[1])[0][0];
+    return `<tr><td><span class="dot" style="background:${s.color}"></span> ${s.name}</td>
+      <td class="num">${s.loaded.toLocaleString()}</td><td class="num">${s.qc.toLocaleString()}</td>
+      <td class="num">${ret}</td><td class="num">${s.dbl}</td><td class="num">${s.genes.toLocaleString()}</td>
+      <td class="num">${s.mt}</td><td class="num">${Object.keys(s.prop).length}</td><td>${top}</td></tr>`;
+  }).join("");
+  document.querySelector("#sumTable tbody").innerHTML=rows;
+}
+
+let selected = SAMPLES.slice(0,4).map(s=>s.name);   // default subset; user picks which to compare
+function renderSampleSel(){
+  const host=document.getElementById("sampleSel"); if(!host) return;
+  host.innerHTML = SAMPLES.map(s=>{
+    const on=selected.includes(s.name);
+    return `<label class="selchip ${on?'on':''}"><input type="checkbox" ${on?'checked':''} data-s="${s.name}">
+      <span class="dot" style="background:${s.color}"></span>${s.name}</label>`;
+  }).join("");
+  document.getElementById("selCount").textContent=selected.length;
+  document.getElementById("selTotal").textContent=SAMPLES.length;
+  host.querySelectorAll("input").forEach(cb=>cb.addEventListener("change",()=>{
+    const n=cb.dataset.s;
+    if(cb.checked){ if(!selected.includes(n)) selected.push(n); } else { selected=selected.filter(x=>x!==n); }
+    renderCompare(curMetric);
+  }));
+}
+function renderCompare(metric){
+  curMetric=metric;
+  const fn = metric==="qc"?qcSVG : metric==="doublets"?doubletSVG : umapSVG;
+  const shown = SAMPLES.filter(s=>selected.includes(s.name));
+  document.getElementById("cmpgrid").innerHTML = shown.length
+    ? shown.map((s,i)=>`
+      <div class="cmpcol">
+        <div class="cmphead"><span class="name"><span class="dot" style="background:${s.color}"></span> ${s.name}</span>
+          ${s.tag?`<span class="tag" style="background:${s.color}">${s.tag.toUpperCase()}</span>`:''}</div>
+        <div class="cmpbody">${fn(s, i*97+13)}</div>
+      </div>`).join("")
+    : `<div class="card">Select at least one sample above to compare.</div>`;
+  document.querySelectorAll("#metricbar button").forEach(b=>b.classList.toggle("active",b.dataset.metric===metric));
+  document.getElementById("cmpLegend").innerHTML = metric==="umap"
+    ? TYPES.map(t=>`<span><span class="dot" style="background:${t.c}"></span>${t.k}</span>`).join("")
+    : `<span>Shared axes across samples · hover (in production) for per-cell values</span>`;
+  renderSampleSel();
+}
+
+function renderProportions(){
+  const stacks=SAMPLES.map(s=>{
+    const total=Object.values(s.prop).reduce((a,b)=>a+b,0);
+    const seg=TYPES.map(t=>`<i style="width:${(s.prop[t.k]||0)/total*100}%;background:${t.c}" title="${t.k} ${s.prop[t.k]||0}%"></i>`).join("");
+    return `<div class="proprow"><span class="nm">${s.name}</span><div class="stack">${seg}</div></div>`;
+  }).join("");
+  document.getElementById("stacks").innerHTML = stacks +
+    `<div class="legend">${TYPES.map(t=>`<span><span class="dot" style="background:${t.c}"></span>${t.k}</span>`).join("")}</div>`;
+  const pre=SAMPLES[0].prop, post=SAMPLES[1].prop;
+  const rows=TYPES.map(t=>{
+    const a=pre[t.k]||0,b=post[t.k]||0,d=b-a;
+    const cls=d<0?"delta-down":d>0?"delta-up":"";
+    const arrow=d<0?"▼":d>0?"▲":"–";
+    const isB=t.k==="B cell";
+    return `<tr class="${isB?'hl':''}"><td><span class="dot" style="background:${t.c}"></span> ${t.k}${isB?' <span class="pill">target</span>':''}</td>
+      <td class="num">${a.toFixed(1)}</td><td class="num">${b.toFixed(1)}</td>
+      <td class="num ${cls}">${d>0?'+':''}${d.toFixed(1)}</td>
+      <td class="${cls}">${arrow} ${Math.abs(d).toFixed(1)} pts</td></tr>`;
+  }).join("");
+  document.querySelector("#deltaTable tbody").innerHTML=rows;
+  const dB=(post["B cell"]-pre["B cell"]);
+  document.getElementById("propNote").innerHTML =
+    `<b>Read:</b> B cells dropped from ${pre["B cell"]}% to ${post["B cell"]}% (${dB.toFixed(0)} pts, ${(dB/pre["B cell"]*-100).toFixed(0)}% depletion) — the sort worked. T/NK/Mono rose proportionally (denominator effect), not by enrichment.`;
+}
+
+/* ---- nav wiring --------------------------------------------------------- */
+let curMetric="umap";
+function show(view, metric){
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===view));
+  if(view==="compare"){curMetric=metric||curMetric;renderCompare(curMetric);}
+  if(view==="proportions")renderProportions();
+  if(view==="overview")renderOverview();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll(".nav a").forEach(a=>a.addEventListener("click",e=>{
+  document.querySelectorAll(".nav a").forEach(x=>x.classList.remove("active"));
+  a.classList.add("active");
+  show(a.dataset.view, a.dataset.metric);
+}));
+document.querySelectorAll("#metricbar button").forEach(b=>b.addEventListener("click",()=>renderCompare(b.dataset.metric)));
+document.querySelectorAll("#sumTable th").forEach(th=>th.addEventListener("click",()=>{
+  const k=th.dataset.k, get=s=>k==="name"?s.name:k==="ret"?s.qc/s.loaded:k==="types"?Object.keys(s.prop).length:k==="top"?Object.entries(s.prop).sort((a,b)=>b[1]-a[1])[0][0]:s[k];
+  SAMPLES.sort((a,b)=>{const x=get(a),y=get(b);return typeof x==="string"?x.localeCompare(y):y-x;});
+  renderOverview();
+}));
+
+renderOverview();
+</script>
+</body>
+</html>
