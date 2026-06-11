@@ -139,7 +139,7 @@ for (nm in SAMPLE_NAMES) {
   hash_path  <- sub("\\.rds$", ".hash", cache_path)
   if (file.exists(cache_path)) {
     stored <- if (file.exists(hash_path)) readLines(hash_path) else ""
-    if (stored == cache_hash(nm)) {
+    if (stored == cache_hash(nm, "03")) {
       message("  [CACHE HIT] ", nm, ": loading _seurat.rds from sample_cache/ (skipping individual processing)")
       message("         (individual plots for this sample are in the original run's results dir)")
       file.copy(cache_path, out_path, overwrite = TRUE)
@@ -151,7 +151,7 @@ for (nm in SAMPLE_NAMES) {
       saveRDS(res$seu, out_path)
       dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
       file.copy(out_path, cache_path, overwrite = TRUE)
-      writeLines(cache_hash(nm), hash_path)
+      writeLines(cache_hash(nm, "03"), hash_path)
       message("  [CACHE] Saved ", nm, "_seurat.rds to sample_cache/")
     }
   } else {
@@ -161,7 +161,7 @@ for (nm in SAMPLE_NAMES) {
     saveRDS(res$seu, out_path)
     dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
     file.copy(out_path, cache_path, overwrite = TRUE)
-    writeLines(cache_hash(nm), hash_path)
+    writeLines(cache_hash(nm, "03"), hash_path)
     message("  [CACHE] Saved ", nm, "_seurat.rds to sample_cache/")
   }
 }

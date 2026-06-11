@@ -93,7 +93,7 @@ for (nm in SAMPLE_NAMES) {
   hash_path  <- sub("\\.rds$", ".hash", cache_path)
   if (file.exists(cache_path)) {
     stored <- if (file.exists(hash_path)) readLines(hash_path) else ""
-    if (stored == cache_hash(nm)) {
+    if (stored == cache_hash(nm, "02")) {
       message("  [CACHE HIT] ", nm, ": loading _singlets.rds from sample_cache/ (skipping doublet detection)")
       file.copy(cache_path, out_path, overwrite = TRUE)
     } else {
@@ -105,7 +105,7 @@ for (nm in SAMPLE_NAMES) {
       message("  Saved singlets: ", ncol(res$seu), " cells")
       dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
       file.copy(out_path, cache_path, overwrite = TRUE)
-      writeLines(cache_hash(nm), hash_path)
+      writeLines(cache_hash(nm, "02"), hash_path)
       message("  [CACHE] Saved ", nm, "_singlets.rds to sample_cache/")
     }
   } else {
@@ -116,7 +116,7 @@ for (nm in SAMPLE_NAMES) {
     message("  Saved singlets: ", ncol(res$seu), " cells")
     dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
     file.copy(out_path, cache_path, overwrite = TRUE)
-    writeLines(cache_hash(nm), hash_path)
+    writeLines(cache_hash(nm, "02"), hash_path)
     message("  [CACHE] Saved ", nm, "_singlets.rds to sample_cache/")
   }
 }

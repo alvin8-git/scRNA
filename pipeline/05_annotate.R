@@ -51,6 +51,16 @@ rm(expr_mat); gc()
 
 merged$singler_label  <- singler_result$labels[colnames(merged)]
 merged$singler_pruned <- singler_result$pruned.labels[colnames(merged)]
+# Guard: the barcode-indexed reindex above aligns SingleR's per-cell rows to
+# cells by name. $labels is never legitimately NA (unlike $pruned.labels, where
+# NA marks a pruned low-confidence call), so any NA here means the row/colname
+# alignment broke — e.g. a SingleR/Seurat upgrade returning positionally-named
+# labels would make the reindex yield all-NA and silently turn every cell into
+# "Unassigned". Fail loud instead of shipping mislabelled cells.
+if (anyNA(merged$singler_label)) {
+  stop(sprintf("SingleR label alignment failed: %d/%d cells have NA labels — likely a barcode mismatch between singler_result and colnames(merged).",
+               sum(is.na(merged$singler_label)), ncol(merged)))
+}
 merged$singler_delta  <- apply(singler_result$scores, 1,
                                 function(x) { s <- sort(x, decreasing = TRUE); if (length(s) >= 2) s[1] - s[2] else 0 })
 merged$singler_label_clean <- ifelse(is.na(merged$singler_pruned),

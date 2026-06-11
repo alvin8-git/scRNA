@@ -228,12 +228,28 @@ SUBTYPE_MARKERS <- list(
 )
 
 # --- Parallelism ---
-# Workers: all cores minus 2 (keep system responsive), capped at 8
+# Workers: all cores minus 2 (keep system responsive), capped at 8, then capped
+# again by a RAM governor so workers x future_mem_gb leaves ~20% headroom. Every
+# heavy step fans out PARALLEL$workers (future multicore in 03/04/06; MulticoreParam
+# in 02/05) and each worker can hold a copy of its object, so without this cap a
+# many-sample or large-merge run can OOM mid-phase.
+.future_mem_gb <- 8L   # memory budget per future worker (GB)
+.cpu_workers   <- min(8L, max(1L, parallel::detectCores() - 2L))
+.avail_gb <- tryCatch({
+  kb <- as.numeric(sub("[^0-9]*([0-9]+).*", "\\1",
+                       grep("MemAvailable", readLines("/proc/meminfo"), value = TRUE)))
+  if (length(kb) == 1L && is.finite(kb)) kb / 1024^2 else NA_real_
+}, error = function(e) NA_real_)
+.mem_workers <- if (is.finite(.avail_gb))
+  max(1L, as.integer(floor(.avail_gb * 0.8 / .future_mem_gb))) else .cpu_workers
 PARALLEL <- list(
-  workers          = min(8L, max(1L, parallel::detectCores() - 2L)),
-  # Memory per future worker — 8 GB covers per-sample objects; raise to 16L for >4-sample merges
-  future_mem_gb    = 8L
+  workers       = min(.cpu_workers, .mem_workers),
+  future_mem_gb = .future_mem_gb
 )
+if (PARALLEL$workers < .cpu_workers)
+  message(sprintf("[config] RAM governor: capping at %d workers (%.0f GB avail / %d GB per worker; %d CPU workers requested).",
+                  PARALLEL$workers, .avail_gb, .future_mem_gb, .cpu_workers))
+rm(.future_mem_gb, .cpu_workers, .avail_gb, .mem_workers)
 
 # --- Serialization ---
 # Opt-in to qs (3-8x faster RDS I/O via LZ4/ZSTD). Falls back to base saveRDS/readRDS.
@@ -248,15 +264,18 @@ IO <- list(use_qs = requireNamespace("qs", quietly = TRUE))
 }
 
 # --- Cache invalidation hash ---
-# Parameters whose change should invalidate the per-sample cache.
-.CACHE_PARAMS <- list(
-  qc       = QC,
-  doublet  = DOUBLET,
-  norm     = NORM,
-  dim_red  = DIM,
-  cluster  = CLUSTER,
-  species  = Sys.getenv("SCRNA_SPECIES", "human")
-)
+# Per-step cumulative parameters. Each step's cache depends on its own params
+# AND all upstream params (its input is the previous step's output), so the keys
+# are nested. Splitting per step means a downstream knob (e.g. CLUSTER) no longer
+# invalidates the QC (01) or doublet (02) caches.
+.cache_params <- function(step) {
+  species <- Sys.getenv("SCRNA_SPECIES", "human")
+  p01 <- list(qc = QC, species = species)
+  p02 <- c(p01, list(doublet = DOUBLET))
+  p03 <- c(p02, list(norm = NORM, dim_red = DIM, cluster = CLUSTER))
+  switch(step, "01" = p01, "02" = p02, "03" = p03,
+         stop("cache_hash: unknown step '", step, "'"))
+}
 
 # Fingerprint the 10x matrix files (size + mtime). Lets a changed input bust the
 # cache even when config is identical. Returns "" if no matrix files are found,
@@ -273,15 +292,15 @@ IO <- list(use_qs = requireNamespace("qs", quietly = TRUE))
   paste(rownames(info), info$size, as.integer(info$mtime), collapse = ";")
 }
 
-# Per-sample cache key: config params + the sample's resolved input PATH + a
-# fingerprint of its matrix files. Keying on the absolute path (not just the
-# sample name `nm`) stops two different experiments that share a folder name
-# from colliding in sample_cache/; the fingerprint busts the cache when the
-# source matrix changes under an unchanged config.
-cache_hash <- function(nm) {
+# Per-sample, per-step cache key: cumulative step params + the sample's resolved
+# input PATH + a fingerprint of its matrix files. Keying on the absolute path
+# (not just the sample name `nm`) stops two different experiments that share a
+# folder name from colliding in sample_cache/; the fingerprint busts the cache
+# when the source matrix changes under an unchanged config.
+cache_hash <- function(nm, step) {
   path <- tryCatch(SAMPLE_PATHS[[nm]], error = function(e) NULL)
   digest::digest(
-    list(params      = .CACHE_PARAMS,
+    list(params      = .cache_params(step),
          path        = if (is.null(path)) nm else normalizePath(path, mustWork = FALSE),
          fingerprint = .matrix_fingerprint(path)),
     algo = "md5"

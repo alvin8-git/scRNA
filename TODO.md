@@ -8,17 +8,11 @@
 
 ### Office-hours architecture findings (2026-06-11) — ranked for implementation
 
-Severity = blast radius if left unfixed, not effort. P0 (cache collision) already fixed (see Done).
+Severity = blast radius if left unfixed, not effort. P0 (cache collision), P1, and the two P2 fixes are done (see Done).
 
-**P1 — High (silent wrong output; tiny fix, do next):**
+**P1 / P2 — resolved 2026-06-11 (see Done):** SingleR all-NA guard, per-step cache scoping, and the RAM governor are implemented and tested. The original **"serial-phase BLAS starvation"** item was **dropped on inspection**: every heavy step fans out `PARALLEL$workers` (future multicore in 03/04/06; `MulticoreParam` in 02/05) and each worker uses BLAS, so the global 1-thread pin is correct and un-pinning would re-introduce oversubscription. The block-4 premise that 04/05 run single-threaded was wrong. A genuine but **benchmark-gated** follow-on remains:
 
-- [ ] **SingleR all-NA guard** — `05_annotate.R:52` `merged$singler_label <- singler_result$labels[colnames(merged)]` is barcode-indexed assignment that is correct today *only* because `$labels` is named by barcode. If a SingleR/Seurat upgrade ever returns positional labels, the character reindex silently yields all-NA → every cell becomes "Unassigned", reports still generate, nobody notices. Add `stopifnot(!anyNA(merged$singler_label))` (and same for `singler_pruned`) right after the assignment. ~2 lines.
-
-**P2 — Medium (scaling/perf wall or wasted compute; correct but costly):**
-
-- [ ] **Per-step cache scoping** — `cache_hash()` is one global key over all of `QC/DOUBLET/NORM/DIM/CLUSTER/species`. Steps 01 (QC) and 02 (doublets) recompute whenever an unrelated knob like `CLUSTER$resolutions` changes. Split into per-step keys (step 01 depends on `QC` + input fingerprint; 02 adds `DOUBLET`; 03 adds `NORM/DIM/CLUSTER`) so a clustering tweak no longer busts QC/doublet caches. Now feasible since the key already carries path + fingerprint.
-- [ ] **Global RAM governor for the parallel phase** — `PARALLEL$workers` (≤8) × `future_mem_gb` has no global cap, so steps 01–03 can oversubscribe RAM and OOM on large/many samples. Cap `workers` so `workers × future_mem_gb ≤` available RAM. Note: `config.R:235` is `future_mem_gb = 8L` but the Done list claims it was raised to 16 GB — reconcile.
-- [ ] **Serial-phase BLAS starvation** — `run_pipeline.sh` pins `OMP/OPENBLAS/MKL/BLAS = 1` (correct for the `future` parallel phase, steps 01–03), but steps 04 (PCA/Harmony/UMAP) and 05 (SingleR) run single-threaded R on the merged object and now get a 1-thread BLAS too. As total cells grow these serial steps dominate wall-clock and the pin actively starves them. Un-pin BLAS for the single-object phase, or document the ceiling so the first ~100K-cell merge isn't a surprise.
+- [ ] **Tune worker count per phase** — the big-merge steps 04/05 fan out the same `PARALLEL$workers` as the per-sample steps, but there each worker copies the full merged object (memory- and copy-heavy) for little parallel gain on BLAS-bound PCA/Harmony/SingleR. Profile, then likely use fewer workers for 04/05 and more for 01–03. Needs measurement, not a blind edit.
 
 **P3 — Low (hygiene / maintainability / cosmetics):**
 
@@ -36,6 +30,9 @@ Severity = blast radius if left unfixed, not effort. P0 (cache collision) alread
 
 ## Done
 
+- [x] **SingleR all-NA guard (office-hours P1, 2026-06-11)** — `05_annotate.R` now hard-stops with a diagnostic count if the barcode-indexed `singler_result$labels[colnames(merged)]` reindex yields any NA. `$labels` is never legitimately NA (unlike `$pruned.labels`), so NA means the row/colname alignment broke — e.g. a SingleR/Seurat upgrade returning positionally-named labels would otherwise silently turn every cell into "Unassigned". Tested (clean labels pass, misaligned caught).
+- [x] **Per-step cache scoping (office-hours P2, 2026-06-11)** — `cache_hash(nm, step)` with cumulative `.cache_params`: 01 = QC+species, 02 += DOUBLET, 03 += NORM/DIM/CLUSTER. A clustering-resolution change no longer busts the QC (01) or doublet (02) caches; a QC change still cascades to all three. Verified by isolation test. Call sites in 01–03 pass their step.
+- [x] **RAM governor (office-hours P2, 2026-06-11)** — `config.R` caps `PARALLEL$workers` so `workers × future_mem_gb` leaves ~20% of `/proc/meminfo` MemAvailable as headroom; prevents OOM in the fan-out phases (every step spawns workers, each holding an object copy). Degrades to the CPU-only cap when meminfo is unreadable; logs a line when it reduces. (Supersedes the stale "raised to 16 GB" note — per-worker budget is 8 GB, now bounded by available RAM.)
 - [x] **Cache key collision fixed (office-hours P0, 2026-06-11)** — `cache_hash()` was keyed on sample name + config only, so two experiments sharing a folder name (e.g. `PBMC/`) under identical config silently served each other's cached `.rds` objects. Now keyed on the resolved absolute input path + a fingerprint (size+mtime) of the 10x matrix files (`config.R`); this also busts the cache when the source matrix changes under unchanged config (closes the content-blindness gap too). Signature changed to `cache_hash(nm)`; call sites updated in steps 01–03. Parse-checked + collision smoke-tested (same name / different path → distinct hashes). First run after this change recomputes each sample once (key format changed).
 - [x] **Samba share** — installed samba 4.15.13; map from Windows: `\\192.168.1.168\alvin`
 - [x] **Pipeline: dynamic sample folders** — `run_pipeline.sh` accepts any number of folder paths; names auto-derived; `SINGLE_SAMPLE` mode skips Harmony
