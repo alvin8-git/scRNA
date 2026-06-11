@@ -202,10 +202,10 @@ declare -A STEP_SCRIPT=(
   ["06b"]="06b_differential.R"
   ["07"]="07_finalize_reports.R"
   ["08"]="08_comparison_report.R"
-  ["11"]="11_wing_degs.R"
-  ["12"]="12_pathways.R"
-  ["13"]="13_cellchat.R"
-  ["14"]="14_trajectory.R"
+  ["11"]="projects/bat_wing/11_wing_degs.R"
+  ["12"]="projects/bat_wing/12_pathways.R"
+  ["13"]="projects/bat_wing/13_cellchat.R"
+  ["14"]="projects/bat_wing/14_trajectory.R"
 )
 
 # =============================================================================
@@ -229,7 +229,7 @@ run_step() {
   local step="$1"
   local script="${STEP_SCRIPT[$step]}"
   local name="${STEP_NAME[$step]}"
-  local logfile="${LOG_DIR}/${step}_${script%.R}.log"
+  local logfile="${LOG_DIR}/${step}_$(basename "${script%.R}").log"  # basename: STEP_SCRIPT may be a subpath (e.g. projects/bat_wing/...)
   local start_ts
   start_ts=$(date +%s)
   STEP_NUM=$(( STEP_NUM + 1 ))

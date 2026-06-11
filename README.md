@@ -38,7 +38,7 @@ Developed for human PBMC data from the **DNB C4** sequencing platform but adapta
 | [How to Run on Bat Whole Blood](docs/howto-bat-whole-blood.md) | How-to | Bat-specific overrides, expected proportions, common mislabellings |
 | [How to Add or Replace a Sample](docs/howto-add-sample.md) | How-to | Add a new sample to an existing cohort using the sample cache |
 | [Configuration Reference](docs/reference-config.md) | Reference | Every `config.R` parameter with type, default, and guidance |
-| [Pipeline Steps Reference](docs/reference-pipeline-steps.md) | Reference | Inputs, outputs, and config keys for each of the 10 steps |
+| [Pipeline Steps Reference](docs/reference-pipeline-steps.md) | Reference | Inputs, outputs, and config keys for each core step (01–10, 06b); bat-wing steps 11–14 live under `pipeline/projects/bat_wing/` |
 | [Output Files Reference](docs/reference-outputs.md) | Reference | Full directory layout and key file descriptions |
 | [Pipeline Architecture](docs/explanation-architecture.md) | Explanation | Why the modular design, sample cache, and Harmony were chosen |
 | [Annotation Strategy](docs/explanation-annotation.md) | Explanation | How SingleR, contamination overrides, and sub-type refinement interact |

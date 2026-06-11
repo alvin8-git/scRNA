@@ -15,9 +15,9 @@ suppressPackageStartupMessages({
   if (!SINGLE_SAMPLE) library(harmony)
 })
 
-plan("multicore", workers = PARALLEL$workers)
-options(future.globals.maxSize = PARALLEL$future_mem_gb * 1024^3)
-message("Parallelism: ", PARALLEL$workers, " cores (future multicore)")
+plan("multicore", workers = PARALLEL$merge_workers)
+options(future.globals.maxSize = PARALLEL$merge_mem_gb * 1024^3)
+message("Parallelism: ", PARALLEL$merge_workers, " cores (future multicore, merged-object phase)")
 
 report_plots <- list()
 
@@ -91,7 +91,7 @@ if (SINGLE_SAMPLE) {
   merged <- suppressWarnings(
     merge(seu_list[[1]],
           y            = seu_list[-1],
-          add.cell.ids = NULL,
+          add.cell.ids = SAMPLE_NAMES,   # prefix barcodes with sample name (self-documenting; provenance also in $sample)
           merge.data   = FALSE,
           project      = "integrated")
   )

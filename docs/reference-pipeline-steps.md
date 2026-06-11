@@ -1,6 +1,8 @@
 # Pipeline Steps Reference
 
-The pipeline consists of 10 R scripts in `pipeline/`. Each step reads `.rds` objects written by earlier steps and writes its own outputs to the results directory. You can re-run from any step without reprocessing earlier ones.
+The core pipeline is a sequence of R scripts in `pipeline/` — steps 01–10 plus 06b (differential expression). Each step reads `.rds` objects written by earlier steps and writes its own outputs to the results directory. You can re-run from any step without reprocessing earlier ones.
+
+Bat-wing-specific downstream analysis (steps 11–14: wing DEGs, pathway enrichment, CellChat, trajectory) lives separately under `pipeline/projects/bat_wing/` and is only run in `bat_wing` species mode; it sources the core `config.R` and is not part of the standard PBMC/whole-blood run.
 
 ---
 

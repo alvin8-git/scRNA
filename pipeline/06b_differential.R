@@ -13,8 +13,8 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-plan("multicore", workers = PARALLEL$workers)
-options(future.globals.maxSize = PARALLEL$future_mem_gb * 1024^3)
+plan("multicore", workers = PARALLEL$merge_workers)
+options(future.globals.maxSize = PARALLEL$merge_mem_gb * 1024^3)
 
 # --- Skip if single sample ---------------------------------------------------
 if (SINGLE_SAMPLE) {

@@ -17,7 +17,7 @@ suppressPackageStartupMessages({
   f <- grep("^--file=", args, value = TRUE)
   if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else "."
 }
-source(file.path(.pipeline_dir, "config.R"))
+source(file.path(dirname(dirname(.pipeline_dir)), "config.R"))  # core config is two dirs up (pipeline/)
 
 dir.create(DIRS$pathways, showWarnings = FALSE, recursive = TRUE)
 

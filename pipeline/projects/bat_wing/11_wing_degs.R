@@ -15,7 +15,7 @@ suppressPackageStartupMessages({
   f <- grep("^--file=", args, value = TRUE)
   if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else "."
 }
-source(file.path(.pipeline_dir, "config.R"))
+source(file.path(dirname(dirname(.pipeline_dir)), "config.R"))  # core config is two dirs up (pipeline/)
 
 if (length(CONDITION_LEVELS) < 2) {
   message("Only one condition found — skipping 11_wing_degs.R (set SCRNA_CONDITION)")

@@ -16,9 +16,9 @@ suppressPackageStartupMessages({
   library(scales)
 })
 
-plan("multicore", workers = PARALLEL$workers)
-options(future.globals.maxSize = PARALLEL$future_mem_gb * 1024^3)
-message("Parallelism: ", PARALLEL$workers, " cores (future multicore)")
+plan("multicore", workers = PARALLEL$merge_workers)
+options(future.globals.maxSize = PARALLEL$merge_mem_gb * 1024^3)
+message("Parallelism: ", PARALLEL$merge_workers, " cores (future multicore, merged-object phase)")
 
 merged <- readRDS(file.path(DIRS$integrated, "integrated_annotated.rds"))
 Idents(merged) <- "cell_type"
