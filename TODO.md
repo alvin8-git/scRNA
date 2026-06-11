@@ -2,8 +2,6 @@
 
 ## Pending
 
-- [ ] **validate_config.R: warning-only mode for SAMPLE_PATHS** — Check 3 in `pipeline/validate_config.R` calls `dir.exists()` for every sample path. If data lives on a NAS or external drive that isn't mounted yet, the validator fails with a confusing error before any pipeline work. Add a `--skip-paths` flag or convert Check 3 to a warning (not an error) so validation can still run on config-only checks before drives are attached. *Surfaced during 2026-06-10 plan-eng-review of T6.*
-
 - [ ] **bat_wing species documentation** — `config.R` advertises `bat_wing` as a supported species alongside `human` and `bat`, but none of the docs (howto-bat-whole-blood.md, reference-config.md) cover it. Add a section to `docs/howto-bat-whole-blood.md` or a stub noting "experimental" if the mode is not yet ready for external use.
 
 ### Office-hours architecture findings (2026-06-11) — ranked for implementation
@@ -18,6 +16,7 @@ Residual (optional, deferred): a deeper split of `05_annotate.R` into annotate-c
 
 ## Done
 
+- [x] **Engineering audit: cache/boundary/execution fixes (2026-06-12)** — 9 findings resolved (commit after `3c5e100`): reverted the `add.cell.ids` barcode double-prefix; replaced hardcoded `config.R` paths in all 11 core steps with a `commandArgs`/`sys.frame` resolver (SCRNA_BASE_DIR + standalone now path-independent); `validate_config.R` SAMPLE_PATHS is a warning by default (`--strict-paths` to fail), resolving the NAS-mounted-late halt; `config.R` warns on H1/H2 + human fallback; `which.max` all-zero guard + consensus left-join in `05_annotate.R`; regression check moved to `pipeline/tests/test_regressions.R`. Full write-up: `docs/eng-audit-2026-06-11.md`.
 - [x] **Annotation-loop automation (office-hours enhancement, 2026-06-11)** — new consensus block in `05_annotate.R` fuses the two per-cluster calls already computed (`cluster_singler$majority_singler` + scType `.cl_sctype$sctype`) into an AUTO/REVIEW decision gated by mean `singler_delta` (≥0.10). Writes `consensus_annotation.csv` and prints a pre-filled `CLUSTER_CELLTYPE_MAP` with `REVIEW` markers on ambiguous clusters — collapses "hand-build the whole map" into "resolve the few flagged clusters." Advisory only (does not change the assignment logic). Decision logic unit-tested.
 - [x] **Per-phase worker tuning (office-hours P2, 2026-06-11)** — `config.R` `PARALLEL` now has `workers` (per-sample, 8 GB/worker) and `merge_workers` (merged-object phase 04/05/06/06b, 16 GB/worker → fewer workers), both RAM-governed. Verified: 8 per-sample / 5 merged on this box. Steps 04/05/06/06b switched to `merge_workers`/`merge_mem_gb`.
 - [x] **droplevels() after T-cell subset (office-hours P3, 2026-06-11)** — `05_annotate.R` drops empty factor levels on the subcluster object so DotPlot legends/axes don't show stale non-T-cell categories. (Step 06 heatmap subset needs none — every cell_type group is sampled.)
@@ -151,11 +150,10 @@ Residual (optional, deferred): a deeper split of `05_annotate.R` into annotate-c
 
 ## Optional Extensions
 
-- [ ] **Trajectory analysis** — run PAGA or Monocle3 on monocyte/DC lineage
-- [ ] **Gene set scoring** — score cells for interferon response, exhaustion, activation signatures
-- [ ] **Cell-cell communication** — run CellChat or NicheNet on integrated object
-- [ ] **Reference mapping** — map to Azimuth PBMC reference for higher-resolution annotation
+- [ ] **Reference mapping** — map to Azimuth PBMC reference for higher-resolution annotation (human-PBMC fast path for the annotation loop)
 - [ ] **Batch effect validation** — compute LISI scores to quantify integration quality
+
+(Trajectory, cell-cell communication, and gene-set scoring shipped as steps 14, 13, and 06b respectively — removed from backlog.)
 
 ---
 

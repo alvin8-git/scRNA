@@ -14,10 +14,10 @@ Developed for human PBMC data from the **DNB C4** sequencing platform but adapta
 ## Features
 
 - **Automatic sample detection** — pass one or more sample folder paths; multi-sample runs trigger Harmony batch correction automatically
-- **9-step modular pipeline** — each step saves intermediate `.rds` objects so you can re-run from any point
+- **Modular pipeline** — core steps 01–10 (plus 06b differential expression); each saves intermediate `.rds` objects so you can re-run from any point. Every step resolves `config.R` relative to its own location, so individual steps run standalone via `Rscript`, not only through the wrapper
 - **Per-sample RDS cache** — steps 01–03 write results to `sample_cache/<name>/`; subsequent runs with the same sample in a different integration combination skip reprocessing automatically
-- **Config pre-flight validation** — `pipeline/validate_config.R` runs before any step; exits with a clear error message if `CLUSTER_CELLTYPE_MAP` entries are missing colors, map keys are not quoted integers, or `SAMPLE_PATHS` don't exist on disk — catches config mistakes before wasting 30 minutes of compute
-- **Parallel execution** — `future` multicore (16 GB worker budget) for Seurat steps, `BiocParallel` for scDblFinder and SingleR; OMP/BLAS/MKL thread count pinned to 1 per worker to prevent CPU thrashing on multi-worker runs
+- **Config pre-flight validation** — `pipeline/validate_config.R` runs before any step; errors out on `CLUSTER_CELLTYPE_MAP` colour/key problems, and *warns* (not errors, unless `--strict-paths`) on missing `SAMPLE_PATHS` so an unmounted NAS doesn't block config-only validation — catches config mistakes before wasting 30 minutes of compute
+- **Two-phase parallelism** — RAM-governed worker pools: more workers (8 GB each) for the per-sample phase (01–03), fewer (16 GB each) for the merged-object phase (04–06b); `future` multicore for Seurat steps, `BiocParallel` for scDblFinder/SingleR; OMP/BLAS/MKL pinned to 1 thread per worker to prevent CPU thrashing
 - **Automated cell type annotation** — SingleR majority vote per cluster + scType marker-based scoring (no reference bias, gene-frequency weighted); suggested `CLUSTER_CELLTYPE_MAP` printed to log; partial manual overrides with automatic SingleR fallback for unmapped clusters
 - **Contamination cell type detection** — rare/contaminating populations (Neutrophil, RBC, HSPC, Platelet, Basophil, Eosinophil, Mast cell) override cluster majority-vote labels via per-cell SingleR labels so they always appear on UMAP regardless of how many cells are in the cluster
 - **Extended label normalisation** — 30-entry `SINGLER_NORM` maps all raw HumanPrimaryCellAtlasData labels (including granulocyte/erythroid lineages) to canonical pipeline names
@@ -68,7 +68,7 @@ Developed for human PBMC data from the **DNB C4** sequencing platform but adapta
 
 - **Linux** (tested on Ubuntu 20.04)
 - [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Mamba](https://github.com/mamba-org/mamba)
-- ~8 GB RAM minimum; 32–64 GB recommended for multi-sample runs with large cell counts (>20 K cells); `future_mem_gb` in `config.R` defaults to 16 GB per worker
+- ~8 GB RAM minimum; 32–64 GB recommended for multi-sample runs with large cell counts (>20 K cells); per-worker RAM budget in `config.R` is 8 GB (per-sample phase) / 16 GB (merged-object phase), auto-capped by a RAM governor
 - ~5 GB disk for conda environment
 
 ---
@@ -145,6 +145,17 @@ bash pipeline/run_pipeline.sh /path/to/SampleA /path/to/SampleB 05 06 07
 # Override the base directory without editing config.R
 SCRNA_BASE_DIR=/mnt/nas/project bash pipeline/run_pipeline.sh /path/to/SampleA
 ```
+
+### Run an individual step standalone
+
+Every step resolves `config.R` from its own location, so any step runs directly without the wrapper — useful for re-running one stage during development:
+
+```bash
+SCRNA_SAMPLE1=/path/to/SampleA SCRNA_SAMPLE2=/path/to/SampleB SCRNA_SPECIES=human \
+  Rscript pipeline/05_annotate.R
+```
+
+Omitting the `SCRNA_SAMPLE*` / `SCRNA_SPECIES` env vars is safe but logged: `config.R` warns and falls back to the hardcoded H1/H2 + `human` defaults rather than silently using the wrong inputs. The wrapper (`run_pipeline.sh`) exports these for you.
 
 ### Test run (with example data)
 

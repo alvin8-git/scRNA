@@ -105,14 +105,15 @@ The results directory is named from the sample names: `results_ES03-ES12_filtere
 
 ## Parallelism
 
-Steps that process multiple samples (03, 05) use `future` multicore with a worker cap:
+Two RAM-governed worker pools:
 ```r
-WORKERS <- min(parallel::detectCores() - 2, 8)
+PARALLEL$workers        # per-sample phase (01-03): cores-2, capped at 8, 8 GB/worker
+PARALLEL$merge_workers  # merged-object phase (04-06b): fewer workers, 16 GB/worker
 ```
 
-`BiocParallel` is used for scDblFinder (step 02) and SingleR (step 05) since these libraries have their own parallelism that conflicts with `future`.
+The per-sample phase fans out wide (small objects). The merged-object phase uses fewer workers because each one can hold a copy of the full merged object; a RAM governor reads `MemAvailable` and caps both counts so `workers × per-worker-budget` leaves ~20% headroom (prevents OOM in the fan-out phases).
 
-`future_mem_gb = 16` limits each worker's RAM allocation. On a 64 GB machine with 8 workers this caps total pipeline memory at 128 GB (enough for large datasets). On 32 GB machines, lower `WORKERS` to 4 or reduce `future_mem_gb`.
+`BiocParallel` drives scDblFinder (step 02) and SingleR (step 05); `future` multicore drives the Seurat steps. OMP/OpenBLAS/MKL/BLAS are pinned to 1 thread per process so worker-spawned BLAS pools don't oversubscribe the CPU.
 
 ---
 

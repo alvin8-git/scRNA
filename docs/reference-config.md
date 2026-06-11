@@ -6,24 +6,28 @@ All pipeline behaviour is controlled by `pipeline/config.R`. Every R script sour
 
 ## Config validation (`validate_config.R`)
 
-`pipeline/validate_config.R` runs automatically before step 01 (called by `run_pipeline.sh`). It exits with code 1 and a clear error message on any of the following:
+`pipeline/validate_config.R` runs automatically before step 01 (called by `run_pipeline.sh`) and can be run standalone: `Rscript pipeline/validate_config.R`. It resolves `config.R` relative to its own location (`sys.frame`/`commandArgs` — no hard-coded path), so it works whether sourced or invoked directly.
 
-| Check | What it catches |
-|-------|----------------|
-| CELLTYPE_COLORS coverage | A type in `CLUSTER_CELLTYPE_MAP` has no colour entry — plots would silently get grey |
-| CLUSTER_CELLTYPE_MAP key format | Keys that are bare integers instead of quoted strings (`0` vs `"0"`) — the map would silently not match |
-| SAMPLE_PATHS existence | A path in `SAMPLE_PATHS` doesn't exist on disk |
+| Check | What it catches | On failure |
+|-------|----------------|-----------|
+| CELLTYPE_COLORS coverage | A type in `CLUSTER_CELLTYPE_MAP` has no colour entry — plots would silently get grey | **error** (exit 1) |
+| CLUSTER_CELLTYPE_MAP key format | Keys that are not cluster numbers — the map would silently not match | **error** (exit 1) |
+| SAMPLE_PATHS existence | A path in `SAMPLE_PATHS` doesn't exist on disk | **warning** (continues) |
 
-You can also run it standalone: `Rscript pipeline/validate_config.R`. It uses a `commandArgs()` path fallback so it works whether sourced or invoked directly without editing hard-coded paths.
+`SAMPLE_PATHS` existence is a **warning by default**, not a hard error — data often lives on a NAS or external drive that isn't mounted at validation time, and config-only checks should still pass. Pass `--strict-paths` to escalate missing paths to an error (e.g. in CI):
 
-> **Pending:** Check 3 (SAMPLE_PATHS) fails if data lives on a NAS or drive that isn't mounted yet. A `--skip-paths` flag is tracked in TODO.md.
+```bash
+Rscript pipeline/validate_config.R --strict-paths
+```
+
+Source-level regression checks (e.g. "step 10 must not hardcode a ground-truth sample") live in `pipeline/tests/test_regressions.R`, not the validator — `validate_config.R` covers config invariants only.
 
 ---
 
 ## Base paths
 
 ```r
-BASE_DIR        <- dirname(dirname(rstudioapi::getSourceEditorContext()$path))
+BASE_DIR         <- Sys.getenv("SCRNA_BASE_DIR", "/data/alvin/scRNA")
 SAMPLE_CACHE_DIR <- file.path(BASE_DIR, "sample_cache")
 ```
 
@@ -34,6 +38,22 @@ SCRNA_BASE_DIR=/mnt/nas/project bash pipeline/run_pipeline.sh /path/to/SampleA
 ```
 
 `SAMPLE_CACHE_DIR` is shared across all sample combinations — deleting a subdirectory forces that sample to be reprocessed from step 01.
+
+---
+
+## Cache invalidation engine
+
+Steps 01–03 cache their per-sample output `.rds` under `sample_cache/<name>/`, each paired with a `.hash` sidecar. Before recomputing, a step compares the stored hash against `cache_hash(nm, step)`:
+
+```
+cache_hash(nm, step) = md5( cumulative_params(step) + resolved_input_path + matrix_fingerprint(path) )
+```
+
+- **cumulative_params** — per-step and nested: step 01 hashes `QC` + species; 02 adds `DOUBLET`; 03 adds `NORM`/`DIM`/`CLUSTER`. Because `digest` hashes the whole nested list, changing a threshold vector or array parameter (e.g. `QC$max_features`, `CLUSTER$resolutions`) changes the digest and invalidates **only** the steps that depend on it — a clustering change does not bust the QC (01) or doublet (02) caches.
+- **resolved_input_path** — the absolute sample path, so two experiments that share a folder name (e.g. `PBMC/`) never collide in `sample_cache/`.
+- **matrix_fingerprint** — `size + mtime` of the 10x matrix files, so editing the input matrix busts the cache even when config is byte-identical.
+
+A mismatch logs `[CACHE STALE]` and recomputes once (linear; no retry loop or halt); a match logs `[CACHE HIT]` and copies the cached object. Parameters that only affect steps 04+ (`HARMONY`, `MARKERS`, `SINGLER_REF`, `CLUSTER_CELLTYPE_MAP`) are deliberately excluded from the key — those steps are not cached and recompute every run.
 
 ---
 
@@ -292,11 +312,15 @@ CELLTYPE_COLORS  <- c("CD4 T" = "#E64B35", "NK" = "#00A087", ...)
 ## Parallelism
 
 ```r
-WORKERS       <- min(parallel::detectCores() - 2, 8)
-future_mem_gb <- 16
+PARALLEL <- list(
+  workers       = ...,   # per-sample phase (01-03): cores-2, capped at 8
+  merge_workers = ...,   # merged-object phase (04-06b): fewer (larger per-worker budget)
+  future_mem_gb = 8L,    # per-worker RAM budget, per-sample phase
+  merge_mem_gb  = 16L    # per-worker RAM budget, merged-object phase
+)
 ```
 
-`WORKERS`: capped at 8 to avoid memory exhaustion. `future_mem_gb`: maximum RAM allocated per `future` worker (16 GB). Raise for large datasets (>50 K cells); lower on machines with <32 GB RAM.
+Two worker budgets, both RAM-governed. `workers` drives the per-sample phase (steps 01–03), where objects are small (~8 GB/worker). `merge_workers` drives the merged-object phase (steps 04, 05, 06, 06b), where each `future`/`BiocParallel` worker can hold a copy of the full merged object, so it uses a larger per-worker budget (16 GB) and therefore fans out to **fewer** workers. A RAM governor reads `MemAvailable` and caps each count so `workers × budget` leaves ~20% headroom, preventing OOM in the fan-out phases. Both are also capped at `cores − 2` (max 8). OMP/OpenBLAS/MKL/BLAS threads are pinned to 1 per process so worker-spawned BLAS pools don't oversubscribe the CPU.
 
 ---
 
