@@ -89,6 +89,16 @@ Ships as **one new step** (e.g. `08b_html_report.R` or fold into step 07) that r
 
 All layout and scope decisions are now locked; the design is ready to build.
 
-## The assignment
+## Implemented (2026-06-12)
 
-Design is locked (architecture A, Overview landing, select-then-compare, per-run). Next concrete step: confirm Quarto + pandoc install into the `scrna_seurat` conda env (`mamba install -n scrna_seurat -c conda-forge quarto pandoc r-plotly`), then spec `08b_html_report.R` — the function that reads a run's outputs (`integrated_annotated.rds`, `cell_fate.csv`, the proportion/DE CSVs) and renders `reports/<run>_report.html`. The mockup is the layout contract for that step.
+Built and verified. Three files:
+
+- `pipeline/08b_html_report.R` — reads a finished `Results/results_*/` run (`integrated_annotated.rds` + the QC/annotation CSVs), builds a compact data bundle (per-cell frame downsampled to 4k/sample for plotting; proportions computed from the *full* data), and renders the report. Args: `<run_dir> [out.html] [--samples=A,B] [--max-cells=N]`. The `--samples` flag is the at-scale escape hatch (render a chosen subset of a >10-sample run).
+- `pipeline/report_template.Rmd` — the report. Overview (stat cards that flag low-QC samples + a sortable `DT` table), Sample comparison (faceted UMAP in the shared integrated space; a crosstalk `filter_select` "Pick samples" tab; QC violins; doublet scores), Cell proportions (stacked plotly bars + a pre→post delta table with a plain-English "Read:" line for two-sample runs). Click a cell type in any legend to toggle it across all panels — that *is* the depletion view.
+- `pipeline/build_report.sh` — self-contained wrapper for detached runs: `nohup bash pipeline/build_report.sh <run_dir> &`. Logs to `<run_dir>/reports/build_report.log`.
+
+**Engine: R Markdown, not the Quarto CLI.** The plan recommended Quarto (architecture A); in practice the conda-forge `quarto` build in `scrna_seurat` is broken (its `deno` shim is missing — `quarto check` fails). R Markdown (`rmarkdown::render`) is the R-native sibling I flagged as the equivalent fallback: same plotly/htmlwidget interactivity, same self-contained emailable HTML, but pure-R and reliable for unattended renders. It needs only pandoc (installed, 3.8.3); the driver auto-points `rmarkdown` at the env's pandoc so it works under a bare `Rscript` call. The recommendation A→ R Markdown swap costs nothing the design depended on.
+
+Verified on `results_H1-H2_filtered` (1207 cells, 2 samples): 0 chunk errors, all five plotly widgets, both DT tables, the crosstalk selector, the delta table all present in a 5.8 MB self-contained file. The hero run (`results_ES03_newkit-ES12_newkit_filtered`, ES03 pre-sort vs ES12 post-sort) renders to `reports/ES03_newkit-ES12_newkit_report.html`.
+
+Phase-2 polish still open: the per-UMAP crosstalk filter currently overlays selected samples rather than re-faceting them (the side-by-side facet is the default sub-tab); DE/marker drilldown tabs (step 06b CSVs) not yet wired; print-to-PDF stylesheet.

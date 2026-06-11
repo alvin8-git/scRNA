@@ -1,0 +1,182 @@
+---
+title: "`r params$run_name`"
+date: "`r format(Sys.Date(), '%d %b %Y')`"
+output:
+  html_document:
+    self_contained: true
+    theme: cosmo
+    highlight: null
+    mathjax: null
+    df_print: paged
+params:
+  bundle: ""
+  run_name: ""
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, error = TRUE)
+suppressWarnings(suppressMessages({
+  library(plotly); library(DT); library(crosstalk); library(ggplot2); library(htmltools)
+}))
+B <- readRDS(params$bundle)
+cells <- B$cells
+PAL <- {
+  cts <- sort(unique(cells$cell_type))
+  base <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
+            "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
+  setNames(rep(base, length.out = length(cts)), cts)
+}
+n_samp <- length(B$samples)
+fig_h  <- max(360, 300 * ceiling(n_samp / 3))
+```
+
+<style>
+.cardrow{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}
+.card{border:1px solid #e3e3e3;border-radius:10px;padding:12px 16px;min-width:150px;
+      box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card .v{font-size:1.6em;font-weight:600;line-height:1.1}
+.card .l{color:#777;font-size:.8em;text-transform:uppercase;letter-spacing:.04em}
+.card .s{color:#999;font-size:.8em}
+.flag{color:#e15759;font-weight:600}
+h1,h2{border-bottom:1px solid #eee;padding-bottom:4px}
+body{max-width:1180px}
+</style>
+
+Interactive run report — `r B$n_cells_total` cells, `r n_samp` samples. Generated `r B$generated`.
+Plots are interactive: hover for values, drag to zoom, click a legend entry to toggle that cell type across every panel. Source: `integrated_annotated.rds` (reduction `r B$umap_name`) + QC tables. No data recomputed.
+
+# Overview
+
+```{r cards, results='asis'}
+S <- B$summary
+fmt <- function(x, d=0) ifelse(is.na(x), "—", formatC(round(as.numeric(x), d), big.mark=",", format="f", digits=d))
+cards <- lapply(seq_len(nrow(S)), function(i) {
+  r <- S[i, ]
+  low <- (!is.na(r$Pct_retained) && r$Pct_retained < 70) ||
+         (!is.na(r$Median_genes) && r$Median_genes < 500)
+  sprintf('<div class="card"><div class="l">%s%s</div><div class="v">%s</div>
+           <div class="s">%s%% retained · %s med genes · %s types</div></div>',
+          r$Sample, ifelse(low, ' <span class="flag">⚠ low QC</span>', ''),
+          fmt(r$Cells), fmt(r$Pct_retained,1), fmt(r$Median_genes), fmt(r$N_cell_types))
+})
+cat('<div class="cardrow">', paste(unlist(cards), collapse=""), '</div>')
+```
+
+```{r summary_table}
+S2 <- B$summary
+names(S2) <- c("Sample","Cells","Median genes","Median UMI","Median %MT","% retained","Doublet %","Cell types","Top type")
+datatable(S2, rownames = FALSE, class = "compact stripe hover",
+          options = list(dom = "t", paging = FALSE, ordering = TRUE)) |>
+  formatRound(c("Median %MT","% retained","Doublet %"), 1)
+```
+
+# Sample comparison {.tabset .tabset-pills}
+
+One metric, every sample, side by side — in the integrated coordinate space, so a depleted
+population appears as the same hole across panels. For runs with many samples, use **Pick samples**.
+
+## Cell type (UMAP)
+
+```{r umap_facet}
+p <- ggplot(cells, aes(UMAP_1, UMAP_2, color = cell_type,
+                       text = paste0(cell_type, "<br>", sample))) +
+  geom_point(size = 0.35, alpha = 0.7) +
+  scale_color_manual(values = PAL) +
+  facet_wrap(~ sample, ncol = min(3, n_samp)) +
+  theme_minimal(base_size = 11) +
+  theme(axis.text = element_blank(), panel.grid.minor = element_blank()) +
+  guides(color = guide_legend(override.aes = list(size = 3)))
+ggplotly(p, tooltip = "text", height = fig_h) |>
+  toWebGL() |> layout(legend = list(title = list(text = "Cell type")))
+```
+
+## Pick samples (interactive)
+
+Filter which samples are shown. Useful when a run has more than a handful — choose the
+2–4 you want to compare, then read the same coordinate space.
+
+```{r umap_crosstalk}
+sd <- SharedData$new(cells, key = ~sample, group = "samp")
+sel <- filter_select("xf_sample", "Samples", sd, ~sample)
+pp <- plot_ly(sd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
+              type = "scattergl", mode = "markers",
+              marker = list(size = 4, opacity = 0.6),
+              text = ~paste0(cell_type, "<br>", sample), hoverinfo = "text",
+              height = 560) |>
+  layout(legend = list(title = list(text = "Cell type")),
+         xaxis = list(title = "UMAP 1"), yaxis = list(title = "UMAP 2"))
+bscols(widths = c(3, 9), sel, pp)
+```
+
+## QC
+
+```{r qc_violin}
+long <- do.call(rbind, lapply(c("nFeature_RNA","nCount_RNA","percent.mt"), function(m)
+  data.frame(sample = cells$sample, metric = m, value = cells[[m]])))
+long$metric <- factor(long$metric, levels = c("nFeature_RNA","nCount_RNA","percent.mt"),
+                      labels = c("Genes / cell","UMIs / cell","% mito"))
+gv <- ggplot(long, aes(sample, value, fill = sample)) +
+  geom_violin(scale = "width", linewidth = 0.2) +
+  facet_wrap(~ metric, scales = "free_y", ncol = 3) +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1), legend.position = "none",
+        axis.title = element_blank())
+ggplotly(gv, height = 420)
+```
+
+## Doublets
+
+```{r doublets}
+if (all(is.na(cells$doublet_score))) {
+  cat("Doublet scores not stored in this object; see the per-sample doublet PDFs.")
+} else {
+  gd <- ggplot(cells, aes(sample, doublet_score, fill = sample)) +
+    geom_violin(scale = "width", linewidth = 0.2) +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "none", axis.title.x = element_blank()) +
+    labs(y = "scDblFinder score")
+  ggplotly(gd, height = 380)
+}
+```
+
+# Cell proportions {.tabset .tabset-pills}
+
+## Composition
+
+```{r prop_bar}
+pl <- B$prop_long
+pb <- plot_ly(pl, x = ~sample, y = ~pct, color = ~cell_type, colors = PAL,
+              type = "bar", text = ~paste0(cell_type, ": ", round(pct,1), "%"),
+              hoverinfo = "text", height = 460) |>
+  layout(barmode = "stack", yaxis = list(title = "% of sample"),
+         xaxis = list(title = ""), legend = list(title = list(text = "Cell type")))
+pb
+```
+
+## Change (delta)
+
+```{r prop_delta}
+if (is.null(B$delta)) {
+  cat("The pre→post delta table is shown for two-sample runs. This run has",
+      length(B$samples), "samples — use the composition bars above to compare.")
+} else {
+  d <- B$delta; ss <- attr(d, "samples")
+  dd <- datatable(d, rownames = FALSE,
+                  colnames = c("Cell type", paste(ss[1], "%"), paste(ss[2], "%"), "Δ pts"),
+                  class = "compact stripe hover",
+                  options = list(dom = "t", paging = FALSE, order = list(list(3, "asc")))) |>
+    formatStyle("delta_pts",
+                color = styleInterval(c(-5, 5), c("#c0392b", "#555", "#1e8449")),
+                fontWeight = "bold")
+  big <- d[which.max(abs(d$delta_pts)), ]
+  htmltools::tagList(
+    htmltools::p(htmltools::strong("Read: "),
+      sprintf("%s moves from %.1f%% (%s) to %.1f%% (%s), a change of %+.1f points — the largest shift.",
+              big$cell_type, big[[2]], ss[1], big[[3]], ss[2], big$delta_pts)),
+    dd)
+}
+```
+
+---
+<small>Generated by `pipeline/08b_html_report.R` (R Markdown + plotly). Re-render any run with
+`bash pipeline/build_report.sh <run_dir>`.</small>
