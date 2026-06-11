@@ -49,16 +49,17 @@ singler_result <- SingleR(test = expr_mat, ref = ref, labels = ref_labels,
                            fine.tune = TRUE, prune = TRUE, BPPARAM = bp_param)
 rm(expr_mat); gc()
 
-merged$singler_label  <- singler_result$labels[colnames(merged)]
-merged$singler_pruned <- singler_result$pruned.labels[colnames(merged)]
-# Guard: the barcode-indexed reindex above aligns SingleR's per-cell rows to
-# cells by name. $labels is never legitimately NA (unlike $pruned.labels, where
-# NA marks a pruned low-confidence call), so any NA here means the row/colname
-# alignment broke — e.g. a SingleR/Seurat upgrade returning positionally-named
-# labels would make the reindex yield all-NA and silently turn every cell into
-# "Unassigned". Fail loud instead of shipping mislabelled cells.
+# Barcode-keyed assignment: index the SingleR DataFrame by [barcode, column] so
+# labels align by cell name, not row position. NOTE: singler_result$labels is an
+# UNNAMED vector, so the old `$labels[colnames(merged)]` silently returned all-NA;
+# `[colnames(merged), "labels"]` uses the DataFrame rownames (the test barcodes).
+merged$singler_label  <- singler_result[colnames(merged), "labels"]
+merged$singler_pruned <- singler_result[colnames(merged), "pruned.labels"]
+# Guard: labels is never legitimately NA (unlike pruned.labels, where NA marks a
+# pruned low-confidence call), so any NA means a colnames(merged) barcode is
+# missing from singler_result — fail loud instead of shipping all-"Unassigned".
 if (anyNA(merged$singler_label)) {
-  stop(sprintf("SingleR label alignment failed: %d/%d cells have NA labels — likely a barcode mismatch between singler_result and colnames(merged).",
+  stop(sprintf("SingleR label alignment failed: %d/%d cells have NA labels — barcode mismatch between singler_result and colnames(merged).",
                sum(is.na(merged$singler_label)), ncol(merged)))
 }
 merged$singler_delta  <- apply(singler_result$scores, 1,
@@ -225,41 +226,47 @@ write.csv(.comparison,
           row.names = FALSE)
 
 # --- Consensus auto-annotation (office-hours) -------------------------------
-# Fuse the two per-cluster calls already computed (SingleR majority + scType)
-# into an auto-accept / flag-for-review decision, gated by SingleR confidence
-# (mean top1-top2 score gap). Advisory ONLY: writes a pre-filled
-# CLUSTER_CELLTYPE_MAP and a per-cluster decision CSV. It does NOT change the
-# cell_type assignment below — it collapses "hand-build the whole 13-row map"
-# into "review the few flagged clusters". Best for PBMC / whole blood (closed
-# cell-type vocabulary across species); novel tissue still needs manual review.
-.consensus_delta_min <- 0.10   # min mean SingleR delta to trust an agreeing call
+# Fuse the two per-cluster calls already computed into an auto-accept /
+# flag-for-review decision. The consensus signal is AGREEMENT between the two
+# INDEPENDENT methods (reference-based SingleR majority vs marker-based scType).
+# Mean SingleR delta (top1-top2 score gap) is shown as a confidence annotation,
+# NOT a hard gate: the delta scale is reference-dependent (HumanPrimaryCellAtlas
+# gaps run ~0.01-0.10), so gating on an absolute delta flags nearly everything.
+# Advisory ONLY: writes a pre-filled CLUSTER_CELLTYPE_MAP and a decision CSV; it
+# does NOT change the cell_type assignment below. Collapses "hand-build the whole
+# map" into "resolve the clusters where the two methods disagree". Best for PBMC /
+# whole blood (closed cell-type vocabulary across species); novel tissue still
+# needs manual review.
+.consensus_low_delta <- 0.03   # agreeing calls below this are tagged low-confidence (still pre-filled)
 .delta_by_cl <- tapply(merged$singler_delta,
                        as.character(merged$seurat_clusters), mean, na.rm = TRUE)
 .comparison$mean_delta <- round(unname(.delta_by_cl[as.character(.comparison$seurat_clusters)]), 3)
-.comparison$decision <- ifelse(
-  .comparison$agreement & !is.na(.comparison$mean_delta) &
-    .comparison$mean_delta >= .consensus_delta_min, "AUTO", "REVIEW")
-.comparison$consensus <- ifelse(.comparison$decision == "AUTO",
+.comparison$decision  <- ifelse(.comparison$agreement, "AUTO", "REVIEW")
+.comparison$consensus <- ifelse(.comparison$agreement,
                                 as.character(.comparison$majority_singler), "REVIEW")
 write.csv(.comparison[, c("seurat_clusters", "majority_singler", "sctype",
                           "agreement", "mean_delta", "n_cells", "decision", "consensus")],
           file.path(DIRS$annotation, "consensus_annotation.csv"), row.names = FALSE)
 .n_auto <- sum(.comparison$decision == "AUTO")
-message(sprintf("\n  === Consensus auto-annotation: %d/%d clusters auto-resolved, %d need review ===",
+message(sprintf("\n  === Consensus auto-annotation: %d/%d clusters agreed (auto), %d disagree (review) ===",
                 .n_auto, nrow(.comparison), nrow(.comparison) - .n_auto))
 message("  Pre-filled CLUSTER_CELLTYPE_MAP (paste into config.R; resolve REVIEW entries):\n")
 message("  CLUSTER_CELLTYPE_MAP <- c(")
 for (.i in order(as.integer(as.character(.comparison$seurat_clusters)))) {
   .cl  <- as.character(.comparison$seurat_clusters[.i])
   .lab <- .comparison$consensus[.i]
-  .note <- if (.comparison$decision[.i] == "REVIEW")
-    sprintf("   # REVIEW: SingleR=%s scType=%s delta=%s",
-            .comparison$majority_singler[.i], .comparison$sctype[.i],
-            format(.comparison$mean_delta[.i], nsmall = 3)) else ""
+  .d   <- .comparison$mean_delta[.i]
+  if (.comparison$decision[.i] == "AUTO") {
+    .lc   <- if (!is.na(.d) && .d < .consensus_low_delta) " low-conf" else ""
+    .note <- sprintf("   # auto%s (SingleR=scType=%s, delta=%s)", .lc, .lab, format(.d, nsmall = 3))
+  } else {
+    .note <- sprintf("   # REVIEW: SingleR=%s scType=%s delta=%s",
+                     .comparison$majority_singler[.i], .comparison$sctype[.i], format(.d, nsmall = 3))
+  }
   message(sprintf('    "%s" = "%s",%s', .cl, .lab, .note))
 }
 message("  )")
-suppressWarnings(rm(.consensus_delta_min, .delta_by_cl, .n_auto, .i, .cl, .lab, .note))
+suppressWarnings(rm(.consensus_low_delta, .delta_by_cl, .n_auto, .i, .cl, .lab, .d, .lc, .note))
 
 # Save cluster→type mapping for cell types MonacoImmune cannot label.
 # These are propagated to merged$cell_type after the SingleR-based assignment.
