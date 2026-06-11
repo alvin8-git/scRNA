@@ -2,7 +2,20 @@
 
 ## Overview
 
-This pipeline analyses human PBMC single-cell RNA-seq data produced by the DNB C4 platform (dnbc4tools v3.0). It performs quality control, doublet detection, individual sample analysis, Harmony batch integration, automated and manual cell type annotation, and publication-quality visualisation using Seurat v5 in R.
+This pipeline takes raw single-cell RNA-seq (scRNA-seq) count matrices and produces annotated cell populations, per-sample composition statistics, and publication-quality figures, using Seurat v5 in R. It handles **human PBMC** and **bat (*Eonycteris spelaea*) whole blood**, from both **10x Genomics** and **DNB C4** (dnbc4tools) platforms.
+
+### New to single-cell analysis? The arc in one paragraph
+
+scRNA-seq measures gene expression in thousands of individual cells at once: each cell is a column, each gene a row, each value a UMI (unique transcript) count. The raw matrix is noisy — empty droplets, dying cells, and **doublets** (two cells captured as one droplet) all masquerade as real cells. The pipeline removes that noise, then finds and names the biology:
+
+1. **QC** (step 01) — drop low-quality cells: too few genes detected, or too many mitochondrial reads (a dying-cell signature).
+2. **Doublet detection** (step 02) — flag and remove droplets that captured two cells.
+3. **Per-sample processing** (step 03) — normalise counts, pick the most informative genes (highly variable genes, HVGs), reduce dimensions (PCA → UMAP), and **cluster** cells by expression similarity.
+4. **Integration** (step 04) — with more than one sample, **Harmony** removes batch effects so the same cell type from different samples overlaps instead of splitting by sample.
+5. **Annotation** (step 05) — give each cluster a biological identity (CD4 T, NK, Monocyte, …) using a reference atlas (SingleR), marker genes (scType), a consensus of the two, and an optional manual map.
+6. **Quantify & report** (steps 06–10) — figures, differential expression, bootstrap proportion confidence intervals, and rarefaction (how many cells you need for a stable estimate).
+
+Every step writes an `.rds` checkpoint, so you can re-run from any point. A pre-flight validator and a per-sample cache (see Configuration Reference) keep re-runs fast and safe.
 
 ---
 
@@ -21,6 +34,27 @@ The DNB C4 output is compatible with Seurat's `Read10X()` but has one key differ
 ---
 
 ## Pipeline Steps
+
+The pipeline is a sequence of R scripts in `pipeline/`. Core steps (run by default):
+
+| Step | Script | What it does |
+|------|--------|--------------|
+| 00 | `validate_config.R` | Pre-flight config validation (see Configuration Reference) |
+| 01 | `01_load_qc.R` | Load matrices, compute QC metrics, filter cells |
+| 02 | `02_doublets.R` | scDblFinder doublet detection + removal |
+| 03 | `03_individual.R` | Per-sample normalise → HVG → PCA → UMAP → cluster → markers |
+| 04 | `04_integrate.R` | Merge + Harmony batch integration (multi-sample) |
+| 05 | `05_annotate.R` | SingleR + scType + consensus + manual cell-type annotation |
+| 06 | `06_visualize.R` | Publication figures |
+| 06b | `06b_differential.R` | Differential expression between samples per cell type (multi-sample) |
+| 07 | `07_finalize_reports.R` | Merge per-step PDFs into 5 category reports + `Overall_report.pdf` |
+| 08 | `08_comparison_report.R` | Standalone cross-sample comparison report |
+| 09 | `09_bootstrap_proportions.R` | Bootstrap-normalised proportion CIs + pairwise chi-squared |
+| 10 | `10_rarefaction.R` | Minimum-capture-depth rarefaction analysis |
+
+Bat-wing-specific downstream analysis (steps 11–14: wing DEGs, pathway enrichment, CellChat, trajectory) lives under `pipeline/projects/bat_wing/` and runs only in `bat_wing` species mode.
+
+The sections below detail each core step.
 
 ### Step 01 — Load & QC (`01_load_qc.R`)
 
@@ -128,6 +162,11 @@ For H1 (~350 cells), consider using `resolution = 0.4` to avoid over-clustering.
 - Filters genes against `rownames(scale.data)` — HVG-safe (scale.data only contains the 2000 HVGs)
 - Outputs: `sctype_labels_umap.pdf`, `singler_vs_sctype_comparison.csv`
 - `sctype_label` added to metadata for cross-reference with SingleR
+
+**Part 1c: Consensus auto-annotation**
+- Fuses the two per-cluster calls (SingleR majority + scType) into a per-cluster **AUTO/REVIEW** decision: clusters where both independent methods agree are auto-accepted; where they disagree, flagged for review.
+- Writes `consensus_annotation.csv` (per cluster: SingleR label, scType label, agreement, mean delta, decision) and prints a **pre-filled `CLUSTER_CELLTYPE_MAP`** to the log with `REVIEW` markers on the ambiguous clusters.
+- Advisory only — it does not change the assignment logic below. It collapses "hand-build the whole map" into "resolve the few clusters where the two methods disagree". Best for PBMC / whole blood, where the cell-type vocabulary is small and known; novel tissue still needs manual review.
 
 **Part 2: Canonical marker dot plot**
 - Dot plot of all canonical PBMC markers across clusters
@@ -282,6 +321,28 @@ CLUSTER_CELLTYPE_MAP <- c(
 )
 ```
 
+### Config validation (`validate_config.R`)
+
+Runs before step 01 (and standalone via `Rscript pipeline/validate_config.R`). Hard-errors on `CLUSTER_CELLTYPE_MAP` colour/key problems; **warns** (does not halt) on missing `SAMPLE_PATHS`, so an unmounted NAS doesn't block config-only validation — pass `--strict-paths` to escalate. Full check table: [`docs/reference-config.md`](docs/reference-config.md).
+
+### Cache invalidation engine
+
+Steps 01–03 cache their per-sample output under `sample_cache/<name>/` with a `.hash` sidecar. A step recomputes only when `cache_hash(nm, step)` changes:
+
+```
+cache_hash = md5( cumulative_params(step) + resolved_input_path + matrix_fingerprint )
+```
+
+- **cumulative_params** are per-step and nested (01: `QC` + species; 02: + `DOUBLET`; 03: + `NORM`/`DIM`/`CLUSTER`), so changing a threshold vector invalidates only the steps that depend on it — a clustering tweak does not bust the QC cache.
+- **resolved_input_path** keys on the absolute sample path, so two experiments that share a folder name never collide in `sample_cache/`.
+- **matrix_fingerprint** (size + mtime of the 10x files) busts the cache when the input matrix changes, even if config is byte-identical.
+
+Steps 04+ are not cached, so `HARMONY` / `MARKERS` / `SINGLER_REF` changes take effect on every run. Delete `sample_cache/<name>/` to force a full recompute for one sample.
+
+### Parallelism
+
+Two RAM-governed worker pools: `PARALLEL$workers` for the per-sample phase (01–03, 8 GB/worker) and `PARALLEL$merge_workers` for the merged-object phase (04–06b, 16 GB/worker → fewer workers, since each holds a copy of the full merged object). A governor reads `MemAvailable` and caps both so `workers × budget` leaves ~20% headroom. OMP/OpenBLAS/MKL/BLAS are pinned to 1 thread per worker to stop CPU thrashing.
+
 ---
 
 ## Bat (*Eonycteris spelaea*) Whole-Blood Support
@@ -351,7 +412,16 @@ bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 08
 bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 06 07 08
 ```
 
-> Steps 01–03 skip automatically via per-sample RDS cache (`sample_cache/<name>/`) when the same sample has been processed in a previous run. Delete `sample_cache/<name>/` to force reprocessing.
+**Run any single step directly (no wrapper).** Every step resolves `config.R` relative to its own location, so you can run one stage with `Rscript` and your own env vars — handy when iterating on a single stage:
+
+```bash
+SCRNA_SAMPLE1=/path/S1 SCRNA_SAMPLE2=/path/S2 SCRNA_SPECIES=human \
+  Rscript pipeline/05_annotate.R
+```
+
+If you omit `SCRNA_SAMPLE*` / `SCRNA_SPECIES`, `config.R` logs a warning and falls back to the hardcoded H1/H2 + `human` defaults — it never silently runs on the wrong inputs.
+
+> Steps 01–03 skip automatically via the per-sample, per-step cache (`sample_cache/<name>/`; see **Cache invalidation engine**). Editing the input matrix, or any parameter a cached step depends on, auto-invalidates the relevant caches. Delete `sample_cache/<name>/` to force a full reprocess.
 
 ---
 
@@ -366,9 +436,11 @@ bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 06 07 08
 | `results/integrated/integrated_seurat.rds` | Merged + Harmony integrated | ~30 MB |
 | `results/integrated/integrated_annotated.rds` | Final annotated object | ~30 MB |
 
+All paths above are relative to the run's results directory, `Results/results_<samples>_<filtered|raw>/` (e.g. `Results/results_H1-H2_filtered/`). Step 05 also writes `annotation/consensus_annotation.csv` and `annotation/cluster_annotation_table.csv`.
+
 Load any object for interactive exploration:
 ```r
 library(Seurat)
-seu <- readRDS("/data/alvin/scRNA/results/integrated/integrated_annotated.rds")
+seu <- readRDS("Results/results_H1-H2_filtered/annotation/integrated_annotated.rds")
 DimPlot(seu, group.by = "cell_type")
 ```
