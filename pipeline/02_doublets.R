@@ -2,7 +2,16 @@
 # 02_doublets.R - Doublet detection using scDblFinder (Bioconductor).
 #                 Outputs: per-sample *_singlets.rds + doublets_report.pdf
 # =============================================================================
-source("/data/alvin/scRNA/pipeline/config.R")
+.pipeline_dir <- local({
+  f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
+  if (!is.null(f)) dirname(f)
+  else {
+    a <- commandArgs(trailingOnly = FALSE)
+    d <- sub("--file=", "", a[grep("--file=", a)])
+    if (length(d) > 0) dirname(normalizePath(d)) else "."
+  }
+})
+source(file.path(.pipeline_dir, "config.R"))
 
 suppressPackageStartupMessages({
   library(Seurat)
@@ -130,6 +139,8 @@ if (file.exists(fate_file)) {
   for (nm in SAMPLE_NAMES) {
     seu_post <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds")))
     idx <- match(nm, cell_fate$Sample)
+    if (is.na(idx))
+      message("  WARNING: sample '", nm, "' not in cell_fate.csv — doublet counts not recorded")
     if (!is.na(idx)) {
       n_before_dbl   <- cell_fate$After_QC[idx]
       n_after_dbl    <- ncol(seu_post)

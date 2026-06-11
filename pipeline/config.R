@@ -70,6 +70,7 @@ if (length(.env_paths) > 0) {
   )
   SAMPLE_NAMES <- names(SAMPLE_PATHS)
 } else {
+  message("[config] No SCRNA_SAMPLE* env vars set — falling back to hardcoded H1/H2 defaults.")
   # ── HARDCODED DEFAULTS (edit here for manual runs) ─────────────────────────
   SAMPLE_PATHS <- list(
     H1 = file.path(BASE_DIR, "Samples", "H1", "filter_matrix"),
@@ -397,7 +398,11 @@ CELLTYPE_COLORS <- c(
 # Species overrides — read SCRNA_SPECIES env var (set by run_pipeline.sh)
 # Supported: "human" (default) | "bat" (whole blood) | "bat_wing" (wing tissue)
 # =============================================================================
-.species <- Sys.getenv("SCRNA_SPECIES", unset = "human")
+.species <- Sys.getenv("SCRNA_SPECIES", unset = "")
+if (!nzchar(.species)) {
+  message("[config] SCRNA_SPECIES not set — defaulting to 'human' (set SCRNA_SPECIES=bat for bat data).")
+  .species <- "human"
+}
 
 source(file.path(PIPELINE_DIR, "config_species_bat.R"))  # bat / bat_wing overrides (extracted)
 

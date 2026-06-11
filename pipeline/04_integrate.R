@@ -3,7 +3,16 @@
 #                  or direct UMAP/cluster (single-sample), generate integration QC.
 #                  Outputs: integrated_seurat.rds + integration_report.pdf
 # =============================================================================
-source("/data/alvin/scRNA/pipeline/config.R")
+.pipeline_dir <- local({
+  f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
+  if (!is.null(f)) dirname(f)
+  else {
+    a <- commandArgs(trailingOnly = FALSE)
+    d <- sub("--file=", "", a[grep("--file=", a)])
+    if (length(d) > 0) dirname(normalizePath(d)) else "."
+  }
+})
+source(file.path(.pipeline_dir, "config.R"))
 
 suppressPackageStartupMessages({
   library(Seurat)
@@ -91,7 +100,7 @@ if (SINGLE_SAMPLE) {
   merged <- suppressWarnings(
     merge(seu_list[[1]],
           y            = seu_list[-1],
-          add.cell.ids = SAMPLE_NAMES,   # prefix barcodes with sample name (self-documenting; provenance also in $sample)
+          add.cell.ids = NULL,   # step 01 RenameCells() already prefixes cell names (H1_...); re-prefixing here would double it (H1_H1_...)
           merge.data   = FALSE,
           project      = "integrated")
   )

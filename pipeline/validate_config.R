@@ -29,16 +29,20 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
                                paste(bad_keys, collapse = ", ")))
 }
 
-# Check 3: SAMPLE_PATHS point to existing directories
+# Check 3: SAMPLE_PATHS should point to existing directories.
+# WARNING (not error) by default — data may live on a NAS / external drive not yet
+# mounted, and config-only validation should still pass. Pass --strict-paths to escalate.
+.strict_paths <- "--strict-paths" %in% commandArgs(trailingOnly = TRUE)
 for (nm in names(SAMPLE_PATHS)) {
-  if (!dir.exists(SAMPLE_PATHS[[nm]]))
-    errors <- c(errors, paste0("Sample path does not exist: ", SAMPLE_PATHS[[nm]]))
+  if (!dir.exists(SAMPLE_PATHS[[nm]])) {
+    .msg <- paste0("Sample path does not exist: ", SAMPLE_PATHS[[nm]])
+    if (.strict_paths) errors <- c(errors, .msg)
+    else message("  WARNING: ", .msg, " (config-only validation continues; pass --strict-paths to fail)")
+  }
 }
 
-# Regression T2: step 10 must not hardcode ES03_newkit
-step10_lines <- readLines(file.path(.this_dir, "10_rarefaction.R"))
-if (any(grepl('ref_sample\\s*<-\\s*"ES03_newkit"', step10_lines)))
-  errors <- c(errors, "REGRESSION: 10_rarefaction.R hardcodes ES03_newkit as ground truth")
+# (Source-level regression checks live in tests/test_regressions.R, not here —
+#  validate_config.R covers config invariants only.)
 
 if (length(errors) > 0) {
   message("CONFIG VALIDATION FAILED:")

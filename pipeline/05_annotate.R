@@ -5,7 +5,16 @@
 #   Part 3: Assign final cell_type labels
 #   Outputs: integrated_annotated.rds + annotation_report.pdf
 # =============================================================================
-source("/data/alvin/scRNA/pipeline/config.R")
+.pipeline_dir <- local({
+  f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
+  if (!is.null(f)) dirname(f)
+  else {
+    a <- commandArgs(trailingOnly = FALSE)
+    d <- sub("--file=", "", a[grep("--file=", a)])
+    if (length(d) > 0) dirname(normalizePath(d)) else "."
+  }
+})
+source(file.path(.pipeline_dir, "config.R"))
 
 suppressPackageStartupMessages({
   library(Seurat)
@@ -184,7 +193,10 @@ colnames(.score_mat) <- names(.gs_pos)
   cells <- which(merged$seurat_clusters == cl)
   if (length(cells) == 0) return(NULL)
   cl_scores <- colSums(.score_mat[cells, , drop = FALSE])
-  data.frame(cluster = cl, sctype = names(which.max(cl_scores)),
+  # No positive marker signal: which.max returns the FIRST type on an all-zero /
+  # all-negative vector, fabricating a label. Mark Unassigned for review instead.
+  best <- if (max(cl_scores) > 0) names(which.max(cl_scores)) else "Unassigned"
+  data.frame(cluster = cl, sctype = best,
              score = max(cl_scores), n_cells = length(cells),
              stringsAsFactors = FALSE)
 }))
@@ -192,6 +204,7 @@ colnames(.score_mat) <- names(.gs_pos)
 
 merged$sctype_label <- .cl_sctype$sctype[match(as.character(merged$seurat_clusters),
                                                 .cl_sctype$cluster)]
+merged$sctype_label[is.na(merged$sctype_label)] <- "Unassigned"  # clusters scType could not score
 message("  scType cluster assignments:")
 print(.cl_sctype[, c("cluster", "sctype", "n_cells")])
 
@@ -215,9 +228,12 @@ report_plots[["scType  -  Marker-based Labels on UMAP"]] <- set_page(p_sctype, 8
 .comparison <- merge(
   cluster_singler[, c("seurat_clusters", "majority_singler")],
   .cl_sctype[, c("cluster", "sctype", "n_cells")],
-  by.x = "seurat_clusters", by.y = "cluster"
+  by.x = "seurat_clusters", by.y = "cluster",
+  all.x = TRUE   # keep every SingleR cluster even if scType dropped it (e.g. no-cell cluster) -> surfaces as REVIEW, not silently gone
 )
-.comparison$agreement <- .comparison$majority_singler == .comparison$sctype
+# NA sctype (a cluster scType could not score) is a disagreement, not a match.
+.comparison$agreement <- !is.na(.comparison$sctype) &
+                         .comparison$majority_singler == .comparison$sctype
 .comparison <- .comparison[order(as.integer(as.character(.comparison$seurat_clusters))), ]
 message("\n  SingleR vs scType comparison per cluster:")
 print(.comparison)
@@ -261,7 +277,9 @@ for (.i in order(as.integer(as.character(.comparison$seurat_clusters)))) {
     .note <- sprintf("   # auto%s (SingleR=scType=%s, delta=%s)", .lc, .lab, format(.d, nsmall = 3))
   } else {
     .note <- sprintf("   # REVIEW: SingleR=%s scType=%s delta=%s",
-                     .comparison$majority_singler[.i], .comparison$sctype[.i], format(.d, nsmall = 3))
+                     .comparison$majority_singler[.i],
+                     ifelse(is.na(.comparison$sctype[.i]), "none", .comparison$sctype[.i]),
+                     format(.d, nsmall = 3))
   }
   message(sprintf('    "%s" = "%s",%s', .cl, .lab, .note))
 }

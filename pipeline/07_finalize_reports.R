@@ -10,7 +10,16 @@
 #   05-Integrated_report.pdf
 #   Overall_report.pdf
 # =============================================================================
-source("/data/alvin/scRNA/pipeline/config.R")
+.pipeline_dir <- local({
+  f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
+  if (!is.null(f)) dirname(f)
+  else {
+    a <- commandArgs(trailingOnly = FALSE)
+    d <- sub("--file=", "", a[grep("--file=", a)])
+    if (length(d) > 0) dirname(normalizePath(d)) else "."
+  }
+})
+source(file.path(.pipeline_dir, "config.R"))
 
 combine <- function(inputs, output) {
   existing <- inputs[file.exists(inputs)]
