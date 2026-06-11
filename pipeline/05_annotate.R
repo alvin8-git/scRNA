@@ -19,8 +19,8 @@ suppressPackageStartupMessages({
   library(scales)
 })
 
-bp_param <- MulticoreParam(workers = PARALLEL$workers)
-message("Parallelism: ", PARALLEL$workers, " cores (BiocParallel)")
+bp_param <- MulticoreParam(workers = PARALLEL$merge_workers)
+message("Parallelism: ", PARALLEL$merge_workers, " cores (BiocParallel, merged-object phase)")
 
 merged <- readRDS(file.path(DIRS$integrated, "integrated_seurat.rds"))
 message("Loaded: ", ncol(merged), " cells, ",
@@ -67,67 +67,7 @@ merged$singler_label_clean <- ifelse(is.na(merged$singler_pruned),
                                       "Unassigned", merged$singler_pruned)
 
 # Normalise raw SingleR labels to match CELLTYPE_COLORS canonical names
-SINGLER_NORM <- c(
-  # --- HumanPrimaryCellAtlas labels ---
-  # Platelet / megakaryocyte
-  "Platelets"              = "Platelet",
-  "Megakaryocyte"          = "Platelet",
-  # Neutrophil / granulocyte precursors
-  "Neutrophils"            = "Neutrophil",
-  "Neutrophil_-G-CSF"      = "Neutrophil",
-  "GMP"                    = "Neutrophil",
-  "Pro-Myelocyte"          = "Neutrophil",
-  "Myelocyte"              = "Neutrophil",
-  # Basophil / eosinophil / mast
-  "Basophils"              = "Basophil",
-  "Eosinophils"            = "Eosinophil",
-  "Mast_cells"             = "Mast cell",
-  # RBC / erythroid
-  "Erythrocyte"            = "RBC",
-  "Erythroblast"           = "RBC",
-  "BFU-E"                  = "RBC",
-  "CFU-E"                  = "RBC",
-  "MEP"                    = "RBC",
-  # HSPC
-  "CMP"                    = "HSPC",
-  "HSC_-G-CSF"             = "HSPC",
-  "HSC_CD34+"              = "HSPC",
-  # Lymphoid
-  "NK_cell"                = "NK",
-  "T_cells"                = "CD4 T",
-  "B_cell"                 = "B cell",
-  "Pro-B_cell_CD34+"       = "B cell",
-  "Pre-B_cell_CD34-"       = "B cell",
-  # Stromal / tissue contamination
-  "Endothelial_cells"      = "Endothelial",
-  "Epithelial_cells"       = "Epithelial",
-  "Fibroblasts"            = "Fibroblast",
-  "Smooth_muscle_cells"    = "Smooth Muscle",
-  # --- MonacoImmuneData labels ---
-  "CD4+ T cells"           = "CD4 T",
-  "CD8+ T cells"           = "CD8 T",
-  "T regulatory cells"     = "Treg",
-  "Vd2 gd T cells"         = "γδ T",
-  "Non Vd2 gd T cells"     = "γδ T",
-  "MAIT cells"             = "CD8 T",
-  "NK cells"               = "NK",
-  "B cells"                = "B cell",
-  "Plasmablasts"           = "Plasma",
-  "Classical monocytes"    = "CD14+ Mono",
-  "Intermediate monocytes" = "CD14+ Mono",
-  "Non-classical monocytes" = "FCGR3A+ Mono",
-  "Plasmacytoid DC"        = "DC",
-  "Myeloid DC"             = "DC",
-  "Progenitor cells"       = "HSPC",
-  "Low-density neutrophils" = "Neutrophil",
-  "Low-density basophils"  = "Basophil",
-  # Monaco label.main catch-alls (coarser labels returned for ambiguous cells)
-  "Monocytes"              = "CD14+ Mono",
-  "T cells"                = "CD4 T",
-  "Dendritic cells"        = "DC",
-  "B cells"                = "B cell",
-  "NK"                     = "NK"
-)
+source(file.path(PIPELINE_DIR, "05_annotate_singler_norm.R"))  # SINGLER_NORM lookup (extracted)
 idx <- merged$singler_label_clean %in% names(SINGLER_NORM)
 merged$singler_label_clean[idx] <- SINGLER_NORM[merged$singler_label_clean[idx]]
 
@@ -283,6 +223,43 @@ print(.comparison)
 write.csv(.comparison,
           file.path(DIRS$annotation, "singler_vs_sctype_comparison.csv"),
           row.names = FALSE)
+
+# --- Consensus auto-annotation (office-hours) -------------------------------
+# Fuse the two per-cluster calls already computed (SingleR majority + scType)
+# into an auto-accept / flag-for-review decision, gated by SingleR confidence
+# (mean top1-top2 score gap). Advisory ONLY: writes a pre-filled
+# CLUSTER_CELLTYPE_MAP and a per-cluster decision CSV. It does NOT change the
+# cell_type assignment below — it collapses "hand-build the whole 13-row map"
+# into "review the few flagged clusters". Best for PBMC / whole blood (closed
+# cell-type vocabulary across species); novel tissue still needs manual review.
+.consensus_delta_min <- 0.10   # min mean SingleR delta to trust an agreeing call
+.delta_by_cl <- tapply(merged$singler_delta,
+                       as.character(merged$seurat_clusters), mean, na.rm = TRUE)
+.comparison$mean_delta <- round(unname(.delta_by_cl[as.character(.comparison$seurat_clusters)]), 3)
+.comparison$decision <- ifelse(
+  .comparison$agreement & !is.na(.comparison$mean_delta) &
+    .comparison$mean_delta >= .consensus_delta_min, "AUTO", "REVIEW")
+.comparison$consensus <- ifelse(.comparison$decision == "AUTO",
+                                as.character(.comparison$majority_singler), "REVIEW")
+write.csv(.comparison[, c("seurat_clusters", "majority_singler", "sctype",
+                          "agreement", "mean_delta", "n_cells", "decision", "consensus")],
+          file.path(DIRS$annotation, "consensus_annotation.csv"), row.names = FALSE)
+.n_auto <- sum(.comparison$decision == "AUTO")
+message(sprintf("\n  === Consensus auto-annotation: %d/%d clusters auto-resolved, %d need review ===",
+                .n_auto, nrow(.comparison), nrow(.comparison) - .n_auto))
+message("  Pre-filled CLUSTER_CELLTYPE_MAP (paste into config.R; resolve REVIEW entries):\n")
+message("  CLUSTER_CELLTYPE_MAP <- c(")
+for (.i in order(as.integer(as.character(.comparison$seurat_clusters)))) {
+  .cl  <- as.character(.comparison$seurat_clusters[.i])
+  .lab <- .comparison$consensus[.i]
+  .note <- if (.comparison$decision[.i] == "REVIEW")
+    sprintf("   # REVIEW: SingleR=%s scType=%s delta=%s",
+            .comparison$majority_singler[.i], .comparison$sctype[.i],
+            format(.comparison$mean_delta[.i], nsmall = 3)) else ""
+  message(sprintf('    "%s" = "%s",%s', .cl, .lab, .note))
+}
+message("  )")
+suppressWarnings(rm(.consensus_delta_min, .delta_by_cl, .n_auto, .i, .cl, .lab, .note))
 
 # Save cluster→type mapping for cell types MonacoImmune cannot label.
 # These are propagated to merged$cell_type after the SingleR-based assignment.
@@ -712,6 +689,10 @@ if (isTRUE(SUBCLUSTER$enabled)) {
     t_markers <- t_markers[t_markers %in% rownames(merged)]
     t_barcodes <- colnames(merged)[as.character(merged$seurat_clusters) %in% t_clusters]
     merged_t   <- subset(merged, cells = t_barcodes)
+    # Drop factor levels left empty by the subset, so DotPlot legends / axes
+    # don't show stale categories from the non-T-cell clusters (office-hours P3).
+    merged_t@meta.data[] <- lapply(merged_t@meta.data,
+                                   function(x) if (is.factor(x)) droplevels(x) else x)
     Idents(merged_t) <- "sub.cluster"
 
     if (length(t_markers) > 0 && length(unique(Idents(merged_t))) > 1) {
