@@ -257,7 +257,36 @@ IO <- list(use_qs = requireNamespace("qs", quietly = TRUE))
   cluster  = CLUSTER,
   species  = Sys.getenv("SCRNA_SPECIES", "human")
 )
-cache_hash <- function() digest::digest(.CACHE_PARAMS, algo = "md5")
+
+# Fingerprint the 10x matrix files (size + mtime). Lets a changed input bust the
+# cache even when config is identical. Returns "" if no matrix files are found,
+# so the key degrades gracefully to (params + path) for non-10x or moved inputs.
+.matrix_fingerprint <- function(path) {
+  if (is.null(path) || !nzchar(path)) return("")
+  files <- c("matrix.mtx.gz", "matrix.mtx",
+             "barcodes.tsv.gz", "barcodes.tsv",
+             "features.tsv.gz", "features.tsv",
+             "genes.tsv.gz", "genes.tsv")
+  fp   <- file.path(path, files)
+  info <- file.info(fp[file.exists(fp)])
+  if (nrow(info) == 0) return("")
+  paste(rownames(info), info$size, as.integer(info$mtime), collapse = ";")
+}
+
+# Per-sample cache key: config params + the sample's resolved input PATH + a
+# fingerprint of its matrix files. Keying on the absolute path (not just the
+# sample name `nm`) stops two different experiments that share a folder name
+# from colliding in sample_cache/; the fingerprint busts the cache when the
+# source matrix changes under an unchanged config.
+cache_hash <- function(nm) {
+  path <- tryCatch(SAMPLE_PATHS[[nm]], error = function(e) NULL)
+  digest::digest(
+    list(params      = .CACHE_PARAMS,
+         path        = if (is.null(path)) nm else normalizePath(path, mustWork = FALSE),
+         fingerprint = .matrix_fingerprint(path)),
+    algo = "md5"
+  )
+}
 
 # --- Manual Cluster → Cell Type Map ---
 # NULL  → auto-annotate using SingleR majority vote per cluster (recommended for first run).

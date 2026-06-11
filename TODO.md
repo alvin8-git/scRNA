@@ -6,10 +6,37 @@
 
 - [ ] **bat_wing species documentation** — `config.R` advertises `bat_wing` as a supported species alongside `human` and `bat`, but none of the docs (howto-bat-whole-blood.md, reference-config.md) cover it. Add a section to `docs/howto-bat-whole-blood.md` or a stub noting "experimental" if the mode is not yet ready for external use.
 
+### Office-hours architecture findings (2026-06-11) — ranked for implementation
+
+Severity = blast radius if left unfixed, not effort. P0 (cache collision) already fixed (see Done).
+
+**P1 — High (silent wrong output; tiny fix, do next):**
+
+- [ ] **SingleR all-NA guard** — `05_annotate.R:52` `merged$singler_label <- singler_result$labels[colnames(merged)]` is barcode-indexed assignment that is correct today *only* because `$labels` is named by barcode. If a SingleR/Seurat upgrade ever returns positional labels, the character reindex silently yields all-NA → every cell becomes "Unassigned", reports still generate, nobody notices. Add `stopifnot(!anyNA(merged$singler_label))` (and same for `singler_pruned`) right after the assignment. ~2 lines.
+
+**P2 — Medium (scaling/perf wall or wasted compute; correct but costly):**
+
+- [ ] **Per-step cache scoping** — `cache_hash()` is one global key over all of `QC/DOUBLET/NORM/DIM/CLUSTER/species`. Steps 01 (QC) and 02 (doublets) recompute whenever an unrelated knob like `CLUSTER$resolutions` changes. Split into per-step keys (step 01 depends on `QC` + input fingerprint; 02 adds `DOUBLET`; 03 adds `NORM/DIM/CLUSTER`) so a clustering tweak no longer busts QC/doublet caches. Now feasible since the key already carries path + fingerprint.
+- [ ] **Global RAM governor for the parallel phase** — `PARALLEL$workers` (≤8) × `future_mem_gb` has no global cap, so steps 01–03 can oversubscribe RAM and OOM on large/many samples. Cap `workers` so `workers × future_mem_gb ≤` available RAM. Note: `config.R:235` is `future_mem_gb = 8L` but the Done list claims it was raised to 16 GB — reconcile.
+- [ ] **Serial-phase BLAS starvation** — `run_pipeline.sh` pins `OMP/OPENBLAS/MKL/BLAS = 1` (correct for the `future` parallel phase, steps 01–03), but steps 04 (PCA/Harmony/UMAP) and 05 (SingleR) run single-threaded R on the merged object and now get a 1-thread BLAS too. As total cells grow these serial steps dominate wall-clock and the pin actively starves them. Un-pin BLAS for the single-object phase, or document the ceiling so the first ~100K-cell merge isn't a surprise.
+
+**P3 — Low (hygiene / maintainability / cosmetics):**
+
+- [ ] **`droplevels()` after subsets** — `seurat_clusters` is carried as a factor and never has stale levels dropped (e.g. T-cell subclustering in step 05). Empty levels leak into plot legends, dot-plot axes, and color-map lookups → empty legend entries / off-by-one palette colors in publication figures. Add `droplevels()` after each `subset()`.
+- [ ] **Doc drift: "10 steps" → 14** — `docs/reference-pipeline-steps.md` and README say 10 R scripts; there are 14 (01–05 core, 06/06b/07/08 reporting, 09/10 stats, 11–14 wing/pathways/CellChat/trajectory).
+- [ ] **Extract steps 11–14 into a project extension** — wing/pathways/CellChat/trajectory are a single project's downstream analysis bolted into the shared numbered trunk; they're dead weight on every human PBMC run. Move to `projects/bat_wing/` that sources the core.
+- [ ] **Decompose the two monster files** — `config.R` (729 lines) and `05_annotate.R` (742 lines) are the "where do I even look" cost. Split by concern (config: QC/integration/annotation/plotting/species; 05: annotate-core vs annotate-refine). Files, not abstractions.
+- [ ] **`merge(add.cell.ids = SAMPLE_NAMES)`** — `04_integrate.R` passes `add.cell.ids = NULL`, so cross-sample barcode collisions get generic `_1/_2` suffixes. Provenance is safe (carried in `$sample` metadata), so this is cosmetic: pass `SAMPLE_NAMES` to make barcodes self-documenting.
+
+**Enhancement track (feature, not a defect):**
+
+- [ ] **Automate the annotation-iteration loop for PBMC/whole blood** — fuse the two cluster-level calls already computed (`majority_singler` + scType `.cl_sctype`) into auto-accept-on-agreement + flag-on-disagreement, gated by `singler_delta` confidence. Collapses "hand-build a 13-row `CLUSTER_CELLTYPE_MAP`" into "review 2–3 flagged clusters." Human-PBMC fast path: Azimuth/`MapQuery` (already tracked under Optional Extensions). Coarse-lineage (L1) only; subtypes stay assisted-but-reviewed.
+
 ---
 
 ## Done
 
+- [x] **Cache key collision fixed (office-hours P0, 2026-06-11)** — `cache_hash()` was keyed on sample name + config only, so two experiments sharing a folder name (e.g. `PBMC/`) under identical config silently served each other's cached `.rds` objects. Now keyed on the resolved absolute input path + a fingerprint (size+mtime) of the 10x matrix files (`config.R`); this also busts the cache when the source matrix changes under unchanged config (closes the content-blindness gap too). Signature changed to `cache_hash(nm)`; call sites updated in steps 01–03. Parse-checked + collision smoke-tested (same name / different path → distinct hashes). First run after this change recomputes each sample once (key format changed).
 - [x] **Samba share** — installed samba 4.15.13; map from Windows: `\\192.168.1.168\alvin`
 - [x] **Pipeline: dynamic sample folders** — `run_pipeline.sh` accepts any number of folder paths; names auto-derived; `SINGLE_SAMPLE` mode skips Harmony
 - [x] **Pipeline: raw_matrix support** — `raw_matrix` / `raw_feature_bc_matrix` recognised alongside `filter_matrix`; results folder appends `_filtered` or `_raw` to differentiate runs
