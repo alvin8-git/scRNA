@@ -13,6 +13,7 @@
 
 suppressWarnings(suppressMessages({
   library(Seurat)
+  library(ggplot2)
 }))
 
 # ---- locate this script's directory (for the .Rmd template) ----
@@ -42,9 +43,10 @@ integ_dir <- file.path(run_dir, "integrated")
 run_name  <- sub("^results_", "", basename(run_dir))
 run_name  <- sub("_filtered$", "", run_name)
 
-max_cells   <- as.integer(getflag("max-cells", "4000"))
+max_cells   <- as.integer(getflag("max-cells", "6000"))
 want_samples <- getflag("samples", NULL)
 if (!is.null(want_samples)) want_samples <- trimws(strsplit(want_samples, ",")[[1]])
+lite <- "--lite" %in% flags
 
 out_html <- if (length(pos) >= 2) pos[2] else
   file.path(run_dir, "reports", paste0(run_name, "_report.html"))
@@ -158,12 +160,163 @@ if (!is.null(fate) && all(c("Removed_doublets", "After_QC") %in% names(fate))) {
 summary$N_cell_types <- n_types[summary$Sample]
 summary$Top_type     <- top_type[summary$Sample]
 
+# median %ribo straight from metadata (qc CSV may not carry it)
+if ("percent.ribo" %in% colnames(md)) {
+  rib <- tapply(suppressWarnings(as.numeric(md$percent.ribo)), md$.sample, median, na.rm = TRUE)
+  summary$Median_pct_ribo <- round(rib[summary$Sample], 2)
+}
+# highly-variable genes per sample (from the per-sample objects, if present)
+hvg_n <- vapply(samples_all, function(s) {
+  f <- list.files(file.path(run_dir, "individual"),
+                  pattern = paste0("^", s, "_(filtered|seurat|singlets)\\.rds$"),
+                  recursive = TRUE, full.names = TRUE)
+  if (!length(f)) return(NA_integer_)
+  tryCatch(length(Seurat::VariableFeatures(readRDS(f[1]))), error = function(e) NA_integer_)
+}, integer(1))
+summary$HVG <- hvg_n[summary$Sample]
+
+# ---- marker dot plot data (canonical human-PBMC panel, computed off the object) ----
+# Mirrors the families the pipeline draws (T / NK / B / mono / DC / platelet / etc.).
+marker_panel <- c("CD3D","CD3E","TRAC","IL7R","CCR7","CD4","CD8A","GZMK","CCL5",
+                  "NKG7","GNLY","KLRD1","NCAM1","KLRB1","MS4A1","CD79A","CD19",
+                  "CD14","LYZ","S100A8","S100A9","FCGR3A","MS4A7","FCER1A","CLEC9A","CST3",
+                  "PPBP","PF4","CD34","CSF3R","GATA2","MS4A2")
+marker_panel <- marker_panel[marker_panel %in% rownames(obj)]
+markers_dot <- tryCatch({
+  d <- Seurat::DotPlot(obj, features = marker_panel, group.by = ct_col)$data
+  data.frame(gene = as.character(d$features.plot), cell_type = as.character(d$id),
+             avg_scaled = d$avg.exp.scaled, pct_exp = d$pct.exp,
+             stringsAsFactors = FALSE)
+}, error = function(e) { msg("dotplot skipped: %s", conditionMessage(e)); NULL })
+if (!is.null(markers_dot)) {
+  attr(markers_dot, "gene_order") <- marker_panel
+  msg("dot plot: %d markers x %d cell types", length(marker_panel), length(unique(markers_dot$cell_type)))
+}
+
+# ---- differential expression (step 06b), optional ----
+de <- NULL
+de_path <- file.path(run_dir, "differential", "DE_all_celltypes.csv")
+if (file.exists(de_path)) {
+  de <- tryCatch(read.csv(de_path, check.names = FALSE), error = function(e) NULL)
+  need <- c("avg_log2FC", "p_val_adj", "gene", "cell_type")
+  if (!is.null(de) && all(need %in% names(de))) {
+    keep_cols <- c(need, intersect(c("pct.1", "pct.2", "comparison"), names(de)))
+    de <- de[is.finite(de$avg_log2FC) & is.finite(de$p_val_adj), keep_cols, drop = FALSE]
+    de$neglog10p <- -log10(pmax(de$p_val_adj, .Machine$double.xmin))
+    de$dir <- ifelse(de$p_val_adj < 0.05 & abs(de$avg_log2FC) >= 1,
+                     ifelse(de$avg_log2FC > 0, "up", "down"), "ns")
+    # cap per cell type (top 300 by |log2FC|) so the linked widget stays light
+    de <- do.call(rbind, lapply(split(de, de$cell_type),
+                  function(d) utils::head(d[order(-abs(d$avg_log2FC)), ], 300)))
+    de$uid <- paste(de$cell_type, de$gene, seq_len(nrow(de)))  # unique crosstalk key
+    rownames(de) <- NULL
+    msg("DE: %d rows across %d cell types", nrow(de), length(unique(de$cell_type)))
+  } else de <- NULL
+}
+
+# ---- static plot galleries (regenerated natively in R; skipped under --lite) ----
+galleries <- NULL
+if (!lite) {
+  msg("building static galleries (pass --lite to skip) ...")
+  mk_uri <- function(g, w = 7, h = 4.4, dpi = 96) {
+    tf <- tempfile(fileext = ".png")
+    ggplot2::ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
+    on.exit(unlink(tf), add = TRUE)
+    knitr::image_uri(tf)
+  }
+  drop_null <- function(x) x[!vapply(x, is.null, logical(1))]
+
+  ## per-sample diagnostics (reached by clicking a sample card)
+  by_sample <- list()
+  for (s in samples_all) {
+    cs <- cells[cells$sample == s, , drop = FALSE]
+    imgs <- list()
+    imgs[["QC: UMIs vs genes"]] <- tryCatch(mk_uri(
+      ggplot(cs, aes(nCount_RNA, nFeature_RNA, color = percent.mt)) +
+        geom_point(size = 0.35, alpha = 0.6) + scale_x_log10() + scale_y_log10() +
+        scale_color_viridis_c(name = "% MT") + theme_minimal(base_size = 11) +
+        labs(x = "UMIs / cell (log)", y = "genes / cell (log)", title = paste(s, "- QC")),
+      w = 6.4, h = 4.4), error = function(e) NULL)
+    if (!all(is.na(cs$doublet_score)))
+      imgs[["Doublet score (UMAP)"]] <- tryCatch(mk_uri(
+        ggplot(cs, aes(UMAP_1, UMAP_2, color = doublet_score)) + geom_point(size = 0.4) +
+          scale_color_viridis_c(option = "magma", name = "score") + theme_void(base_size = 11) +
+          labs(title = paste(s, "- doublet score")),
+        w = 5.8, h = 5), error = function(e) NULL)
+    hf <- list.files(file.path(run_dir, "individual"),
+                     pattern = paste0("^", s, "_(seurat|filtered|singlets)\\.rds$"),
+                     recursive = TRUE, full.names = TRUE)
+    hf <- hf[order(!grepl("_seurat", hf))]   # prefer the object that has HVG computed
+    for (cand in hf) {
+      img <- tryCatch(mk_uri(Seurat::VariableFeaturePlot(readRDS(cand)), w = 6.4, h = 4.4),
+                      error = function(e) NULL)
+      if (!is.null(img)) { imgs[["Highly variable genes"]] <- img; break }
+    }
+    imgs <- drop_null(imgs)
+    if (length(imgs)) by_sample[[s]] <- imgs
+  }
+
+  ## run-level galleries (one family per left-nav entry)
+  stage <- list()
+  fmark <- intersect(c("CD3D","MS4A1","NKG7","CD14","LYZ","FCER1A","PPBP","GNLY"), rownames(obj))
+  if (length(fmark)) stage[["Marker feature plots"]] <- tryCatch(
+    mk_uri(Seurat::FeaturePlot(obj, features = fmark, reduction = umap_name, order = TRUE),
+           w = 9, h = 2.7 * ceiling(length(fmark) / 3)), error = function(e) NULL)
+  if (!is.null(de)) stage[["Top DE marker heatmap"]] <- tryCatch({
+    top <- do.call(rbind, lapply(split(de, de$cell_type),
+              function(d) utils::head(d[order(-d$avg_log2FC), ], 5)))
+    genes <- unique(top$gene); genes <- genes[genes %in% rownames(obj)]
+    ave <- as.matrix(Seurat::AverageExpression(obj, features = genes, group.by = ct_col, assays = "RNA")[[1]])
+    z <- t(scale(t(log1p(ave))))
+    dfh <- as.data.frame(as.table(z)); colnames(dfh) <- c("gene","cell_type","z")
+    dfh$gene <- factor(dfh$gene, levels = rev(genes))
+    mk_uri(ggplot(dfh, aes(cell_type, gene, fill = z)) + geom_tile() +
+      scale_fill_gradient2(low = "#4575b4", mid = "white", high = "#d73027", name = "z") +
+      theme_minimal(base_size = 9) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_blank()),
+      w = 7.5, h = max(4, 0.17 * length(genes))) }, error = function(e) NULL)
+  if (any(c("percent.mt","percent.ribo") %in% colnames(md))) stage[["Contamination (MT / ribo)"]] <- tryCatch({
+    parts <- list()
+    if ("percent.mt"   %in% colnames(md)) parts[["% MT"]]   <- suppressWarnings(as.numeric(md$percent.mt))
+    if ("percent.ribo" %in% colnames(md)) parts[["% ribo"]] <- suppressWarnings(as.numeric(md$percent.ribo))
+    ccl <- do.call(rbind, lapply(names(parts), function(nm)
+             data.frame(cell_type = md$.cell_type, metric = nm, value = parts[[nm]])))
+    mk_uri(ggplot(ccl, aes(cell_type, value, fill = cell_type)) +
+      geom_violin(scale = "width", linewidth = 0.2) +
+      facet_wrap(~ metric, scales = "free_y", ncol = 1) + theme_minimal(base_size = 10) +
+      theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.title.x = element_blank()),
+      w = 8, h = 6) }, error = function(e) NULL)
+  if ("singler_delta" %in% colnames(md)) stage[["SingleR delta (annotation confidence)"]] <- tryCatch({
+    cd <- data.frame(cell_type = md$.cell_type, delta = suppressWarnings(as.numeric(md$singler_delta)))
+    cd <- cd[is.finite(cd$delta), , drop = FALSE]
+    mk_uri(ggplot(cd, aes(cell_type, delta, fill = cell_type)) +
+      geom_violin(scale = "width", linewidth = 0.2) + theme_minimal(base_size = 10) +
+      theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.title.x = element_blank()) +
+      labs(y = "SingleR delta (higher = more confident)"),
+      w = 8, h = 4) }, error = function(e) NULL)
+  if ("singler_label_clean" %in% colnames(md)) stage[["SingleR vs final label"]] <- tryCatch({
+    tb <- as.data.frame(table(SingleR = as.character(md$singler_label_clean), Final = md$.cell_type))
+    tb <- tb[tb$Freq > 0, , drop = FALSE]
+    mk_uri(ggplot(tb, aes(Final, SingleR, fill = Freq)) + geom_tile() +
+      scale_fill_viridis_c(trans = "log10", name = "cells") + theme_minimal(base_size = 9) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)),
+      w = 7.6, h = 5.6) }, error = function(e) NULL)
+  stage <- drop_null(stage)
+
+  galleries <- list(by_sample = by_sample, stage = stage)
+  msg("galleries: %d per-sample sets, %d run-level panels", length(by_sample), length(stage))
+}
+
 # ---- bundle + render ----
 bundle <- list(
   run_name = run_name, generated = as.character(Sys.time()),
   samples = samples_all, n_cells_total = nrow(cells),
   cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide,
-  delta = delta, summary = summary, umap_name = umap_name
+  delta = delta, summary = summary, umap_name = umap_name, de = de,
+  markers_dot = markers_dot,
+  galleries = galleries, lite = lite
 )
 bpath <- file.path(tempdir(), paste0("report_bundle_", Sys.getpid(), ".rds"))
 saveRDS(bundle, bpath)

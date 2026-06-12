@@ -1,6 +1,5 @@
 ---
 title: "`r params$run_name`"
-date: "`r format(Sys.Date(), '%d %b %Y')`"
 output:
   html_document:
     self_contained: true
@@ -14,7 +13,8 @@ params:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, error = TRUE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, error = TRUE,
+                      dev = "png", dpi = 120)
 suppressWarnings(suppressMessages({
   library(plotly); library(DT); library(crosstalk); library(ggplot2); library(htmltools)
 }))
@@ -26,87 +26,248 @@ PAL <- {
             "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
   setNames(rep(base, length.out = length(cts)), cts)
 }
-n_samp <- length(B$samples)
-fig_h  <- max(360, 300 * ceiling(n_samp / 3))
+n_samp   <- length(B$samples)
+fac_ncol <- min(3, n_samp)
+fac_nrow <- ceiling(n_samp / fac_ncol)
+fig_h    <- max(420, 380 * fac_nrow)
+fig_w    <- max(7, 4.2 * fac_ncol)
 ```
 
-<style>
-.cardrow{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}
-.card{border:1px solid #e3e3e3;border-radius:10px;padding:12px 16px;min-width:150px;
-      box-shadow:0 1px 2px rgba(0,0,0,.05)}
-.card .v{font-size:1.6em;font-weight:600;line-height:1.1}
-.card .l{color:#777;font-size:.8em;text-transform:uppercase;letter-spacing:.04em}
-.card .s{color:#999;font-size:.8em}
-.flag{color:#e15759;font-weight:600}
-h1,h2{border-bottom:1px solid #eee;padding-bottom:4px}
-body{max-width:1180px}
-</style>
+```{css, echo=FALSE}
+:root{
+  --bg:#f4f6f9; --panel:#fff; --ink:#1f2733; --muted:#667085;
+  --line:#e4e8ee; --rail:#1b2230; --rail-ink:#cdd5e0; --accent:#3b82f6;
+  --good:#12a150; --warn:#e08a00; --bad:#d23f3f;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+     color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5}
+/* hide R Markdown's default title/date header — the title lives in the top bar */
+#header,h1.title,.title{display:none}
 
-Interactive run report — `r B$n_cells_total` cells, `r n_samp` samples. Generated `r B$generated`.
-Plots are interactive: hover for values, drag to zoom, click a legend entry to toggle that cell type across every panel. Source: `integrated_annotated.rds` (reduction `r B$umap_name`) + QC tables. No data recomputed.
+/* full-width fixed top bar */
+.report-top{position:fixed;top:0;left:0;right:0;height:52px;z-index:100;display:flex;
+  align-items:center;gap:14px;background:var(--rail);color:#fff;padding:0 18px;box-shadow:var(--shadow)}
+.report-top .title{font-weight:600;font-size:15px;letter-spacing:.01em}
+.report-top .chip{background:#2b3548;color:var(--rail-ink);border-radius:999px;padding:3px 11px;font-size:12px}
+.report-top .meta{margin-left:auto;color:#9aa6b5;font-size:12px;display:flex;gap:16px;align-items:center}
+.report-top .meta b{color:#fff;font-weight:600}
+/* nav toggle lives at the top-right of the nav rail; when collapsed it parks at the page edge */
+.navtoggle{position:fixed;top:59px;left:170px;z-index:96;width:30px;height:28px;
+  background:#fff;border:1px solid var(--line);color:var(--muted);border-radius:7px;
+  font-size:14px;line-height:1;cursor:pointer;box-shadow:var(--shadow);transition:left .15s}
+.navtoggle:hover{color:var(--accent);border-color:var(--accent)}
+body.nav-collapsed .navtoggle{left:10px}
+
+/* fixed left navigation rail (a panel with a right border, not a card) */
+.report-nav{position:fixed;top:52px;left:0;bottom:0;width:208px;background:#fff;
+  border-right:1px solid var(--line);padding:10px 0;overflow:auto;z-index:90}
+.report-nav a{display:block;padding:9px 18px;color:var(--muted);text-decoration:none;font-size:13px;
+  border-left:3px solid transparent;cursor:pointer}
+.report-nav a:hover{background:#f7f9fc;color:var(--ink)}
+.report-nav a.active{color:var(--ink);font-weight:600;border-left-color:var(--accent);background:#f2f6ff}
+.report-nav .grouplabel{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa6b5;
+  padding:14px 18px 4px}
+
+/* main column clears the fixed top bar + nav; collapsing the nav frees the whole page */
+.main-container{margin:52px 0 0 208px !important;max-width:1080px;padding:10px 30px 70px;transition:margin .15s}
+body.nav-collapsed .report-nav{display:none}
+body.nav-collapsed .main-container{margin-left:auto !important;margin-right:auto}
+
+h1{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-top:30px}
+h2{font-size:15px;border:0;margin-top:16px}
+
+/* sample cards: compact, label/value stat rows (mockup style) */
+.cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px;
+  margin:10px 0 22px;max-width:880px}
+.scard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+.scard h3{margin:0 0 9px;font-size:13.5px;display:flex;align-items:center;gap:7px;font-weight:600}
+.scard .tag{font-size:10.5px;color:#fff;background:var(--bad);border-radius:999px;padding:1px 7px;font-weight:600}
+.scard .stat{display:flex;justify-content:space-between;padding:2.5px 0;font-size:12.5px;color:var(--muted)}
+.scard .stat b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:600}
+
+/* accent tab pills + tables + read line */
+.nav-pills>li.active>a,.nav-pills>li.active>a:hover,.nav-pills>li.active>a:focus{background:var(--accent)}
+.nav-pills>li>a{color:var(--muted)}
+table.dataTable thead th{background:#fafbfd;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line)}
+.read-line{background:#f2f6ff;border-left:3px solid var(--accent);border-radius:6px;
+  padding:9px 14px;margin:4px 0 14px;font-size:13.5px}
+hr{border-top:1px solid var(--line)}
+small{color:var(--muted)}
+
+/* sample selector: rounded toggle chips (restyled crosstalk checkbox group), no ticks, no search */
+.crosstalk-input{margin:0 0 14px}
+.crosstalk-input .control-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+  color:#9aa6b5;font-weight:600;margin-bottom:8px;display:block}
+.crosstalk-input-checkboxgroup .crosstalk-options-group{display:flex;flex-wrap:wrap;gap:8px}
+.crosstalk-input-checkboxgroup .checkbox{margin:0}
+.crosstalk-input-checkboxgroup .checkbox input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.crosstalk-input-checkboxgroup .checkbox label{display:inline-flex;align-items:center;border:1px solid var(--line);
+  border-radius:999px;padding:6px 15px;font-size:13px;background:#fff;color:var(--muted);cursor:pointer;
+  font-weight:500;user-select:none}
+.crosstalk-input-checkboxgroup .checkbox label:hover{border-color:#c4ccd8;color:var(--ink)}
+.crosstalk-input-checkboxgroup .checkbox label:has(input:checked){border-color:var(--accent);
+  background:#f2f6ff;color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* sample-comparison: chip selector row + UMAP grid (max 3/row) + one shared legend on the side */
+.selrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 16px}
+.selrow .sellabel{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#9aa6b5;
+  font-weight:600;margin-right:4px}
+.selchip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 15px;font-size:13px;
+  cursor:pointer;color:var(--muted);font-weight:500}
+.selchip:hover{border-color:#c4ccd8;color:var(--ink)}
+.selchip.on{border-color:var(--accent);background:#f2f6ff;color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
+.umapwrap{display:flex;gap:16px;align-items:flex-start}
+.umapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;flex:1;min-width:0}
+.umapcell{border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 6px 2px;box-shadow:var(--shadow);min-width:0}
+.umaptitle{font-weight:600;font-size:12.5px;padding:3px 6px;color:var(--ink)}
+.shlegend{width:158px;flex:none;border:1px solid var(--line);border-radius:10px;background:#fff;
+  padding:10px 12px;box-shadow:var(--shadow);position:sticky;top:64px}
+.shlegend .lgtitle{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa6b5;
+  font-weight:600;margin-bottom:8px}
+.legitem{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.legitem:hover{color:var(--accent)}
+.legitem.off{opacity:.38}
+.legsw{width:12px;height:12px;border-radius:3px;flex:none}
+
+/* clickable sample cards (deep-link into the per-sample gallery) */
+.scardlink{text-decoration:none;color:inherit;display:block}
+.scardlink:hover .scard{border-color:var(--accent);box-shadow:0 2px 7px rgba(59,130,246,.16)}
+
+/* static gallery figures */
+.galfig{margin:10px 0 20px}
+.galfig figcaption{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:5px}
+.galfig img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+```
+
+```{r shell, results='asis'}
+top <- sprintf('<div class="report-top"><span class="title">%s</span><span class="chip">Interactive run report</span><span class="meta"><span><b>%s</b> cells</span><span><b>%s</b> samples</span><span>%s</span></span></div><button class="navtoggle" title="Show / hide the navigation rail" onclick="document.body.classList.toggle(\'nav-collapsed\')">&#9776;</button>',
+  htmltools::htmlEscape(B$run_name), format(B$n_cells_total, big.mark=","), n_samp, format(Sys.Date(), "%d %b %Y"))
+slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+gal  <- !isTRUE(B$lite) && !is.null(B$galleries)
+stage_links <- if (gal && length(B$galleries$stage)) paste0('<div class="grouplabel">Per stage</div>',
+  paste(sprintf('<a href="#stage-%s">%s</a>', slug(names(B$galleries$stage)),
+                htmltools::htmlEscape(names(B$galleries$stage))), collapse="")) else ''
+sample_links <- if (gal && length(B$galleries$by_sample)) paste0('<div class="grouplabel">Per sample</div>',
+  paste(sprintf('<a href="#sample-%s">%s</a>', slug(names(B$galleries$by_sample)),
+                htmltools::htmlEscape(names(B$galleries$by_sample))), collapse="")) else ''
+nav <- paste0('<nav class="report-nav">',
+  '<div class="grouplabel">Run</div><a href="#overview">Overview</a>',
+  '<div class="grouplabel">Compare</div>',
+  '<a href="#sample-comparison">Sample comparison</a>',
+  '<a href="#cell-type-markers">Cell-type markers</a>',
+  '<a href="#cell-proportions">Cell proportions</a>',
+  stage_links, sample_links,
+  '</nav>')
+cat(top, nav)
+```
+
+Hover any plot for values, drag to zoom, and click a cell type in a legend to toggle it across every
+panel — that toggle *is* the depletion view. Source: `integrated_annotated.rds` (reduction
+`r B$umap_name`) + the QC tables. No data is recomputed.
 
 # Overview
 
 ```{r cards, results='asis'}
 S <- B$summary
 fmt <- function(x, d=0) ifelse(is.na(x), "—", formatC(round(as.numeric(x), d), big.mark=",", format="f", digits=d))
-cards <- lapply(seq_len(nrow(S)), function(i) {
+row <- function(l, v) sprintf('<div class="stat"><span>%s</span><b>%s</b></div>', l, v)
+cards <- vapply(seq_len(nrow(S)), function(i) {
   r <- S[i, ]
   low <- (!is.na(r$Pct_retained) && r$Pct_retained < 70) ||
          (!is.na(r$Median_genes) && r$Median_genes < 500)
-  sprintf('<div class="card"><div class="l">%s%s</div><div class="v">%s</div>
-           <div class="s">%s%% retained · %s med genes · %s types</div></div>',
-          r$Sample, ifelse(low, ' <span class="flag">⚠ low QC</span>', ''),
-          fmt(r$Cells), fmt(r$Pct_retained,1), fmt(r$Median_genes), fmt(r$N_cell_types))
-})
-cat('<div class="cardrow">', paste(unlist(cards), collapse=""), '</div>')
+  tag <- if (low) ' <span class="tag">low QC</span>' else ''
+  stats <- paste0(
+    row("Cells", fmt(r$Cells)),
+    row("% retained", paste0(fmt(r$Pct_retained,1), "%")),
+    row("Median genes", fmt(r$Median_genes)),
+    row("Median UMI", fmt(r$Median_UMI)),
+    row("% MT", paste0(fmt(r$Median_pct_MT,1), "%")),
+    if (!is.null(r$Doublet_pct) && !is.na(r$Doublet_pct)) row("Doublets", paste0(fmt(r$Doublet_pct,1), "%")) else "",
+    if (!is.null(r$HVG) && !is.na(r$HVG)) row("HVG", fmt(r$HVG)) else "",
+    row("Cell types", fmt(r$N_cell_types)))
+  card <- sprintf('<div class="scard"><h3>%s%s</h3>%s</div>', htmltools::htmlEscape(r$Sample), tag, stats)
+  slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+  has_gal <- !isTRUE(B$lite) && !is.null(B$galleries) && r$Sample %in% names(B$galleries$by_sample)
+  if (has_gal) sprintf('<a class="scardlink" href="#sample-%s">%s</a>', slug(r$Sample), card) else card
+}, character(1))
+cat('<div class="cardgrid">', paste(cards, collapse=""), '</div>')
 ```
 
 ```{r summary_table}
 S2 <- B$summary
-names(S2) <- c("Sample","Cells","Median genes","Median UMI","Median %MT","% retained","Doublet %","Cell types","Top type")
+nm  <- c(Sample="Sample", Cells="Cells", Median_genes="Median genes", Median_UMI="Median UMI",
+         Median_pct_MT="Median %MT", Median_pct_ribo="Median %ribo", Pct_retained="% retained",
+         Doublet_pct="Doublet %", HVG="HVG", N_cell_types="Cell types", Top_type="Top type")
+names(S2) <- ifelse(names(S2) %in% names(nm), nm[names(S2)], names(S2))
+roundable <- intersect(c("Median %MT","Median %ribo","% retained","Doublet %"), names(S2))
 datatable(S2, rownames = FALSE, class = "compact stripe hover",
           options = list(dom = "t", paging = FALSE, ordering = TRUE)) |>
-  formatRound(c("Median %MT","% retained","Doublet %"), 1)
+  formatRound(roundable, 1)
 ```
 
 # Sample comparison {.tabset .tabset-pills}
 
-One metric, every sample, side by side — in the integrated coordinate space, so a depleted
-population appears as the same hole across panels. For runs with many samples, use **Pick samples**.
+Pick a metric below, then choose which samples to compare with the chips. Every panel shares the
+integrated coordinate space, so a depleted population shows up as the same hole across samples.
 
-## Cell type (UMAP)
+## UMAP
 
-```{r umap_facet}
-p <- ggplot(cells, aes(UMAP_1, UMAP_2, color = cell_type,
-                       text = paste0(cell_type, "<br>", sample))) +
-  geom_point(size = 0.35, alpha = 0.7) +
-  scale_color_manual(values = PAL) +
-  facet_wrap(~ sample, ncol = min(3, n_samp)) +
-  theme_minimal(base_size = 11) +
-  theme(axis.text = element_blank(), panel.grid.minor = element_blank()) +
-  guides(color = guide_legend(override.aes = list(size = 3)))
-ggplotly(p, tooltip = "text", height = fig_h) |>
-  toWebGL() |> layout(legend = list(title = list(text = "Cell type")))
+```{r umap_grid}
+slugv <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+cts   <- sort(unique(cells$cell_type))
+mk_umap <- function(s) {
+  dd <- cells[cells$sample == s, , drop = FALSE]
+  plot_ly(dd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
+          type = "scattergl", mode = "markers",
+          marker = list(size = 4, opacity = 0.75),
+          text = ~cell_type, hoverinfo = "text", showlegend = FALSE, height = 290) |>
+    layout(xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
+           margin = list(l = 2, r = 2, t = 2, b = 2)) |>
+    toWebGL()
+}
+panels <- lapply(B$samples, function(s)
+  htmltools::div(class = "umapcell", id = paste0("umapwrap-", slugv(s)),
+                 htmltools::div(class = "umaptitle", s), mk_umap(s)))
+chips <- lapply(B$samples, function(s)
+  htmltools::tags$button(class = "selchip on", `data-sample` = slugv(s), s))
+legitems <- lapply(cts, function(ct)
+  htmltools::tags$div(class = "legitem", `data-ct` = ct,
+    htmltools::tags$span(class = "legsw", style = sprintf("background:%s", PAL[[ct]])),
+    htmltools::tags$span(ct)))
+js <- "
+(function(){
+  document.querySelectorAll('.selrow .selchip').forEach(function(b){
+    b.addEventListener('click', function(){
+      var on=b.classList.toggle('on');
+      var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));
+      if(w) w.style.display = on ? '' : 'none';
+    });
+  });
+  document.querySelectorAll('.shlegend .legitem').forEach(function(it){
+    it.addEventListener('click', function(){
+      var off=it.classList.toggle('off'), name=it.getAttribute('data-ct');
+      document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){
+        if(!gd.data) return; var idx=[];
+        gd.data.forEach(function(t,i){ if(t.name===name) idx.push(i); });
+        if(idx.length && window.Plotly) Plotly.restyle(gd, {visible: off?'legendonly':true}, idx);
+      });
+    });
+  });
+})();"
+htmltools::browsable(htmltools::tagList(
+  htmltools::div(class = "selrow", htmltools::tags$span(class = "sellabel", "Samples"), chips),
+  htmltools::div(class = "umapwrap",
+    htmltools::div(class = "umapgrid", panels),
+    htmltools::div(class = "shlegend",
+      htmltools::div(class = "lgtitle", "Cell type"), legitems)),
+  htmltools::tags$script(htmltools::HTML(js))
+))
 ```
 
-## Pick samples (interactive)
-
-Filter which samples are shown. Useful when a run has more than a handful — choose the
-2–4 you want to compare, then read the same coordinate space.
-
-```{r umap_crosstalk}
-sd <- SharedData$new(cells, key = ~sample, group = "samp")
-sel <- filter_select("xf_sample", "Samples", sd, ~sample)
-pp <- plot_ly(sd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
-              type = "scattergl", mode = "markers",
-              marker = list(size = 4, opacity = 0.6),
-              text = ~paste0(cell_type, "<br>", sample), hoverinfo = "text",
-              height = 560) |>
-  layout(legend = list(title = list(text = "Cell type")),
-         xaxis = list(title = "UMAP 1"), yaxis = list(title = "UMAP 2"))
-bscols(widths = c(3, 9), sel, pp)
-```
+Click a sample chip to add or drop its panel. Click a cell type in the shared legend to toggle it
+across every UMAP at once (e.g. isolate CD14+ Mono pre vs post to read the sort).
 
 ## QC
 
@@ -120,22 +281,50 @@ gv <- ggplot(long, aes(sample, value, fill = sample)) +
   facet_wrap(~ metric, scales = "free_y", ncol = 3) +
   theme_minimal(base_size = 11) +
   theme(axis.text.x = element_text(angle = 30, hjust = 1), legend.position = "none",
-        axis.title = element_blank())
-ggplotly(gv, height = 420)
+        axis.title = element_blank(), strip.text = element_text(face = "bold"))
+ggplotly(gv, height = 430)
 ```
 
 ## Doublets
 
 ```{r doublets}
 if (all(is.na(cells$doublet_score))) {
-  cat("Doublet scores not stored in this object; see the per-sample doublet PDFs.")
+  cat("Doublet scores are not stored in this object; see the per-sample doublet PDFs.")
 } else {
   gd <- ggplot(cells, aes(sample, doublet_score, fill = sample)) +
     geom_violin(scale = "width", linewidth = 0.2) +
     theme_minimal(base_size = 11) +
     theme(legend.position = "none", axis.title.x = element_blank()) +
     labs(y = "scDblFinder score")
-  ggplotly(gd, height = 380)
+  ggplotly(gd, height = 390)
+}
+```
+
+# Cell-type markers
+
+Canonical marker panel across the annotated types — dot **size** is the % of cells in that type
+expressing the gene, **colour** is the scaled average expression. This is the evidence behind the
+labels (e.g. CD14/LYZ/S100A8 lighting up CD14+ Mono, MS4A1/CD79A on B cells).
+
+```{r marker_dot}
+md_ <- B$markers_dot
+if (is.null(md_) || !nrow(md_)) {
+  cat("Marker dot plot is unavailable for this run.")
+} else {
+  go <- attr(md_, "gene_order"); if (is.null(go)) go <- unique(md_$gene)
+  md_$gene <- factor(md_$gene, levels = go)
+  md_$cell_type <- factor(md_$cell_type, levels = rev(sort(unique(md_$cell_type))))
+  gp <- ggplot(md_, aes(gene, cell_type, size = pct_exp, color = avg_scaled,
+                 text = paste0("<b>", gene, "</b> in ", cell_type, "<br>",
+                               round(pct_exp), "% expressing<br>scaled avg ", round(avg_scaled, 2)))) +
+    geom_point() +
+    scale_color_gradient2(low = "#4575b4", mid = "#f7f7f7", high = "#d73027",
+                          midpoint = 0, name = "scaled avg") +
+    scale_size(range = c(0, 6), name = "% expressing") +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 9),
+          axis.title = element_blank(), panel.grid.major = element_line(color = "#f0f0f0"))
+  ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 130))
 }
 ```
 
@@ -147,11 +336,20 @@ if (all(is.na(cells$doublet_score))) {
 pl <- B$prop_long
 pb <- plot_ly(pl, x = ~sample, y = ~pct, color = ~cell_type, colors = PAL,
               type = "bar", text = ~paste0(cell_type, ": ", round(pct,1), "%"),
-              hoverinfo = "text", height = 460) |>
+              hoverinfo = "text", height = 470) |>
   layout(barmode = "stack", yaxis = list(title = "% of sample"),
-         xaxis = list(title = ""), legend = list(title = list(text = "Cell type")))
+         xaxis = list(title = ""), legend = list(title = list(text = "Cell type")),
+         updatemenus = list(list(type = "buttons", direction = "right",
+           x = 0, y = 1.08, xanchor = "left", showactive = FALSE, pad = list(t = 2),
+           buttons = list(
+             list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
+             list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
 pb
 ```
+
+Click a cell type in the legend to drop it from the bars (or **Hide all**, then click one back on).
+The myeloid fraction here doubles as a contamination read: a high CD14+ Mono / granulocyte share in a
+lymphocyte-sorted sample flags carry-over.
 
 ## Change (delta)
 
@@ -161,6 +359,9 @@ if (is.null(B$delta)) {
       length(B$samples), "samples — use the composition bars above to compare.")
 } else {
   d <- B$delta; ss <- attr(d, "samples")
+  big <- d[which.max(abs(d$delta_pts)), ]
+  read <- sprintf('<div class="read-line"><b>Read:</b> %s moves from %.1f%% (%s) to %.1f%% (%s), a change of %+.1f points — the largest shift.</div>',
+                  htmltools::htmlEscape(big$cell_type), big[[2]], ss[1], big[[3]], ss[2], big$delta_pts)
   dd <- datatable(d, rownames = FALSE,
                   colnames = c("Cell type", paste(ss[1], "%"), paste(ss[2], "%"), "Δ pts"),
                   class = "compact stripe hover",
@@ -168,15 +369,56 @@ if (is.null(B$delta)) {
     formatStyle("delta_pts",
                 color = styleInterval(c(-5, 5), c("#c0392b", "#555", "#1e8449")),
                 fontWeight = "bold")
-  big <- d[which.max(abs(d$delta_pts)), ]
-  htmltools::tagList(
-    htmltools::p(htmltools::strong("Read: "),
-      sprintf("%s moves from %.1f%% (%s) to %.1f%% (%s), a change of %+.1f points — the largest shift.",
-              big$cell_type, big[[2]], ss[1], big[[3]], ss[2], big$delta_pts)),
-    dd)
+  htmltools::tagList(htmltools::HTML(read), dd)
 }
 ```
 
 ---
 <small>Generated by `pipeline/08b_html_report.R` (R Markdown + plotly). Re-render any run with
 `bash pipeline/build_report.sh <run_dir>`.</small>
+
+```{r galleries, results='asis'}
+if (isTRUE(B$lite) || is.null(B$galleries)) {
+  invisible(NULL)
+} else {
+  G <- B$galleries
+  slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+  fig <- function(uri, cap=NULL) {
+    fc <- if (is.null(cap)) "" else sprintf('<figcaption>%s</figcaption>', htmltools::htmlEscape(cap))
+    sprintf('<figure class="galfig">%s<img src="%s"></figure>', fc, uri)
+  }
+  out <- character(0)
+  if (length(G$stage)) {
+    out <- c(out, '<h1 id="galleries">Stage galleries</h1>',
+      '<p>Regenerated from the saved objects. The SingleR panels stand in for the raw score heatmap, which the pipeline does not keep in the object.</p>')
+    for (t in names(G$stage))
+      out <- c(out, sprintf('<h2 id="stage-%s">%s</h2>', slug(t), htmltools::htmlEscape(t)), fig(G$stage[[t]]))
+  }
+  if (length(G$by_sample)) {
+    out <- c(out, '<h1 id="per-sample">Per-sample detail</h1>',
+      '<p>Click a sample card on the Overview to jump straight here.</p>')
+    for (s in names(G$by_sample)) {
+      out <- c(out, sprintf('<h2 id="sample-%s">%s</h2>', slug(s), htmltools::htmlEscape(s)))
+      imgs <- G$by_sample[[s]]
+      for (t in names(imgs)) out <- c(out, fig(imgs[[t]], t))
+    }
+  }
+  cat(paste(out, collapse="\n"))
+}
+```
+
+```{r scrollspy, results='asis'}
+cat('<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll(".report-nav a"));
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute("href"));});
+  function onScroll(){
+    var y=(window.scrollY||window.pageYOffset)+90, idx=0;
+    for(var i=0;i<secs.length;i++){ if(secs[i] && secs[i].offsetTop<=y) idx=i; }
+    links.forEach(function(a,i){ a.classList.toggle("active", i===idx); });
+  }
+  window.addEventListener("scroll", onScroll, {passive:true});
+  window.addEventListener("load", onScroll); onScroll();
+})();
+</script>')
+```

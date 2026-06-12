@@ -102,3 +102,64 @@ Built and verified. Three files:
 Verified on `results_H1-H2_filtered` (1207 cells, 2 samples): 0 chunk errors, all five plotly widgets, both DT tables, the crosstalk selector, the delta table all present in a 5.8 MB self-contained file. The hero run (`results_ES03_newkit-ES12_newkit_filtered`, ES03 pre-sort vs ES12 post-sort) renders to `reports/ES03_newkit-ES12_newkit_report.html`.
 
 Phase-2 polish still open: the per-UMAP crosstalk filter currently overlays selected samples rather than re-faceting them (the side-by-side facet is the default sub-tab); DE/marker drilldown tabs (step 06b CSVs) not yet wired; print-to-PDF stylesheet.
+
+## v2 — from comparison layer to run browser (2026-06-12)
+
+User review of the first build landed four asks. The first three are accepted directions (refinements of the existing layout); the fourth is a genuine architecture shift.
+
+1. **Collapsible side nav** (accepted). Replace the stock `toc_float` with the mockup's hand-built left rail, plus a collapse-to-icon toggle that widens the plot area. Cost: ~40 lines of inline CSS/JS in the self-contained file, and moving off `toc_float`. Worth it — it is the nav the user approved and it is the spine for #4.
+2. **Toggle chips over crosstalk** (accepted). Swap the `filter_select` dropdown for on/off sample chips (the mockup's `.selchip`) that add/remove sample facets from the comparison grid. Slightly more JS than crosstalk, but it is the interaction the user prefers and reads better than a dropdown.
+3. **Richer sample cards** (accepted). Today each card shows cells / % retained / med genes / n types. Add: median UMI, median %MT, doublet %, HVG count, top-type, and a one-line QC verdict. Cards become **clickable** and deep-link to that sample's gallery (the hook for #4).
+4. **Embed the pipeline's static plots** (the real decision). The pipeline already writes ~8 plot families to `Results/results_*/<stage>/` as **PDFs**: per-sample QC (`*_violin_qc`, `*_scatter_qc`, UMI-vs-genes), doublets (`*_doublet_umap`, `*_doublet_score_hist`), annotation (`singler_scores_heatmap`, `canonical_markers_dotplot`, `feature_*`, `celltype_umap`, `contamination_summary`, lineage markers), HVG (under `individual/<sample>/`), and DE marker heatmaps (`differential/`). These do **not** need to be interactive.
+
+### The wedge tension
+
+v1 was deliberately the *thin comparison layer* — the one thing the PDF pile can't do. #4 expands it into a *run browser* that subsumes `Overall_Report.pdf`. That is scope growth, but it is the right kind: a wetlab scientist wants **one** artifact from email, not the HTML plus the PDF stack. Consolidating is the Boil-the-Ocean move — make the single file complete — *provided* we keep it one emailable file.
+
+### Source: reuse, don't recompute
+
+The plots exist on disk as PDFs. The driver rasterizes each needed PDF page to PNG (`pdftoppm`/`magick`) and base64-embeds it. No re-plotting in R, consistent with v1's "assembly + presentation, no new computation." Dependency to confirm at build: a PDF→PNG rasterizer in the env.
+
+### The cost: self-contained file size
+
+Embedding rasterized galleries grows the file. Rough estimate: ~1 MB of PNG per sample gallery + ~2 MB of run-level stage galleries. A 2-sample run goes ~5.8 → ~10 MB; a 10-sample run could reach 30–50 MB, past common 25 MB email caps. So emailability vs completeness is the live tradeoff — handled by an emailable `--lite` mode that keeps the interactive wedge and drops the embedded galleries.
+
+### Navigation taxonomy (both axes)
+
+- **By sample** — click a card on the landing page → that sample's QC + doublet + annotation + HVG panels.
+- **By stage** — left-nav groups (QC, Doublets, Annotation, DE) → the same plot family across all samples, side by side.
+
+### Open forks taken to the user
+
+(1) plot source: reuse PDFs vs regenerate in R; (2) emailability: single file + `--lite` vs two outputs vs split folder; (3) gallery scope: both axes vs one.
+
+### Decisions taken (2026-06-12)
+
+- **Plot source: regenerate natively in R** (not reuse PDFs). Clean plots that match the report theme, with controllable DPI/dimensions so we can keep the HTML small. Caveat to verify per family: some plots need their source object on disk (e.g. a *singleR score heatmap* needs the raw `SingleR` result, which may not be saved in `integrated_annotated.rds`); any family that cannot be reconstructed falls back to reusing its pipeline PDF or is dropped.
+- **File size: single self-contained file + `--lite`** (default = complete browser; `--lite` = interactive wedge only, emailable). Keep raster DPI/size modest.
+- **Nav: both axes** — clickable cards deep-link to a per-sample gallery; left-nav stage groups show a family across all samples.
+- **Plot tiers (user-defined priority):**
+  - *Interactive core:* QC violin; doublets; faceted UMAP with an **unselect-all-cell-types** control; cell proportions with an **unselect-all** control (contamination is derivable from proportions); marker-definition **dot plot**.
+  - *Static good-to-have (raster, `--lite` drops them):* singleR heatmap, top-DE marker heatmap, feature/marker expression plots, HVG, contamination, QC scatter (UMI vs genes).
+
+### Build order
+
+1. Collapsible custom left nav (off `toc_float`) + richer **clickable** sample cards.
+2. Sample-comparison toggle chips + unselect-all on UMAP and proportions.
+3. Interactive marker dot plot.
+4. Static galleries (regenerated, raster-embedded), wired both by-sample and by-stage.
+5. `--lite` flag + size budget.
+
+
+## v2 implemented (2026-06-12)
+
+Both passes built and verified on `results_H1-H2_filtered` and the hero `results_ES03_newkit-ES12_newkit_filtered` (0 chunk errors each).
+
+**Pass 1 (interactive/layout):** collapsible nav rail (`☰` widens the plot area); sample selector is now on/off chips (crosstalk `filter_checkbox`); `Show all / Hide all` cell-type controls on both UMAP views and the proportions bars (plotly `updatemenus`); richer **clickable** sample cards (cells, % retained, med genes, med UMI, % MT, % ribo, % doublets, HVG, n types, top type) that deep-link to the per-sample section; new interactive **marker dot plot** computed off the object.
+
+**Pass 2 (static galleries, regenerated in R, `--lite` drops them):**
+- *By sample* (card click → `#sample-<slug>`): QC scatter (UMI vs genes), doublet-score UMAP, HVG mean-variance.
+- *By stage* (left-nav entries): marker feature plots, top-DE marker heatmap, contamination (MT / ribo by type), and the singleR-confidence substitute — **singleR delta** per type + **singleR-vs-final** label agreement (raw SingleR scores aren't saved, so no original score heatmap).
+- Driver gains `library(ggplot2)`, a `--lite` flag, and a gallery generator (PNG via `ggsave` → `knitr::image_uri`, modest DPI to bound size). Bundle carries `galleries` + `lite`.
+
+File size: full ~6.7 MB (2-sample H1-H2) / ~7.9 MB (hero); `--lite` ~6.1 MB. HVG prefers `_seurat.rds` (where `FindVariableFeatures` ran), falling back across the per-sample objects.
