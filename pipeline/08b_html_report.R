@@ -48,8 +48,16 @@ want_samples <- getflag("samples", NULL)
 if (!is.null(want_samples)) want_samples <- trimws(strsplit(want_samples, ",")[[1]])
 lite <- "--lite" %in% flags
 
+# Long run names (every sample dash-joined) make a >300-char path that Windows
+# cannot open over a share (MAX_PATH = 260). Shorten the default report filename to
+# <firstSample>_<N>samples when the run name is long; an explicit output path wins.
+short_report_name <- function(name) {
+  if (nchar(name) <= 64) return(name)
+  toks <- strsplit(name, "-", fixed = TRUE)[[1]]
+  paste0(gsub("[^A-Za-z0-9]", "", toks[1]), "_", length(toks), "samples")
+}
 out_html <- if (length(pos) >= 2) pos[2] else
-  file.path(run_dir, "reports", paste0(run_name, "_report.html"))
+  file.path(run_dir, "reports", paste0(short_report_name(run_name), "_report.html"))
 dir.create(dirname(out_html), showWarnings = FALSE, recursive = TRUE)
 
 msg <- function(...) cat(sprintf("[08b %s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
@@ -111,7 +119,41 @@ if (is.finite(max_cells) && max_cells > 0) {
     if (length(idx) > max_cells) sample(idx, max_cells) else idx), use.names = FALSE)
   cells_plot <- cells[sort(keep), , drop = FALSE]
 } else cells_plot <- cells
+# round coords/QC so the interactive plotly widgets are not bloated by 17-digit floats
+cells_plot$UMAP_1 <- round(cells_plot$UMAP_1, 3)
+cells_plot$UMAP_2 <- round(cells_plot$UMAP_2, 3)
+for (cc in c("nFeature_RNA","nCount_RNA","percent.mt","doublet_score"))
+  if (cc %in% names(cells_plot)) cells_plot[[cc]] <- round(cells_plot[[cc]], 3)
 msg("plotting frame: %d cells (cap %d/sample)", nrow(cells_plot), max_cells)
+
+# shared palette (mirrors the template) for any PNGs we pre-render here
+PAL_base <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
+              "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
+ctlev <- sort(unique(cells_plot$cell_type))
+PAL   <- setNames(rep(PAL_base, length.out = length(ctlev)), ctlev)
+to_uri <- function(g, w, h, dpi = 72) {
+  tf <- tempfile(fileext = ".png")
+  ggplot2::ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
+  on.exit(unlink(tf), add = TRUE); knitr::image_uri(tf)
+}
+
+# Past ~8 samples, 14+ live WebGL UMAP widgets blow up the file (16 MB of JSON) and
+# exceed the browser's WebGL-context limit, so the report won't open. For large runs
+# render the per-sample UMAP panels as light static PNGs instead.
+umap_static <- length(samples_all) > 8
+umap_panels <- NULL
+if (umap_static) {
+  umap_panels <- lapply(samples_all, function(s) {
+    dd <- cells_plot[cells_plot$sample == s, , drop = FALSE]
+    g <- ggplot(dd, aes(UMAP_1, UMAP_2, color = cell_type)) +
+      geom_point(size = 0.25, alpha = 0.7, stroke = 0) +
+      scale_color_manual(values = PAL, guide = "none") +
+      theme_void(base_size = 9)
+    to_uri(g, w = 3.1, h = 2.9)
+  })
+  names(umap_panels) <- samples_all
+  msg("static UMAP panels: %d (n_samples > 8)", length(umap_panels))
+}
 
 # ---- proportions from the FULL data (not downsampled) ----
 tab <- table(cells$cell_type, cells$sample)
@@ -260,8 +302,9 @@ if (!lite) {
   stage <- list()
   fmark <- intersect(c("CD3D","MS4A1","NKG7","CD14","LYZ","FCER1A","PPBP","GNLY"), rownames(obj))
   if (length(fmark)) stage[["Marker feature plots"]] <- tryCatch(
-    mk_uri(Seurat::FeaturePlot(obj, features = fmark, reduction = umap_name, order = TRUE),
-           w = 9, h = 2.7 * ceiling(length(fmark) / 3)), error = function(e) NULL)
+    mk_uri(Seurat::FeaturePlot(obj, features = fmark, reduction = umap_name, order = FALSE,
+                               raster = TRUE, raster.dpi = c(200, 200)),
+           w = 9, h = 2.7 * ceiling(length(fmark) / 3), dpi = 72), error = function(e) NULL)
   if (!is.null(de)) stage[["Top DE marker heatmap"]] <- tryCatch({
     top <- do.call(rbind, lapply(split(de, de$cell_type),
               function(d) utils::head(d[order(-d$avg_log2FC), ], 5)))
@@ -316,7 +359,8 @@ bundle <- list(
   cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide,
   delta = delta, summary = summary, umap_name = umap_name, de = de,
   markers_dot = markers_dot,
-  galleries = galleries, lite = lite
+  galleries = galleries, lite = lite,
+  umap_static = umap_static, umap_panels = umap_panels
 )
 bpath <- file.path(tempdir(), paste0("report_bundle_", Sys.getpid(), ".rds"))
 saveRDS(bundle, bpath)

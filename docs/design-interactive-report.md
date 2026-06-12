@@ -163,3 +163,10 @@ Both passes built and verified on `results_H1-H2_filtered` and the hero `results
 - Driver gains `library(ggplot2)`, a `--lite` flag, and a gallery generator (PNG via `ggsave` → `knitr::image_uri`, modest DPI to bound size). Bundle carries `galleries` + `lite`.
 
 File size: full ~6.7 MB (2-sample H1-H2) / ~7.9 MB (hero); `--lite` ~6.1 MB. HVG prefers `_seurat.rds` (where `FindVariableFeatures` ran), falling back across the per-sample objects.
+
+## At-scale hardening (2026-06-12)
+
+Validated on a 14-sample run (`results_Aksh1-…-ES459_500umi_filtered`, 112k cells). Two real blockers surfaced and were fixed; both kick in automatically — small runs stay fully interactive.
+
+- **File would not open (weight).** 14 live WebGL UMAP widgets (~16 MB of JSON) plus a single 5.7 MB QC-violin widget (ggplotly serialises ~1,000-point density polygons per sample×metric trace) put the file at 21.9 MB with 14 simultaneous WebGL contexts. Fixes, gated on `> 8 samples`: per-sample UMAP grid → light **static PNG panels** (chips still show/hide; one static colour key); QC + doublet violins → **static PNGs**; FeaturePlot rasterised (`raster = TRUE`); UMAP coords rounded to 3 dp. Result: **21.9 → 9.3 MB full / 4.9 MB `--lite`**, heaviest line now just the plotly.js library.
+- **File would not open (path length).** The run-dir name is ~130 chars, so the report path hit **319 chars** — past Windows' 260 `MAX_PATH` over a Samba share, so Chrome refused it. Driver now shortens the default report filename to `<firstSample>_<N>samples_report.html` when the run name exceeds 64 chars (explicit output path still wins), bringing the path well under the limit.

@@ -20,6 +20,14 @@ suppressWarnings(suppressMessages({
 }))
 B <- readRDS(params$bundle)
 cells <- B$cells
+# violins only need enough points for the shape; downsample so ggplotly does not
+# serialize ~80k cells per widget (that ballooned the file on many-sample runs)
+vcells <- {
+  set.seed(1)
+  idx <- unlist(lapply(split(seq_len(nrow(cells)), cells$sample),
+                       function(ix) if (length(ix) > 600) sample(ix, 600) else ix), use.names = FALSE)
+  cells[sort(idx), , drop = FALSE]
+}
 PAL <- {
   cts <- sort(unique(cells$cell_type))
   base <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
@@ -27,6 +35,15 @@ PAL <- {
   setNames(rep(base, length.out = length(cts)), cts)
 }
 n_samp   <- length(B$samples)
+# On many-sample runs the live ggplotly violins serialize ~1000-point density
+# polygons per (sample x metric) trace (42 traces => ~5 MB), which is what blocked
+# the file from opening. For those runs render the violins as static PNGs instead.
+STATIC <- isTRUE(B$umap_static) && !is.null(B$umap_panels)
+to_uri <- function(g, w, h, dpi = 72) {
+  tf <- tempfile(fileext = ".png")
+  ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
+  knitr::image_uri(tf)
+}
 fac_ncol <- min(3, n_samp)
 fac_nrow <- ceiling(n_samp / fac_ncol)
 fig_h    <- max(420, 380 * fac_nrow)
@@ -77,6 +94,7 @@ body.nav-collapsed .main-container{margin-left:auto !important;margin-right:auto
 
 h1{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-top:30px}
 h2{font-size:15px;border:0;margin-top:16px}
+h1:empty{display:none}  /* the hidden tab-closing header after the galleries */
 
 /* sample cards: compact, label/value stat rows (mockup style) */
 .cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px;
@@ -129,7 +147,10 @@ small{color:var(--muted)}
 .legitem{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12.5px;cursor:pointer;color:var(--ink)}
 .legitem:hover{color:var(--accent)}
 .legitem.off{opacity:.38}
+.legitem.static{cursor:default}
+.legitem.static:hover{color:var(--ink)}
 .legsw{width:12px;height:12px;border-radius:3px;flex:none}
+.muted-note{color:var(--muted);font-size:12.5px;margin:0 0 12px;max-width:760px}
 
 /* clickable sample cards (deep-link into the per-sample gallery) */
 .scardlink{text-decoration:none;color:inherit;display:block}
@@ -215,54 +236,49 @@ integrated coordinate space, so a depleted population shows up as the same hole 
 ## UMAP
 
 ```{r umap_grid}
-slugv <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
-cts   <- sort(unique(cells$cell_type))
-mk_umap <- function(s) {
-  dd <- cells[cells$sample == s, , drop = FALSE]
-  plot_ly(dd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
-          type = "scattergl", mode = "markers",
-          marker = list(size = 4, opacity = 0.75),
-          text = ~cell_type, hoverinfo = "text", showlegend = FALSE, height = 290) |>
-    layout(xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
-           margin = list(l = 2, r = 2, t = 2, b = 2)) |>
-    toWebGL()
+slugv  <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+cts    <- sort(unique(cells$cell_type))
+static <- isTRUE(B$umap_static) && !is.null(B$umap_panels)
+
+if (static) {
+  # many-sample runs: light static PNG panels (no 14x WebGL contexts / 16 MB of JSON)
+  panels <- lapply(B$samples, function(s)
+    htmltools::div(class = "umapcell", id = paste0("umapwrap-", slugv(s)),
+      htmltools::div(class = "umaptitle", s),
+      htmltools::tags$img(src = B$umap_panels[[s]], style = "width:100%;display:block;border-radius:6px")))
+} else {
+  mk_umap <- function(s) {
+    dd <- cells[cells$sample == s, , drop = FALSE]
+    plot_ly(dd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
+            type = "scattergl", mode = "markers",
+            marker = list(size = 4, opacity = 0.75),
+            text = ~cell_type, hoverinfo = "text", showlegend = FALSE, height = 290) |>
+      layout(xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
+             margin = list(l = 2, r = 2, t = 2, b = 2)) |>
+      toWebGL()
+  }
+  panels <- lapply(B$samples, function(s)
+    htmltools::div(class = "umapcell", id = paste0("umapwrap-", slugv(s)),
+                   htmltools::div(class = "umaptitle", s), mk_umap(s)))
 }
-panels <- lapply(B$samples, function(s)
-  htmltools::div(class = "umapcell", id = paste0("umapwrap-", slugv(s)),
-                 htmltools::div(class = "umaptitle", s), mk_umap(s)))
 chips <- lapply(B$samples, function(s)
   htmltools::tags$button(class = "selchip on", `data-sample` = slugv(s), s))
 legitems <- lapply(cts, function(ct)
-  htmltools::tags$div(class = "legitem", `data-ct` = ct,
+  htmltools::tags$div(class = if (static) "legitem static" else "legitem", `data-ct` = ct,
     htmltools::tags$span(class = "legsw", style = sprintf("background:%s", PAL[[ct]])),
     htmltools::tags$span(ct)))
-js <- "
-(function(){
-  document.querySelectorAll('.selrow .selchip').forEach(function(b){
-    b.addEventListener('click', function(){
-      var on=b.classList.toggle('on');
-      var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));
-      if(w) w.style.display = on ? '' : 'none';
-    });
-  });
-  document.querySelectorAll('.shlegend .legitem').forEach(function(it){
-    it.addEventListener('click', function(){
-      var off=it.classList.toggle('off'), name=it.getAttribute('data-ct');
-      document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){
-        if(!gd.data) return; var idx=[];
-        gd.data.forEach(function(t,i){ if(t.name===name) idx.push(i); });
-        if(idx.length && window.Plotly) Plotly.restyle(gd, {visible: off?'legendonly':true}, idx);
-      });
-    });
-  });
-})();"
+js_chip <- "document.querySelectorAll('.selrow .selchip').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w) w.style.display=on?'':'none';});});"
+js_leg  <- if (static) "" else "document.querySelectorAll('.shlegend .legitem').forEach(function(it){it.addEventListener('click',function(){var off=it.classList.toggle('off'),name=it.getAttribute('data-ct');document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){if(!gd.data) return;var idx=[];gd.data.forEach(function(t,i){if(t.name===name) idx.push(i);});if(idx.length&&window.Plotly) Plotly.restyle(gd,{visible:off?'legendonly':true},idx);});});});"
+note <- if (static) htmltools::tags$p(class = "muted-note",
+  sprintf("%d samples: panels are high-resolution static snapshots (live zoom + legend toggle kick in automatically for runs of 8 samples or fewer). Use the chips to show or hide samples.", length(B$samples))) else NULL
 htmltools::browsable(htmltools::tagList(
   htmltools::div(class = "selrow", htmltools::tags$span(class = "sellabel", "Samples"), chips),
+  note,
   htmltools::div(class = "umapwrap",
     htmltools::div(class = "umapgrid", panels),
     htmltools::div(class = "shlegend",
       htmltools::div(class = "lgtitle", "Cell type"), legitems)),
-  htmltools::tags$script(htmltools::HTML(js))
+  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s})();", js_chip, js_leg)))
 ))
 ```
 
@@ -273,16 +289,16 @@ across every UMAP at once (e.g. isolate CD14+ Mono pre vs post to read the sort)
 
 ```{r qc_violin}
 long <- do.call(rbind, lapply(c("nFeature_RNA","nCount_RNA","percent.mt"), function(m)
-  data.frame(sample = cells$sample, metric = m, value = cells[[m]])))
+  data.frame(sample = vcells$sample, metric = m, value = vcells[[m]])))
 long$metric <- factor(long$metric, levels = c("nFeature_RNA","nCount_RNA","percent.mt"),
                       labels = c("Genes / cell","UMIs / cell","% mito"))
 gv <- ggplot(long, aes(sample, value, fill = sample)) +
-  geom_violin(scale = "width", linewidth = 0.2) +
+  geom_violin(scale = "width", linewidth = 0.2, n = 64) +
   facet_wrap(~ metric, scales = "free_y", ncol = 3) +
   theme_minimal(base_size = 11) +
   theme(axis.text.x = element_text(angle = 30, hjust = 1), legend.position = "none",
         axis.title = element_blank(), strip.text = element_text(face = "bold"))
-ggplotly(gv, height = 430)
+if (STATIC) htmltools::tags$img(src = to_uri(gv, w = 9, h = 4.4), style = "width:100%") else ggplotly(gv, height = 430)
 ```
 
 ## Doublets
@@ -291,12 +307,12 @@ ggplotly(gv, height = 430)
 if (all(is.na(cells$doublet_score))) {
   cat("Doublet scores are not stored in this object; see the per-sample doublet PDFs.")
 } else {
-  gd <- ggplot(cells, aes(sample, doublet_score, fill = sample)) +
-    geom_violin(scale = "width", linewidth = 0.2) +
+  gd <- ggplot(vcells, aes(sample, doublet_score, fill = sample)) +
+    geom_violin(scale = "width", linewidth = 0.2, n = 64) +
     theme_minimal(base_size = 11) +
     theme(legend.position = "none", axis.title.x = element_blank()) +
     labs(y = "scDblFinder score")
-  ggplotly(gd, height = 390)
+  if (STATIC) htmltools::tags$img(src = to_uri(gd, w = 9, h = 4), style = "width:100%") else ggplotly(gd, height = 390)
 }
 ```
 
@@ -373,39 +389,37 @@ if (is.null(B$delta)) {
 }
 ```
 
----
-<small>Generated by `pipeline/08b_html_report.R` (R Markdown + plotly). Re-render any run with
-`bash pipeline/build_report.sh <run_dir>`.</small>
-
 ```{r galleries, results='asis'}
-if (isTRUE(B$lite) || is.null(B$galleries)) {
-  invisible(NULL)
-} else {
+# Emit real markdown headers (not raw <h1>/<h2>) so pandoc CLOSES the proportions
+# {.tabset} above. Raw HTML headers left the galleries trapped inside the last (hidden)
+# tab-pane, so anchor links to them could not scroll. {#id} sets the nav/card targets.
+if (!isTRUE(B$lite) && !is.null(B$galleries)) {
   G <- B$galleries
   slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
-  fig <- function(uri, cap=NULL) {
+  emit_fig <- function(uri, cap = NULL) {
     fc <- if (is.null(cap)) "" else sprintf('<figcaption>%s</figcaption>', htmltools::htmlEscape(cap))
-    sprintf('<figure class="galfig">%s<img src="%s"></figure>', fc, uri)
+    cat(sprintf('\n<figure class="galfig">%s<img src="%s"></figure>\n', fc, uri))
   }
-  out <- character(0)
   if (length(G$stage)) {
-    out <- c(out, '<h1 id="galleries">Stage galleries</h1>',
-      '<p>Regenerated from the saved objects. The SingleR panels stand in for the raw score heatmap, which the pipeline does not keep in the object.</p>')
-    for (t in names(G$stage))
-      out <- c(out, sprintf('<h2 id="stage-%s">%s</h2>', slug(t), htmltools::htmlEscape(t)), fig(G$stage[[t]]))
+    cat('\n# Stage galleries {#galleries}\n\n')
+    cat('Regenerated from the saved objects. The SingleR panels stand in for the raw score heatmap (the pipeline does not keep the score matrix in the object).\n')
+    for (t in names(G$stage)) { cat(sprintf('\n## %s {#stage-%s}\n\n', t, slug(t))); emit_fig(G$stage[[t]]) }
   }
   if (length(G$by_sample)) {
-    out <- c(out, '<h1 id="per-sample">Per-sample detail</h1>',
-      '<p>Click a sample card on the Overview to jump straight here.</p>')
+    cat('\n# Per-sample detail {#per-sample}\n\n')
+    cat('Each panel is regenerated from the saved objects. Use the Overview cards to jump here.\n')
     for (s in names(G$by_sample)) {
-      out <- c(out, sprintf('<h2 id="sample-%s">%s</h2>', slug(s), htmltools::htmlEscape(s)))
-      imgs <- G$by_sample[[s]]
-      for (t in names(imgs)) out <- c(out, fig(imgs[[t]], t))
+      cat(sprintf('\n## %s {#sample-%s}\n\n', s, slug(s)))
+      imgs <- G$by_sample[[s]]; for (t in names(imgs)) emit_fig(imgs[[t]], t)
     }
   }
-  cat(paste(out, collapse="\n"))
 }
 ```
+
+# {.unlisted .unnumbered}
+
+<small>Generated by `pipeline/08b_html_report.R` (R Markdown + plotly). Re-render any run with
+`bash pipeline/build_report.sh <run_dir>`.</small>
 
 ```{r scrollspy, results='asis'}
 cat('<script>
