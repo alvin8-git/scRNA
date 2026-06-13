@@ -52,11 +52,12 @@ conda activate scrna_seurat
 **3. Run the pipeline on the example data.**
 
 ```bash
-bash pipeline/run_pipeline.sh H1 H2
+bash pipeline/run_pipeline.sh Samples/H1 Samples/H2
 ```
 
-Two samples turns on Harmony integration automatically. The interactive HTML report is built
-at the end, after the PDFs.
+`Samples/H1` and `Samples/H2` are human PBMC matrices committed with the repo. Passing two
+samples turns on Harmony integration automatically. The interactive HTML report is built at the
+end, after the PDFs.
 
 **4. Open the report.** It lands here (default two-sample run name):
 
@@ -101,6 +102,27 @@ bash pipeline/run_pipeline.sh condition="ADay0=healthy,BDay1=recovering" /path/t
 
 Output is the same shape as the example: a run directory under `Results/` with the HTML report
 in its `reports/` subfolder.
+
+---
+
+## Species and tissue
+
+The same pipeline runs human PBMC, human whole blood, and bat whole blood. The species keyword
+swaps the SingleR reference, the marker panels, the clustering resolution, and the expected
+contamination list, so the HTML report is annotated correctly for the tissue.
+
+| Input | Command | SingleR reference | Clustering | Notes |
+|-------|---------|-------------------|------------|-------|
+| Human PBMC (default) | `run_pipeline.sh /path/A /path/B` | `HumanPrimaryCellAtlas` (broad) | `0.3–0.8`, default 0.5 | Canonical PBMC marker panel |
+| Human whole blood | same, with `SINGLER_REF <- "MonacoImmune"` in `config.R` | `MonacoImmune` (blood-optimised) | `0.3–0.8` | Resolves CD4 / CD8 / γδ T; treat RBC + neutrophils as expected |
+| Bat whole blood | `run_pipeline.sh bat /path/A /path/B` | `MonacoImmune` | `0.3–1.0` | `config_species_bat.R` overrides: γδ T, bat-validated markers, RBC + neutrophil contamination |
+| Bat wing tissue | `run_pipeline.sh bat_wing /path/A /path/B` | broad atlas | `0.3–0.8` | Adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory); no blood-contamination types |
+
+The `bat` and `bat_wing` keywords source `pipeline/config_species_bat.R` after the human base
+config, mutating `MARKERS`, `QC`, `SINGLER_REF`, and `CLUSTER` in place. Human whole blood has
+no keyword; set `SINGLER_REF <- "MonacoImmune"` in `config.R` if you want blood-optimised
+annotation over the broad PBMC default. Either way the report layout, panels, and interactivity
+are identical; only the labels and palette change.
 
 ---
 
