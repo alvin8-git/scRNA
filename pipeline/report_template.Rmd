@@ -169,6 +169,10 @@ small{color:var(--muted)}
 .galfig{margin:10px 0 20px}
 .galfig figcaption{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:5px}
 .galfig img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+/* per-sample detail figures: force one uniform width (= the marker/container width) so the
+   gallery is tidy; sources are rendered wide enough that this never upscales (height:auto
+   keeps each plot's own proportions) */
+#per-sample .galfig img{width:100%}
 ```
 
 ```{r shell, results='asis'}

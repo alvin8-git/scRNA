@@ -299,6 +299,10 @@ if (file.exists(de_path)) {
 galleries <- NULL
 if (!lite) {
   msg("building static galleries (pass --lite to skip) ...")
+  # uniform render target for every per-sample figure: ~1100 px wide so they display at one
+  # tidy width (the report CSS stretches them to the marker/container width) without upscaling.
+  GAL_W   <- 7.3    # inches
+  GAL_DPI <- 150
   mk_uri <- function(g, w = 7, h = 4.4, dpi = 96) {
     tf <- tempfile(fileext = ".png")
     ggplot2::ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
@@ -347,7 +351,7 @@ if (!lite) {
         scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .03))) +
         theme_classic(base_size = 11) +
         labs(x = "UMIs / cell", y = "genes / cell", title = paste(s, "- UMIs vs genes")),
-      w = 6.2, h = 4.4), error = function(e) NULL)
+      w = GAL_W, h = GAL_W * 0.71, dpi = GAL_DPI), error = function(e) NULL)
     # QC: UMIs vs % MT — axes from 0, dashed %MT threshold
     imgs[["QC: UMIs vs % MT"]] <- tryCatch(mk_uri(
       ggplot(cs, aes(nCount_RNA, percent.mt)) +
@@ -357,15 +361,17 @@ if (!lite) {
         scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .03))) +
         theme_classic(base_size = 11) +
         labs(x = "UMIs / cell", y = "% MT", title = paste(s, "- UMIs vs % MT")),
-      w = 6.2, h = 4.4), error = function(e) NULL)
+      w = GAL_W, h = GAL_W * 0.71, dpi = GAL_DPI), error = function(e) NULL)
     # Doublets — rasterise the step-02 PDFs (the integrated object has doublets ALREADY
     # removed, so recomputing here gives 0/sample; 02_doublets.R drew these pre-removal
     # with the true counts). Samples served from sample_cache/ were not re-run here, so
     # their PDFs live in the run that first processed them — fall back across Results/*.
+    # 02_doublets.R saves these at 7x6 in (umap) and 6x4 in (hist); pick a dpi that yields
+    # the same target pixel width as the ggplot panels so every per-sample figure matches.
     dbl_umap <- find_dbl_pdf(s, "umap")
-    if (!is.na(dbl_umap)) imgs[["Doublets (UMAP)"]] <- rasterize_pdf(dbl_umap, dpi = 120)
+    if (!is.na(dbl_umap)) imgs[["Doublets (UMAP)"]] <- rasterize_pdf(dbl_umap, dpi = round(GAL_W * GAL_DPI / 7))
     dbl_hist <- find_dbl_pdf(s, "score_hist")
-    if (!is.na(dbl_hist)) imgs[["Doublet score distribution"]] <- rasterize_pdf(dbl_hist, dpi = 120)
+    if (!is.na(dbl_hist)) imgs[["Doublet score distribution"]] <- rasterize_pdf(dbl_hist, dpi = round(GAL_W * GAL_DPI / 6))
     # HVG — VariableFeaturePlot + the top-10 labelled dots (03_individual.R)
     hf <- list.files(file.path(run_dir, "individual"),
                      pattern = paste0("^", s, "_(seurat|filtered|singlets)\\.rds$"),
@@ -377,7 +383,8 @@ if (!lite) {
         top10 <- utils::head(Seurat::VariableFeatures(so), 10)
         ph <- Seurat::VariableFeaturePlot(so)
         ph <- Seurat::LabelPoints(plot = ph, points = top10, repel = TRUE, xnudge = 0, ynudge = 0)
-        mk_uri(ph + labs(title = paste(s, "- Variable genes (top 10 labelled)")), w = 6.6, h = 4.6)
+        mk_uri(ph + labs(title = paste(s, "- Variable genes (top 10 labelled)")),
+               w = GAL_W, h = GAL_W * 0.70, dpi = GAL_DPI)
       }, error = function(e) NULL)
       if (!is.null(img)) { imgs[["Highly variable genes"]] <- img; break }
     }
