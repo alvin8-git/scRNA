@@ -42,6 +42,34 @@ n_samp   <- length(B$samples)
 # Past 8 samples the UMAP comparison panels are pre-rendered static snapshots (built
 # in the driver), so live zoom and legend-toggling do not apply; the intro text adapts.
 STATIC <- isTRUE(B$umap_static) && !is.null(B$umap_panels)
+
+# Redundant, colour-independent encoding for the stacked composition / cell-number bars so
+# cell types are not told apart by colour alone (colour-blind- and greyscale-print-safe):
+#   - a hatch pattern per cell type, cycling so adjacent stacked segments differ in texture
+#   - the cell-type name printed inside each segment, auto-hidden by uniformtext when the
+#     segment is too small to fit it (dominant populations get named without needing hover)
+# Hover still carries the exact value. Applied after plotly_build so the colour= split into
+# one-trace-per-type is already resolved.
+CT_PATTERNS <- c("", "/", "\\", "x", "-", "|", "+", ".")
+style_ct_bars <- function(p) {
+  b <- plotly::plotly_build(p)
+  b$x$layout$uniformtext <- list(minsize = 8, mode = "hide")
+  k <- 0
+  for (i in seq_along(b$x$data)) {
+    tr <- b$x$data[[i]]
+    if (is.null(tr$type) || tr$type != "bar") next
+    b$x$data[[i]]$marker$pattern <- list(
+      shape = CT_PATTERNS[(k %% length(CT_PATTERNS)) + 1],
+      fillmode = "overlay", size = 7, solidity = 0.28, fgcolor = "rgba(0,0,0,0.32)")
+    b$x$data[[i]]$textposition     <- "inside"
+    b$x$data[[i]]$insidetextanchor <- "middle"
+    b$x$data[[i]]$texttemplate     <- tr$name   # constant per trace = the cell-type label
+    b$x$data[[i]]$textfont         <- list(size = 11)
+    b$x$data[[i]]$cliponaxis       <- FALSE
+    k <- k + 1
+  }
+  b
+}
 ```
 
 ```{css, echo=FALSE}
@@ -464,10 +492,12 @@ pb <- plot_ly(pl, x = ~sample, y = ~pct, color = ~cell_type, colors = PAL,
            buttons = list(
              list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
              list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
-pb
+style_ct_bars(pb)
 ```
 
-Click a cell type in the legend to drop it from the bars (or **Hide all**, then click one back on).
+Each segment is labelled with its cell type where it is large enough to fit (and textured per type, so
+the bars read without relying on colour); hover any segment for the exact value. Click a cell type in
+the legend to drop it from the bars (or **Hide all**, then click one back on).
 The myeloid fraction here doubles as a contamination read: a high CD14+ Mono / granulocyte share in a
 lymphocyte-sorted sample flags carry-over.
 
@@ -488,7 +518,7 @@ if (is.null(cl) || !nrow(cl)) {
              buttons = list(
                list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
                list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
-  cb
+  style_ct_bars(cb)
 }
 ```
 
