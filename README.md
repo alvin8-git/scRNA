@@ -1,412 +1,274 @@
+![scRNA-seq Seurat pipeline — interactive HTML run report](github_banner_collage.png)
+
 # scRNA-seq Seurat Pipeline
 
-[![R](https://img.shields.io/badge/R-4.3.3-276DC3?logo=r)](https://www.r-project.org/)
-[![Seurat](https://img.shields.io/badge/Seurat-v5.1.0-blue)](https://satijalab.org/seurat/)
-[![Harmony](https://img.shields.io/badge/Harmony-batch_correction-green)](https://github.com/immunogenomics/harmony)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+A multi-sample single-cell RNA-seq pipeline built on Seurat v5 and Harmony. It takes count
+matrices from MGI's DNBelab C Series (C4) software (or 10x CellRanger) from raw barcodes to an
+annotated, integrated atlas, and compiles the whole run into **one self-contained, emailable
+HTML report** that a wet-lab scientist can open with a double-click and explore without R, a
+server, or an internet connection.
 
-A modular, end-to-end single-cell RNA-seq analysis pipeline built on **Seurat v5**. Supports single-sample and multi-sample (Harmony-integrated) workflows with automated cell type annotation, publication-quality figures, and combined PDF reports.
+The HTML report is the headline deliverable. Everything upstream exists to fill it:
 
-Developed for human PBMC data from the **DNB C4** sequencing platform but adaptable to any species or tissue type.
+- **Per-sample UMAP panel grid** — one interactive panel per sample on a shared coordinate
+  space. Show or hide samples with chips, expand a single sample to full width, and hover any
+  cell for its type. For runs of 8 samples or fewer the panels are live (zoom, pan, legend
+  toggle); past 8 they fall back to high-resolution static snapshots so the file still opens.
+- **Cell-type proportion tracking** — stacked composition (% of sample) and absolute
+  cell-number bars, with in-bar labels, per-type hatch patterns (so the bars read without
+  relying on colour), legend toggling, and hover values.
+- **Marker dot plot, QC and doublet violins, and per-sample / per-stage galleries** — the
+  evidence behind every annotation, one click away in the left nav.
 
----
+A finished example lives at
+`Results/results_Aksh1-ES03-ES14-ES258-ES332-ES35-ES407-ES459_filtered/reports/`
+(`results_Aksh1_8samples_report.html`).
 
-## Features
-
-- **Automatic sample detection** — pass one or more sample folder paths; multi-sample runs trigger Harmony batch correction automatically
-- **Modular pipeline** — core steps 01–10 (plus 06b differential expression); each saves intermediate `.rds` objects so you can re-run from any point. Every step resolves `config.R` relative to its own location, so individual steps run standalone via `Rscript`, not only through the wrapper
-- **Per-sample RDS cache** — steps 01–03 write results to `sample_cache/<name>/`; subsequent runs with the same sample in a different integration combination skip reprocessing automatically
-- **Config pre-flight validation** — `pipeline/validate_config.R` runs before any step; errors out on `CLUSTER_CELLTYPE_MAP` colour/key problems, and *warns* (not errors, unless `--strict-paths`) on missing `SAMPLE_PATHS` so an unmounted NAS doesn't block config-only validation — catches config mistakes before wasting 30 minutes of compute
-- **Two-phase parallelism** — RAM-governed worker pools: more workers (8 GB each) for the per-sample phase (01–03), fewer (16 GB each) for the merged-object phase (04–06b); `future` multicore for Seurat steps, `BiocParallel` for scDblFinder/SingleR; OMP/BLAS/MKL pinned to 1 thread per worker to prevent CPU thrashing
-- **Automated cell type annotation** — SingleR majority vote per cluster + scType marker-based scoring (no reference bias, gene-frequency weighted); suggested `CLUSTER_CELLTYPE_MAP` printed to log; partial manual overrides with automatic SingleR fallback for unmapped clusters
-- **Contamination cell type detection** — rare/contaminating populations (Neutrophil, RBC, HSPC, Platelet, Basophil, Eosinophil, Mast cell) override cluster majority-vote labels via per-cell SingleR labels so they always appear on UMAP regardless of how many cells are in the cluster
-- **Extended label normalisation** — 30-entry `SINGLER_NORM` maps all raw HumanPrimaryCellAtlasData labels (including granulocyte/erythroid lineages) to canonical pipeline names
-- **Differential expression** — step 06b runs `FindMarkers` per cell type between samples; volcano plots, DE tables, and inflammatory/interferon/T-activation module score plots saved automatically (multi-sample only)
-- **Combined PDF reports** — five numbered reports (`01-QC_report.pdf` … `05-Integrated_report.pdf`) plus an A4-normalised `Overall_report.pdf` (curated cross-stage summary); split-by-sample UMAP paginated at 2 panels per page with a shared cell-type legend
-- **Comparison report** — step 08 (`08_comparison_report.R`) generates a standalone `Comparison_report.pdf` addressing sample quality, doublet rates, composition, integration, and DE in one document
-- **Dynamic results directory** — named after input samples (e.g. `results_H1andH2/`)
-
----
-
-## Documentation
-
-| Document | Type | Description |
-|----------|------|-------------|
-| [Getting Started Tutorial](docs/tutorial-first-run.md) | Tutorial | Install, run, annotate — from raw matrices to a full report |
-| [How to Re-run from a Specific Step](docs/howto-rerun-steps.md) | How-to | Restart the pipeline from step 03, 05, or 07 without reprocessing |
-| [How to Override Cell Type Annotations](docs/howto-override-annotations.md) | How-to | Fill and correct `CLUSTER_CELLTYPE_MAP` after first run |
-| [How to Run on Bat Whole Blood](docs/howto-bat-whole-blood.md) | How-to | Bat-specific overrides, expected proportions, common mislabellings |
-| [How to Add or Replace a Sample](docs/howto-add-sample.md) | How-to | Add a new sample to an existing cohort using the sample cache |
-| [Configuration Reference](docs/reference-config.md) | Reference | Every `config.R` parameter with type, default, and guidance |
-| [Pipeline Steps Reference](docs/reference-pipeline-steps.md) | Reference | Inputs, outputs, and config keys for each core step (01–10, 06b); bat-wing steps 11–14 live under `pipeline/projects/bat_wing/` |
-| [Output Files Reference](docs/reference-outputs.md) | Reference | Full directory layout and key file descriptions |
-| [Pipeline Architecture](docs/explanation-architecture.md) | Explanation | Why the modular design, sample cache, and Harmony were chosen |
-| [Annotation Strategy](docs/explanation-annotation.md) | Explanation | How SingleR, contamination overrides, and sub-type refinement interact |
+Deeper docs: [DOCUMENTATION.md](DOCUMENTATION.md) (architecture and config reference) and
+[ReportGuide.md](ReportGuide.md) (how to read every panel in the HTML report).
 
 ---
 
-## Pipeline Steps
+## Quick start (the 10-minute route)
 
-| Step | Script | Description |
-|------|--------|-------------|
-| 00 | `validate_config.R` | Pre-flight config validator — exits with error before step 01 if config is broken |
-| 01 | `01_load_qc.R` | Load 10x matrices, compute QC metrics, filter low-quality cells |
-| 02 | `02_doublets.R` | Doublet detection with scDblFinder |
-| 03 | `03_individual.R` | Per-sample: normalize, HVG, PCA, UMAP, cluster, markers |
-| 04 | `04_integrate.R` | Merge samples + Harmony batch correction (or single-sample UMAP) |
-| 05 | `05_annotate.R` | SingleR automated annotation + sub-type refinement + canonical marker plots |
-| 06 | `06_visualize.R` | Publication-quality UMAP, dot plots, heatmaps, violin plots |
-| 06b | `06b_differential.R` | DE between samples per cell type; volcano plots; module scores (multi-sample only) |
-| 07 | `07_finalize_reports.R` | Merge all PDFs into 5 final combined reports + Overall_report.pdf |
-| 08 | `08_comparison_report.R` | Standalone cross-sample comparison report (quality, composition, integration, DE) |
-| 09 | `09_bootstrap_proportions.R` | Bootstrap-normalised cell type proportions across samples; multinomial 95% CI; pairwise chi-squared tests |
-| 10 | `10_rarefaction.R` | Rarefaction analysis — minimum capture depth for stable proportion estimates |
+This gets you from a clean clone to a compiled HTML report using the bundled `H1` / `H2`
+example data (~1,200 cells, ~15–25 min depending on cores).
+
+**1. Clone and enter the repo.**
+
+```bash
+git clone <repo-url> scRNA
+cd scRNA
+```
+
+**2. Build the conda environment** (R 4.3.3, Seurat 5.1.0, Harmony, SingleR, scDblFinder, and
+the rest). Uses `mamba`; takes 10–20 min the first time.
+
+```bash
+bash pipeline/setup_env.sh
+conda activate scrna_seurat
+```
+
+**3. Run the pipeline on the example data.**
+
+```bash
+bash pipeline/run_pipeline.sh H1 H2
+```
+
+Two samples turns on Harmony integration automatically. The interactive HTML report is built
+at the end, after the PDFs.
+
+**4. Open the report.** It lands here (default two-sample run name):
+
+```
+Results/results_H1-H2_filtered/reports/H1-H2_report.html
+```
+
+Double-click it. No server needed; the file is self-contained.
+
+### Run it on your own data
+
+Each sample is a folder holding a count matrix in one of these layouts (the pipeline
+auto-detects which). The `filter_matrix/` and `raw_matrix/` layouts are the output of MGI's
+[DNBelab C Series HT scRNA analysis software](https://github.com/MGI-tech-bioinformatics/DNBelab_C_Series_HT_scRNA-analysis-software),
+which is what every bundled dataset here was generated with:
+
+```
+SampleA/
+├── filter_matrix/                 # preferred: pre-filtered barcodes (DNBelab C Series output)
+│   ├── barcodes.tsv.gz
+│   ├── features.tsv.gz
+│   └── matrix.mtx.gz
+└── raw_matrix/                    # optional: raw, unfiltered barcodes
+```
+
+10x CellRanger's own `filtered_feature_bc_matrix/` and `raw_feature_bc_matrix/` are detected
+too. Point the runner at any number of sample folders by absolute or relative path:
+
+```bash
+# One sample (no integration)
+bash pipeline/run_pipeline.sh /path/to/SampleA
+
+# Two or more samples (Harmony integration)
+bash pipeline/run_pipeline.sh /path/to/SampleA /path/to/SampleB /path/to/SampleC
+
+# Non-human data: the 'bat' keyword applies Eonycteris spelaea overrides
+bash pipeline/run_pipeline.sh bat /path/to/ES03 /path/to/ES12
+
+# Label conditions for the comparison report
+bash pipeline/run_pipeline.sh condition="ADay0=healthy,BDay1=recovering" /path/to/A /path/to/B
+```
+
+Output is the same shape as the example: a run directory under `Results/` with the HTML report
+in its `reports/` subfolder.
+
+---
+
+## What a run produces
+
+Run directory name is `Results/results_<samples>_<filtered|raw>/` (runs of more than 4 samples
+abbreviate to `<firstSample>_<N>samples` to stay under the Windows 260-char path limit).
+
+```
+Results/results_<...>_filtered/
+├── qc/                  # QC violins, scatter, cell_fate.csv
+├── doublets/            # scDblFinder score plots
+├── individual/          # per-sample UMAP, markers, dot plots
+├── integrated/          # integrated_annotated.rds (the atlas), Harmony UMAP, heatmaps
+├── annotation/          # SingleR scores, canonical marker feature plots
+├── differential/        # DE tables and plots (multi-sample runs)
+├── logs/                # one log per step
+├── reports/             # <run>_report.html  +  build_report.log
+├── 01-QC_report.pdf
+├── 02-Doublet_report.pdf
+├── 03-Individual_report.pdf
+├── 04-Annotation_report.pdf
+├── 05-Integrated_report.pdf
+└── Overall_report.pdf   # A4-normalised curated summary
+```
+
+---
+
+## Architecture reference (for pipeline operators)
+
+### The numbered steps
+
+`run_pipeline.sh` runs a sequence of standalone R scripts. Each resolves `config.R` from its
+own location, so any step can be run on its own.
+
+| Step | Script | Does |
+|------|--------|------|
+| 01 | `01_load_qc.R` | Load matrices, QC filter (genes / UMI / %MT), write `cell_fate.csv` |
+| 02 | `02_doublets.R` | scDblFinder per sample; cache and remove doublets |
+| 03 | `03_individual.R` | Per-sample normalise, HVGs, PCA, UMAP, clustering, markers |
+| 04 | `04_integrate.R` | Merge and integrate with Harmony |
+| 05 | `05_annotate.R` | SingleR + canonical markers → cell-type labels; T-cell sub-clustering |
+| 06 | `06_visualize.R` | Integrated UMAPs, proportion plots, marker dot plots |
+| 06b | `06b_differential.R` | Differential expression across conditions (multi-sample) |
+| 07 | `07_finalize_reports.R` | Assemble the per-stage PDFs and `Overall_report.pdf` |
+| 08 | `08_comparison_report.R` | Optional cross-condition comparison report |
+| 08b | `08b_html_report.R` | The interactive HTML report (auto-built at the end of a run) |
+
+Default step set: multi-sample runs do `01 02 03 04 05 06 06b 07`; single-sample runs do
+`01 02 03 04 05 06 07` (no DE). Then 08b runs automatically **if**
+`integrated/integrated_annotated.rds` exists (so single-sample runs, which skip integration,
+skip the HTML report). Run a subset by appending step numbers:
+
+```bash
+bash pipeline/run_pipeline.sh /path/to/A /path/to/B 05 06 07
+bash pipeline/run_pipeline.sh --no-report /path/to/A /path/to/B   # skip the HTML build
+```
+
+The bat-wing project adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory) under
+`pipeline/projects/bat_wing/`, triggered by the `bat_wing` species keyword.
+
+### Config drift protection: `validate_config.R`
+
+Before any step runs, `run_pipeline.sh` calls `pipeline/validate_config.R`, which sources
+`config.R` and fails fast (exit 1) on the config mistakes that otherwise surface hours into a
+run:
+
+- every cell type in `CLUSTER_CELLTYPE_MAP` has a colour in `CELLTYPE_COLORS`;
+- `CLUSTER_CELLTYPE_MAP` keys are cluster numbers, not labels;
+- sample paths exist (a warning by default so config-only checks pass on an unmounted NAS;
+  `--strict-paths` escalates it to an error).
+
+### The caching engine: `sample_cache/`
+
+Per-sample work (QC and doublet detection) is cached in `sample_cache/`. The cache key
+fingerprints the 10x matrix files (size + mtime) alongside the QC parameters, so changing an
+input or a threshold busts the cache while re-running the same inputs reuses it. For inputs the
+fingerprint can't read, the key degrades to (parameters + path). This is what lets you re-run
+step 05 onward repeatedly during annotation without recomputing 01–04.
+
+### Tuning knobs (all in `pipeline/config.R`)
+
+| What | Where | Default |
+|------|-------|---------|
+| Dimensionality | `DIM$npcs`, `DIM$dims_use` | 30 PCs, dims 1:20 |
+| Clustering | `CLUSTER$resolutions`, `CLUSTER$default_res` | `c(0.3,0.4,0.5,0.6,0.8)`, 0.5 |
+| Side-by-side resolutions | `CLUSTER$compare_res` | `c(0.5,0.6,0.8)` |
+| T-cell sub-clustering | `SUBCLUSTER$enabled`, `$resolution`, `$min_cells` | TRUE, 0.8, 20 |
+| Harmony | `HARMONY$theta`, `$lambda`, `$nclust` | 2, 1, 50 |
+| QC thresholds | `QC` | see file |
+| Palette / labels | `CELLTYPE_COLORS`, `CLUSTER_CELLTYPE_MAP` | see file |
+
+**Resource allocation** is governed automatically in `config.R$PARALLEL`: a RAM governor sizes
+the worker pool from available memory and core count, capped at `min(8, detectCores() - 2)`,
+budgeting ~8 GB/worker in the per-sample phase and ~16 GB/worker in the merged phase. To go
+wider or narrower, edit `.future_mem_gb` / `.merge_mem_gb` in that block. `run_pipeline.sh`
+pins BLAS/OMP to one thread per process so workers don't oversubscribe cores.
+
+**Environment overrides** (no config edit needed): `SCRNA_BASE_DIR` (relocate the project
+root), `SCRNA_SAMPLE1..N` (sample paths), `SCRNA_SPECIES` (`human` / `bat`), `SCRNA_CONDITION`
+(`name=label,...`). The wrapper sets these for you from its CLI args.
+
+**Report downsampling** is a flag on the HTML build, not a config edit. The plotting frame is
+capped per sample (default 6,000 cells) for a responsive file; proportion and count bars always
+use the full data. See the re-render runbook below.
+
+---
+
+## Runbooks
+
+### Re-render the HTML report without recomputing anything
+
+Layout, styling, and downsampling live entirely in step 08b. To change them on a finished run,
+re-render straight from the saved `integrated_annotated.rds` and tables. No clustering, no
+integration, seconds not hours:
+
+```bash
+bash pipeline/build_report.sh <run_dir>
+
+# examples
+bash pipeline/build_report.sh Results/results_H1-H2_filtered
+bash pipeline/build_report.sh Results/results_H1-H2_filtered --max-cells=4000
+bash pipeline/build_report.sh Results/results_H1-H2_filtered --samples=H1,H2
+```
+
+`--max-cells=N` sets the per-sample plotting cap (default 6000); `--samples=A,B` restricts the
+report to a subset. Output and a `build_report.log` land in `<run_dir>/reports/`. For a big run
+you can detach it:
+
+```bash
+nohup bash pipeline/build_report.sh <run_dir> &   # poll <run_dir>/reports/build_report.log
+```
+
+### Fix or refine the cell-type annotation
+
+Annotation is the one step that usually needs a human pass:
+
+1. Open `<run_dir>/annotation/canonical_markers_dotplot.pdf`.
+2. Fill in `CLUSTER_CELLTYPE_MAP` in `pipeline/config.R` (cluster number → label).
+3. Re-run the downstream steps only:
+
+   ```bash
+   bash pipeline/run_pipeline.sh /path/to/A /path/to/B 05 06 07
+   ```
+
+Steps 01–04 come from `sample_cache/`, so this is fast.
+
+### Common issues
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| `Environment 'scrna_seurat' not found` | Run `bash pipeline/setup_env.sh`, then `conda activate scrna_seurat`. |
+| HTML report skipped at the end of a run | No `integrated/integrated_annotated.rds` — that's expected for single-sample runs (no integration). |
+| `CONFIG VALIDATION FAILED` | Read the printed errors: a label is missing from `CELLTYPE_COLORS`, or a `CLUSTER_CELLTYPE_MAP` key isn't a cluster number. |
+| Sample path warnings | Data lives on an unmounted NAS; mount it, or pass `--strict-paths` to turn the warning into a hard error. |
+| Report too large / slow to open | Re-render with a lower `--max-cells`, or it will already be static snapshots past 8 samples. |
 
 ---
 
 ## Requirements
 
-- **Linux** (tested on Ubuntu 20.04)
-- [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Mamba](https://github.com/mamba-org/mamba)
-- ~8 GB RAM minimum; 32–64 GB recommended for multi-sample runs with large cell counts (>20 K cells); per-worker RAM budget in `config.R` is 8 GB (per-sample phase) / 16 GB (merged-object phase), auto-capped by a RAM governor
-- ~5 GB disk for conda environment
-
----
-
-## Installation
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/alvin8-git/scRNA.git
-cd scRNA
-```
-
-### 2. Create the conda environment
-
-```bash
-# Uses mamba for faster solving (falls back to conda if mamba not found)
-bash pipeline/setup_env.sh
-```
-
-This installs R 4.3.3 with all required packages:
-`Seurat`, `harmony`, `scDblFinder`, `SingleR`, `celldex`, `BiocParallel`, `ggplot2`, `patchwork`, `cowplot`, `pheatmap`, `viridis`, `dplyr`, `pdftools`, `magick`
-
-> `pdftools` and `magick` are required for the A4-normalised `Overall_report.pdf`. Without them the pipeline falls back to a simple PDF merge.
-
-Installation takes **10–20 minutes** on first run.
-
-### 3. Activate the environment
-
-```bash
-conda activate scrna_seurat
-```
-
----
-
-## Usage
-
-### Input data format
-
-Each sample folder should contain a 10x Genomics-compatible matrix in one of these subfolder layouts:
-
-```
-SampleA/
-└── filter_matrix/          # preferred: pre-filtered barcodes
-    ├── barcodes.tsv.gz
-    ├── features.tsv.gz
-    └── matrix.mtx.gz
-```
-
-Or `filtered_feature_bc_matrix/` — the pipeline detects both automatically.
-
-### Run the pipeline
-
-```bash
-# Print usage
-bash pipeline/run_pipeline.sh --help
-
-# Single sample
-bash pipeline/run_pipeline.sh /path/to/SampleA
-
-# Two samples (Harmony integration enabled automatically)
-bash pipeline/run_pipeline.sh /path/to/SampleA /path/to/SampleB
-
-# Any number of samples
-bash pipeline/run_pipeline.sh /path/to/S1 /path/to/S2 /path/to/S3
-
-# Species flag (default: human) — applies bat-specific marker/QC/reference overrides
-bash pipeline/run_pipeline.sh bat /path/to/ES03 /path/to/ES12
-bash pipeline/run_pipeline.sh human /path/to/H1 /path/to/H2
-
-# Specific steps only (e.g. re-run annotation and visualization)
-bash pipeline/run_pipeline.sh /path/to/SampleA /path/to/SampleB 05 06 07
-
-# Override the base directory without editing config.R
-SCRNA_BASE_DIR=/mnt/nas/project bash pipeline/run_pipeline.sh /path/to/SampleA
-```
-
-### Run an individual step standalone
-
-Every step resolves `config.R` from its own location, so any step runs directly without the wrapper — useful for re-running one stage during development:
-
-```bash
-SCRNA_SAMPLE1=/path/to/SampleA SCRNA_SAMPLE2=/path/to/SampleB SCRNA_SPECIES=human \
-  Rscript pipeline/05_annotate.R
-```
-
-Omitting the `SCRNA_SAMPLE*` / `SCRNA_SPECIES` env vars is safe but logged: `config.R` warns and falls back to the hardcoded H1/H2 + `human` defaults rather than silently using the wrong inputs. The wrapper (`run_pipeline.sh`) exports these for you.
-
-### Test run (with example data)
-
-If you have the H1 and H2 example data placed under `H1/` and `H2/`:
-
-```bash
-conda activate scrna_seurat
-bash pipeline/run_pipeline.sh H1 H2
-```
-
-Expected output in `results_H1andH2/`:
-
-```
-results_H1andH2/
-├── logs/                        # per-step log files
-├── qc/                          # QC violin & scatter plots, cell_fate.csv
-├── doublets/                    # scDblFinder score plots
-├── individual/                  # per-sample UMAP, markers, dot plots
-├── integrated/                  # Harmony UMAP, heatmap, violin plots
-├── annotation/                  # SingleR scores, marker feature plots
-├── reports/
-│   ├── 01-QC_report.pdf
-│   ├── 02-Doublet_report.pdf
-│   ├── 03-Individual_report.pdf
-│   ├── 04-Annotation_report.pdf
-│   ├── 05-Integrated_report.pdf
-│   └── Overall_report.pdf       # A4-normalised curated summary
-```
-
-Total runtime on the H1+H2 dataset (~1,200 cells): **~15–25 minutes** depending on CPU cores.
-
----
-
-## Configuration
-
-All parameters are centralised in `pipeline/config.R`. Open it in a text editor before running the pipeline.
-
----
-
-### QC Thresholds
-
-```r
-QC <- list(
-  min_features   = 200,    # min unique genes per cell
-  max_features   = 5000,   # max unique genes per cell  (doublet proxy)
-  min_counts     = 500,    # min total UMIs per cell
-  max_counts     = 25000,  # max total UMIs per cell
-  max_percent_mt = 20      # max mitochondrial gene %
-)
-```
-
-**Recommended values by tissue:**
-
-| Parameter | Human PBMC (recommended) | Non-PBMC tissue | Notes |
-|-----------|--------------------------|-----------------|-------|
-| `min_features` | 300–500 | 200–500 | 200 is permissive; raise to exclude low-quality cells |
-| `max_features` | 4000–5000 | 6000–8000 | Cells above threshold are likely doublets |
-| `min_counts` | 500–1000 | 500–1000 | Raise for high-depth libraries |
-| `max_counts` | 15000–25000 | 20000–40000 | Generous upper cap |
-| `max_percent_mt` | **10–15%** | 20–40% | **Current default (20%) is too permissive for PBMCs** — dying/stressed cells up to 20% will be retained. Lower to 10–15% for cleaner PBMC data. Neurons and cardiomyocytes naturally have higher MT% so keep higher for those. |
-
-> **Tip:** Always inspect `report_qc.pdf` before finalising thresholds. The violin and scatter plots show where the natural breaks in your data are — adjust thresholds to those breaks rather than using fixed defaults.
-
----
-
-### Cell Type Detection
-
-The pipeline detects cell types via **two independent routes**:
-
-**1. SingleR (automated, unrestricted)**
-Scores every cell against a reference transcriptome. The reference is set by `SINGLER_REF` in `config.R`:
-
-| Value | Reference | Best for |
-|-------|-----------|---------|
-| `"HumanPrimaryCellAtlas"` | HumanPrimaryCellAtlasData (default) | General human tissues |
-| `"MonacoImmune"` | MonacoImmuneData | Blood/PBMC — resolves CD4/CD8/Treg/γδ T, monocyte subtypes, pDC/mDC (29 types) |
-
-The bat species override sets `MonacoImmune` automatically. Cell types detectable include:
-
-- T cells (CD4, CD8, Tregs), NK cells, NKT cells
-- B cells, Plasma cells
-- Monocytes (CD14+, CD16+/FCGR3A+), Macrophages
-- Dendritic cells (mDC, pDC), Mast cells
-- Neutrophils, Eosinophils, Basophils *(if present — rare in healthy PBMC)*
-- Megakaryocytes/Platelets, Erythrocytes
-- Endothelial, Epithelial, Fibroblasts *(tissue samples)*
-
-> Rare populations like Neutrophils will be detected and labelled by SingleR even if they are not in your canonical `MARKERS` list.
-
-**2. Auto-generated cluster map + optional manual override via `CLUSTER_CELLTYPE_MAP`**
-When `CLUSTER_CELLTYPE_MAP = NULL` (the default), the pipeline computes SingleR majority vote per cluster and uses that as the cell type label. A copy-pasteable `CLUSTER_CELLTYPE_MAP` is printed to `logs/05_annotate.log` after every run so you can review and correct it. Partial entries are supported — listed clusters get your label; any cluster not in the map falls back to SingleR automatically.
-
----
-
-### Canonical Marker Genes
-
-These are used only for **feature plots and dot plots** (visual QC). They do not affect clustering or SingleR annotation.
-
-`MARKERS$compute_integrated` gates `FindAllMarkers` in step 04. It defaults to `FALSE` because the full marker sweep takes 20–30 minutes on large datasets and isn't needed for annotation. Set it to `TRUE` if you want cluster marker tables written to `integrated/integrated_cluster_markers.csv`.
-
-```r
-MARKERS <- list(
-  T_pan       = c("CD3D", "CD3E"),
-  CD4_T       = c("CD4", "IL7R", "CCR7"),
-  CD8_T       = c("CD8A", "CD8B", "GZMK"),
-  NK          = c("NKG7", "GNLY", "KLRD1"),
-  B_cell      = c("MS4A1", "CD79A", "CD19"),
-  CD14_mono   = c("CD14", "LYZ", "CST3", "S100A8"),
-  FCGR3A_mono = c("FCGR3A", "MS4A7"),
-  DC          = c("FCER1A", "CLEC9A"),
-  Platelet    = c("PPBP", "PF4")
-)
-```
-
-The full marker list in `config.R` now includes all major populations plus contamination indicators:
-
-| Group | Markers | Interpretation |
-|-------|---------|----------------|
-| CD4 T | CD4, IL7R, CCR7 | Expected ~40–50% of healthy PBMC |
-| CD8 T | CD8A, CD8B, GZMK | Expected ~20–30% |
-| **Treg** | FOXP3, IL2RA, CTLA4 | Small (~5–10% of T cells); expanded in cancer/autoimmunity |
-| NK | NKG7, GNLY, KLRD1 | Expected ~5–15% |
-| B cell | MS4A1, CD79A, CD19 | Expected ~5–10% |
-| **Plasma** | MZB1, JCHAIN, SDC1 | Rare in healthy blood; elevated in infection or myeloma |
-| CD14+ Mono | CD14, LYZ, S100A8 | Expected ~10–15% |
-| FCGR3A+ Mono | FCGR3A, MS4A7 | Expected ~2–5% |
-| **Neutrophil** | FCGR3B, CSF3R, CXCR2, CEACAM8 | Rare in healthy PBMC; **elevated = inflammation or poor/slow Ficoll separation** |
-| DC | FCER1A, CLEC9A | Rare (~1%); absence after filtering suggests over-filtering |
-| Platelet | PPBP, PF4 | Small cluster is normal; large cluster = **poor PBMC separation** |
-| **RBC** | HBB, HBA1, HBA2, GYPA | **Contamination** — should be absent; present = failed Ficoll gradient |
-| **HSPC** | CD34, GATA2, AVP | **Contamination** — haematopoietic progenitors; seen in mobilised or bone marrow samples |
-
-**Quality indicators to check in `report_annotation.pdf`:**
-
-- ✅ **Good:** T cells ~60–70%, NK ~10%, B cells ~5–10%, Monocytes ~15%
-- ✅ **Good:** No RBC or HSPC clusters detected
-- ⚠️ **Warning:** Neutrophil cluster present — donor may be inflamed, or sample processed slowly (neutrophils lyse quickly at room temperature)
-- ⚠️ **Warning:** Large platelet cluster (>5%) — platelet aggregation during PBMC isolation
-- ❌ **Contamination:** RBC cluster (HBB/HBA1+ cells) — Ficoll gradient failed; repeat isolation or filter HBB-high cells
-- ❌ **Contamination:** HSPC cluster (CD34+) — sample is not pure PBMC; may be bone marrow aspirate or G-CSF mobilised blood
-
----
-
-### Clustering Resolution
-
-```r
-CLUSTER <- list(
-  resolutions = c(0.3, 0.4, 0.5, 0.6, 0.8),  # all tested; stored in metadata
-  default_res = 0.5,                            # used for downstream analysis
-  algorithm   = 1,                              # 1 = Louvain, 4 = Leiden
-  compare_res = c(0.5, 0.6, 0.8)               # side-by-side UMAP comparison saved to integrated/
-)
-```
-
-| Resolution | Typical clusters (PBMC ~1000 cells) | Use when |
-|-----------|--------------------------------------|----------|
-| 0.3 | 8–10 | Starting point; broad populations |
-| 0.5 | 12–15 | **Default — good for most PBMC runs** |
-| 0.8 | 18–22 | Needed to split CD4/CD8 T or mono subtypes |
-
-> Step 04 saves `cluster_resolution_comparison.pdf` showing `compare_res` side-by-side so you can pick the best resolution before re-running annotation.
-
-> Inspect the elbow plot in `03-Individual_report.pdf` and the cluster UMAP at multiple resolutions before finalising.
-
----
-
-### T Cell Sub-clustering
-
-```r
-SUBCLUSTER <- list(
-  enabled    = TRUE,
-  t_patterns = "T[_ ]cell|T cell|CD4|CD8|Treg|cytotox",  # regex to identify T cell clusters
-  resolution = 0.8,    # sub-cluster resolution (start lower: 0.6–0.8 to avoid over-splitting)
-  min_cells  = 20      # skip sub-clustering if fewer cells
-)
-```
-
-Step 05 (`05_annotate.R`) automatically identifies clusters whose majority `final_cell_type` matches `t_patterns` and runs `FindSubCluster()` on them. Outputs saved to `annotation/`:
-
-| File | Description |
-|------|-------------|
-| `tcell_subclusters_umap.pdf` | UMAP coloured by T cell sub-cluster identity |
-| `tcell_subclusters_dotplot.pdf` | CD4/CD8/Treg marker dot plot per sub-cluster |
-| `tcell_subcluster_summary.csv` | Sub-cluster cell counts and parent cluster mapping |
-
-> At `resolution = 1.2`, T cell clusters may split into 15–18 sub-clusters (over-split). Start with `resolution = 0.6–0.8` for 4–8 meaningful sub-types (CD4 naive, CD4 memory, CD8 effector, Treg).
-
----
-
-### Annotation Workflow
-
-**Step 1 — First run (automatic, no config needed)**
-
-Leave `CLUSTER_CELLTYPE_MAP = NULL` in `config.R`. The pipeline automatically assigns SingleR majority labels per cluster. After step 05 completes, the log prints a suggested map:
-
-```
-logs/05_annotate.log:
-  CLUSTER_CELLTYPE_MAP <- c(
-    "0" = "CD4 T (naive)",
-    "1" = "NK",
-    ...
-  )
-```
-
-**Step 2 — Review (optional)**
-
-1. Open `results_*/annotation/canonical_markers_dotplot.pdf`
-2. Cross-check suggested labels against marker expression
-3. Correct any wrong entries (SingleR occasionally mislabels DCs as Monocytes, neutrophils as Pre-B, etc.)
-
-**Step 3 — Apply corrections (only if needed)**
-
-Copy the suggested map from the log into `config.R`, editing any wrong labels:
-
-```r
-CLUSTER_CELLTYPE_MAP <- c(
-  "0" = "CD4 T (naive)",
-  "3" = "NK",           # override: SingleR said T_cells
-  "11" = "DC"           # override: SingleR said Monocyte
-  # all other clusters fall back to SingleR automatically
-)
-```
-
-**Step 4 — Re-run**
-
-```bash
-bash pipeline/run_pipeline.sh /path/to/S1 /path/to/S2 05 06 07
-```
-
-> **Important:** Cluster numbers change between datasets. Never copy a `CLUSTER_CELLTYPE_MAP` from one sample run to another — always start from the log of that specific run.
-
----
-
-## Adapting for Other Species or Tissues
-
-| Parameter | Location | Example |
-|-----------|----------|---------|
-| Species keyword | `run_pipeline.sh` first arg | `bat` or `human` (default) |
-| MT gene pattern | `config.R` line ~34 | `"^MT-"` → `"^mt-"` (mouse) |
-| `max_percent_mt` | `config.R` `QC` list | 20 → 35 (heart/brain tissue) |
-| SingleR reference | `config.R` `SINGLER_REF` | `"HumanPrimaryCellAtlas"` (default) → `"MonacoImmune"` (blood) |
-| Canonical markers | `config.R` `MARKERS` list | Replace with tissue-specific genes |
-| Contamination types | `config.R` `CONTAMINATION_TYPES` | Remove RBC/Neutrophil for whole-blood samples |
-| Cell type colours | `config.R` `CELLTYPE_COLORS` | Update names to match expected types |
-| Harmony theta | `config.R` `HARMONY$theta` | 2 → 3–5 for strong batch effects |
-| Clustering resolution | `config.R` `CLUSTER$default_res` | 0.5 (PBMC) → 1.0 (whole blood / complex tissue) |
-
-The `bat` keyword applies all *Eonycteris spelaea* whole-blood overrides automatically (MonacoImmune reference, res=1.0, γδ T markers, adjusted contamination list, bat-specific subtype markers).
-
----
+- Linux or macOS, conda or mamba.
+- ~16 GB RAM for two small samples; more for larger or many-sample runs (the RAM governor
+  scales workers to fit).
+- The conda environment from `pipeline/setup_env.sh`: R 4.3.3, Seurat 5.1.0, Harmony, SingleR,
+  celldex, scDblFinder, DESeq2, clusterProfiler, plus CellChat v2 / monocle3 / SeuratWrappers
+  for the bat-wing extension.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE).
