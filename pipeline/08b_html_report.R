@@ -473,14 +473,24 @@ tool_roles <- c(
   SingleR              = "Reference-based cell-type annotation",
   celldex              = "Reference expression datasets for SingleR",
   SingleCellExperiment = "Bioconductor single-cell data container")
+tool_urls <- c(
+  R                    = "https://www.r-project.org",
+  Seurat               = "https://satijalab.org/seurat",
+  SeuratObject         = "https://github.com/satijalab/seurat-object",
+  harmony              = "https://github.com/immunogenomics/harmony",
+  scDblFinder          = "https://bioconductor.org/packages/scDblFinder",
+  SingleR              = "https://bioconductor.org/packages/SingleR",
+  celldex              = "https://bioconductor.org/packages/celldex",
+  SingleCellExperiment = "https://bioconductor.org/packages/SingleCellExperiment")
 tv_rows <- lapply(names(tool_roles), function(p) {
   v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
   if (is.na(v)) NULL else data.frame(Tool = p, Version = v, Role = unname(tool_roles[p]),
-                                     stringsAsFactors = FALSE)
+                                     Source = unname(tool_urls[p]), stringsAsFactors = FALSE)
 })
 tool_versions <- do.call(rbind, c(
   list(data.frame(Tool = "R", Version = paste(R.version$major, R.version$minor, sep = "."),
-                  Role = "Statistical computing environment", stringsAsFactors = FALSE)),
+                  Role = "Statistical computing environment", Source = unname(tool_urls["R"]),
+                  stringsAsFactors = FALSE)),
   tv_rows))
 msg("tool versions: %s", paste(tool_versions$Tool, tool_versions$Version, collapse = ", "))
 

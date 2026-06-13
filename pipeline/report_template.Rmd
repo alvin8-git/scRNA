@@ -333,8 +333,8 @@ legitems <- lapply(cts, function(ct)
   htmltools::tags$div(class = if (static) "legitem static" else "legitem", `data-ct` = ct,
     htmltools::tags$span(class = "legsw", style = sprintf("background:%s", PAL[[ct]])),
     htmltools::tags$span(ct)))
-js_solo <- "function umSolo(){var g=document.querySelector('.umapgrid');if(!g)return;var n=0;Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')n++;});g.classList.toggle('solo',n===1);if(window.Plotly)requestAnimationFrame(function(){g.querySelectorAll('.js-plotly-plot').forEach(function(p){try{Plotly.Plots.resize(p);}catch(e){}});});}"
-js_chip <- "document.querySelectorAll('.selrow .selchip').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w) w.style.display=on?'':'none';umSolo();});});"
+js_solo <- "var _wasSolo=null;function umResize(c,solo){var w=c.querySelector('.html-widget'),p=c.querySelector('.js-plotly-plot');if(w)w.style.height=(solo?700:360)+'px';if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}}function umSolo(){var g=document.querySelector('.umapgrid');if(!g)return;var n=0;Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')n++;});var solo=n===1;g.classList.toggle('solo',solo);if(solo===_wasSolo)return;_wasSolo=solo;requestAnimationFrame(function(){Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')umResize(c,solo);});});}"
+js_chip <- "document.querySelectorAll('.selrow .selchip').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on)requestAnimationFrame(function(){var p=w.querySelector('.js-plotly-plot');if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}});}umSolo();});});"
 # linked zoom/pan: every UMAP shares the integrated coordinate space, so syncing axis ranges
 # across the plotly widgets makes a zoom/pan on one repeat on all (interactive runs only)
 js_sync <- if (static) "" else "(function s(){var g=document.querySelectorAll('.umapgrid .js-plotly-plot');if(!g.length||!g[0].on){return setTimeout(s,300);}var busy=false;Array.prototype.forEach.call(g,function(gd){gd.on('plotly_relayout',function(e){if(busy)return;var u={};if('xaxis.range[0]'in e){u['xaxis.range[0]']=e['xaxis.range[0]'];u['xaxis.range[1]']=e['xaxis.range[1]'];}if('yaxis.range[0]'in e){u['yaxis.range[0]']=e['yaxis.range[0]'];u['yaxis.range[1]']=e['yaxis.range[1]'];}if('xaxis.autorange'in e){u['xaxis.autorange']=true;u['yaxis.autorange']=true;}if(!Object.keys(u).length)return;busy=true;Array.prototype.forEach.call(g,function(o){if(o!==gd&&window.Plotly)Plotly.relayout(o,u);});busy=false;});});})();"
@@ -465,7 +465,7 @@ if (is.null(md_) || !nrow(md_)) {
     scale_color_viridis_c(option = "plasma", name = "scaled avg") +
     scale_size(range = c(0, 6), name = "% expressing") +
     theme_minimal(base_size = 11) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10.5),
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 10.5),
           axis.text.y = element_text(size = 10.5),
           axis.title = element_blank(), panel.grid.major = element_line(color = "#f0f0f0"))
   ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 150)) |>
@@ -518,13 +518,19 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
   }
   if (length(G$by_sample)) {
     cat('\n# Per-sample detail {#per-sample}\n\n')
-    cat('Each panel is regenerated from the saved objects. Use the Overview cards to jump here. <span class="plot-desc" style="display:inline">Doublet panels appear only for samples whose doublet detection ran in this analysis; samples loaded from cache (pre-removed singlets) show the other diagnostics only.</span>\n')
-    for (s in names(G$by_sample)) {
+    cat('Pick a sample to load its diagnostics (so you do not scroll through every sample). The Overview cards, the summary table, and the left-nav sample links jump here too. Doublet panels appear only for samples whose doublet detection ran in this analysis; cache-loaded samples (pre-removed singlets) show the other diagnostics only.\n')
+    sn <- names(G$by_sample)
+    chips_ps <- paste(sprintf('<button class="selchip" data-psample="%s">%s</button>',
+                              slug(sn), htmltools::htmlEscape(sn)), collapse = "")
+    cat(sprintf('\n<div class="selrow psel"><span class="sellabel">Sample</span>%s</div>\n', chips_ps))
+    for (s in sn) {
       cat(sprintf('\n## %s {#sample-%s}\n\n', s, slug(s)))
       cat('\n<div class="galgrid">\n')           # 2-up grid so a sample is not an endless column
       imgs <- G$by_sample[[s]]; for (t in names(imgs)) emit_fig(imgs[[t]], t)
       cat('\n</div>\n')
     }
+    # show one sample at a time; reveal on chip click or on a #sample-<slug> deep-link
+    cat('<script>(function(){var secs=document.querySelectorAll("#per-sample .level2");var chips=document.querySelectorAll(".psel .selchip");if(!secs.length)return;function show(sl){secs.forEach(function(s){s.style.display=(s.id==="sample-"+sl)?"":"none";});chips.forEach(function(c){c.classList.toggle("on",c.getAttribute("data-psample")===sl);});}chips.forEach(function(c){c.addEventListener("click",function(){show(c.getAttribute("data-psample"));});});function fromHash(){var m=(location.hash||"").match(/^#sample-(.+)$/);if(m){show(m[1]);var el=document.getElementById("sample-"+m[1]);if(el)el.scrollIntoView();}}window.addEventListener("hashchange",fromHash);if(/^#sample-/.test(location.hash)){fromHash();}else{show(chips[0].getAttribute("data-psample"));}})();</script>\n')
   }
 }
 ```
@@ -539,7 +545,10 @@ tv <- B$tool_versions
 if (is.null(tv) || !nrow(tv)) {
   cat("Tool versions are unavailable for this run.")
 } else {
-  datatable(tv, rownames = FALSE, class = "compact stripe hover",
+  if ("Source" %in% names(tv))
+    tv$Source <- sprintf('<a href="%s" target="_blank" rel="noopener">%s</a>',
+                         tv$Source, sub("^https?://(www\\.)?", "", tv$Source))
+  datatable(tv, rownames = FALSE, class = "compact stripe hover", escape = FALSE,
             options = list(dom = "t", paging = FALSE, ordering = FALSE, scrollX = TRUE))
 }
 ```
