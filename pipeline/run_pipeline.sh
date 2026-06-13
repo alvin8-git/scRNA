@@ -53,10 +53,13 @@ step_hdr() { echo -e "\n${CYAN}${BOLD}+$(printf '=%.0s' {1..54})+${NC}"
 SAMPLE_PATHS=()
 STEPS_ARGS=()
 SPECIES="human"   # default; overridden by 'bat' or 'human' keyword in args
+WANT_REPORT=true  # auto-build the interactive HTML report at the end; --no-report to skip
 
 for arg in "$@"; do
   if [[ "$arg" == "bat" || "$arg" == "human" || "$arg" == "bat_wing" ]]; then
     SPECIES="$arg"
+  elif [[ "$arg" == "--no-report" || "$arg" == "no-report" ]]; then
+    WANT_REPORT=false
   elif [[ "$arg" == condition=* ]]; then
     export SCRNA_CONDITION="${arg#condition=}"
   # Treat as sample path if absolute, relative directory, or starts with ./ or ../
@@ -106,8 +109,16 @@ if [[ $N_SAMPLES -gt 0 ]]; then
     _parts+=("$(_sample_name "$p")")
     [[ "$(_matrix_tag "$p")" == "raw" ]] && _any_raw=true
   done
-  _suffix="${_parts[0]}"
-  for (( _j=1; _j<${#_parts[@]}; _j++ )); do _suffix="${_suffix}-${_parts[$_j]}"; done
+  if [[ ${#_parts[@]} -gt 4 ]]; then
+    # >4 samples: abbreviate to <firstSample>_<N>samples so the run path stays under
+    # the Windows MAX_PATH (260) limit (a 14-sample dash-joined name is ~130 chars and
+    # made the report unopenable over a share). Matches 08b_html_report.R's report name.
+    _first="${_parts[0]//[^A-Za-z0-9]/}"
+    _suffix="${_first}_${#_parts[@]}samples"
+  else
+    _suffix="${_parts[0]}"
+    for (( _j=1; _j<${#_parts[@]}; _j++ )); do _suffix="${_suffix}-${_parts[$_j]}"; done
+  fi
   $_any_raw && _mtag="raw" || _mtag="filtered"
   RESULTS_DIR="${BASE_DIR}/Results/results_${_suffix}_${_mtag}"
 else
@@ -278,6 +289,23 @@ for step in "${STEPS[@]}"; do
   run_step "${step}"
 done
 
+# --- Interactive HTML run report (step 08b) — additive; never fails the pipeline ---
+if [[ "$WANT_REPORT" == "true" ]]; then
+  if [[ -f "${RESULTS_DIR}/integrated/integrated_annotated.rds" ]]; then
+    step_hdr "Interactive HTML report (08b)"
+    _rlog="${LOG_DIR}/08b_html_report.log"
+    if Rscript "${PIPELINE_DIR}/08b_html_report.R" "${RESULTS_DIR}" 2>&1 | tee "${_rlog}"; then
+      echo -e "\n  ${GREEN}DONE${NC}  HTML report — see ${RESULTS_DIR}/reports/"
+    else
+      warn "HTML report failed (pipeline outputs are unaffected) — see ${_rlog}"
+    fi
+  else
+    warn "Skipping HTML report: no integrated_annotated.rds (single-sample run, or integration not run)."
+  fi
+else
+  log "HTML report skipped (--no-report)."
+fi
+
 TOTAL_ELAPSED=$(( $(date +%s) - TOTAL_START ))
 step_hdr "Pipeline complete in ${TOTAL_ELAPSED}s"
 echo -e "  ${GREEN}Results :${NC} ${RESULTS_DIR}"
@@ -289,6 +317,7 @@ echo "    ${RESULTS_DIR}/03-Individual_report.pdf"
 echo "    ${RESULTS_DIR}/04-Annotation_report.pdf"
 echo "    ${RESULTS_DIR}/05-Integrated_report.pdf"
 echo "    ${RESULTS_DIR}/Overall_report.pdf"
+[[ "$WANT_REPORT" == "true" ]] && echo "    ${RESULTS_DIR}/reports/  (interactive HTML report)"
 echo ""
 if [[ "$SPECIES" == "bat_wing" ]]; then
   echo ""

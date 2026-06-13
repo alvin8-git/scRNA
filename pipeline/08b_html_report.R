@@ -52,8 +52,8 @@ lite <- "--lite" %in% flags
 # cannot open over a share (MAX_PATH = 260). Shorten the default report filename to
 # <firstSample>_<N>samples when the run name is long; an explicit output path wins.
 short_report_name <- function(name) {
-  if (nchar(name) <= 64) return(name)
   toks <- strsplit(name, "-", fixed = TRUE)[[1]]
+  if (length(toks) <= 4) return(name)        # abbreviate once a run has >4 samples
   paste0(gsub("[^A-Za-z0-9]", "", toks[1]), "_", length(toks), "samples")
 }
 out_html <- if (length(pos) >= 2) pos[2] else
@@ -111,6 +111,8 @@ cells <- data.frame(
   nCount_RNA    = num(c("nCount_RNA")),
   percent.mt    = num(c("percent.mt", "percent_mt")),
   doublet_score = num(c("doublet_score", "scDblFinder.score")),
+  doublet_class = { dc <- col(c("doublet_class","scDblFinder.class"))
+                    if (is.na(dc)) NA_character_ else as.character(md[[dc]]) },
   stringsAsFactors = FALSE
 )
 set.seed(1)
@@ -126,11 +128,32 @@ for (cc in c("nFeature_RNA","nCount_RNA","percent.mt","doublet_score"))
   if (cc %in% names(cells_plot)) cells_plot[[cc]] <- round(cells_plot[[cc]], 3)
 msg("plotting frame: %d cells (cap %d/sample)", nrow(cells_plot), max_cells)
 
-# shared palette (mirrors the template) for any PNGs we pre-render here
-PAL_base <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
-              "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
+# canonical cell-type colours (copied from pipeline/config.R CELLTYPE_COLORS) so the
+# report matches Overall_Report.pdf exactly; unknown types fall back to a tableau ramp.
+CELLTYPE_COLORS <- c(
+  "CD4 T"="#E64B35","CD4 T (naive)"="#E64B35","CD4 T (memory)"="#FF7043","CD4 T (effector)"="#FF8A65",
+  "CD8 T"="#4DBBD5","CD8 T (naive)"="#6ACDE6","CD8 T (memory)"="#3A8BA5","CD8 T (effector)"="#1D6680",
+  "Treg"="#FF7F0E","γδ T"="#FFC107","NKT"="#17BECF","NK"="#00A087",
+  "B cell"="#3C5488","B cell (naive)"="#3C5488","B cell (memory)"="#5C74A8","Plasma"="#7B4F9E",
+  "Monocyte"="#F39B7F","CD14+ Mono"="#F39B7F","FCGR3A+ Mono"="#8491B4",
+  "Neutrophil"="#E377C2","DC"="#91D1C2","cDC1"="#70BFB0","cDC2"="#A8E6D8","pDC"="#4FA090","Platelet"="#DC0000",
+  "RBC"="#A52A2A","HSPC"="#8C564B","Basophil"="#B5B000","Eosinophil"="#F4A460","Mast cell"="#9400D3",
+  "Endothelial"="#636363","Epithelial"="#969696","Fibroblast"="#BDBDBD","Smooth Muscle"="#D9D9D9","Unknown"="#B09C85")
+PAL_fallback <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
+                  "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
 ctlev <- sort(unique(cells_plot$cell_type))
-PAL   <- setNames(rep(PAL_base, length.out = length(ctlev)), ctlev)
+PAL <- CELLTYPE_COLORS[ctlev]
+miss <- is.na(PAL)
+if (any(miss)) PAL[miss] <- rep(PAL_fallback, length.out = sum(miss))
+names(PAL) <- ctlev
+PAL["Unassigned"] <- "#B0B0B0"
+
+# QC acceptance thresholds (pipeline/config.R QC list) — for the per-sample QC scatters
+QC_THRESH <- list(min_features = 200, max_features = 5000,
+                  min_counts = 500, max_counts = 25000, max_percent_mt = 20)
+
+if (length(samples_all) > 8)
+  msg("WARNING: %d samples (>8). UMAP comparison panels render as static images; interactive zoom is available only for runs of 8 or fewer.", length(samples_all))
 to_uri <- function(g, w, h, dpi = 72) {
   tf <- tempfile(fileext = ".png")
   ggplot2::ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
@@ -143,13 +166,29 @@ to_uri <- function(g, w, h, dpi = 72) {
 umap_static <- length(samples_all) > 8
 umap_panels <- NULL
 if (umap_static) {
+  n_full <- table(cells$sample)   # true per-sample cell count (not the plotting cap)
+  have_repel <- requireNamespace("ggrepel", quietly = TRUE)
   umap_panels <- lapply(samples_all, function(s) {
     dd <- cells_plot[cells_plot$sample == s, , drop = FALSE]
+    # cluster labels at each cell type's centroid (median UMAP coords), as in DimPlot(label=TRUE)
+    ctr <- aggregate(cbind(UMAP_1, UMAP_2) ~ cell_type, data = dd, FUN = median)
     g <- ggplot(dd, aes(UMAP_1, UMAP_2, color = cell_type)) +
-      geom_point(size = 0.25, alpha = 0.7, stroke = 0) +
+      geom_point(size = 0.4, alpha = 0.8, stroke = 0) +
       scale_color_manual(values = PAL, guide = "none") +
-      theme_void(base_size = 9)
-    to_uri(g, w = 3.1, h = 2.9)
+      labs(x = "UMAP 1", y = "UMAP 2",
+           title = sprintf("%s  (%s cells)", s, format(as.integer(n_full[s]), big.mark = ","))) +
+      theme_classic(base_size = 11) +
+      theme(axis.text = element_blank(), axis.ticks = element_blank(),
+            plot.title = element_text(face = "bold", size = 12))
+    g <- if (have_repel)
+      g + ggrepel::geom_text_repel(data = ctr, aes(UMAP_1, UMAP_2, label = cell_type),
+            inherit.aes = FALSE, size = 2.7, fontface = "bold", colour = "black",
+            bg.color = "white", bg.r = 0.12, max.overlaps = Inf, seed = 1,
+            min.segment.length = 0, segment.size = 0.2, segment.colour = "grey55")
+    else
+      g + geom_text(data = ctr, aes(UMAP_1, UMAP_2, label = cell_type),
+            inherit.aes = FALSE, size = 2.7, fontface = "bold", colour = "black")
+    to_uri(g, w = 4.4, h = 4.0)
   })
   names(umap_panels) <- samples_all
   msg("static UMAP panels: %d (n_samples > 8)", length(umap_panels))
@@ -267,31 +306,79 @@ if (!lite) {
     knitr::image_uri(tf)
   }
   drop_null <- function(x) x[!vapply(x, is.null, logical(1))]
+  # rasterise an existing pipeline PDF page (for plots not reconstructable from the rds)
+  rasterize_pdf <- function(path, page = 1, dpi = 120) {
+    if (!file.exists(path)) return(NULL)
+    tf <- tempfile(fileext = ".png")
+    ok <- tryCatch({ im <- magick::image_read_pdf(path, pages = page, density = dpi)
+                     magick::image_write(im, tf, "png"); TRUE }, error = function(e) FALSE)
+    if (!ok) ok <- tryCatch({ bm <- pdftools::pdf_render_page(path, page = page, dpi = dpi)
+                     magick::image_write(magick::image_read(bm), tf, "png"); TRUE }, error = function(e) FALSE)
+    if (ok) { on.exit(unlink(tf), add = TRUE); knitr::image_uri(tf) } else NULL
+  }
+  # locate a per-sample doublet PDF. Step 02 computes it ONCE and caches it under
+  # sample_cache/<s>/, restoring it into this run's doublets/ on a cache hit. Prefer the
+  # run's doublets/, then the sample_cache copy, then (legacy) the newest sibling run.
+  results_root <- dirname(run_dir)
+  sample_cache <- file.path(dirname(results_root), "sample_cache")
+  find_dbl_pdf <- function(s, kind) {
+    f <- sprintf("%s_doublet_%s.pdf", s, kind)
+    local <- file.path(run_dir, "doublets", f);        if (file.exists(local))  return(local)
+    cached <- file.path(sample_cache, s, f);           if (file.exists(cached)) return(cached)
+    cand <- Sys.glob(file.path(results_root, "*", "doublets", f))
+    if (!length(cand)) return(NA_character_)
+    cand[order(file.info(cand)$mtime, decreasing = TRUE)][1]
+  }
 
-  ## per-sample diagnostics (reached by clicking a sample card)
+  ## per-sample diagnostics (reached by clicking a sample card) — match Overall_Report.pdf
   by_sample <- list()
   for (s in samples_all) {
-    cs <- cells[cells$sample == s, , drop = FALSE]
+    cs <- cells_plot[cells_plot$sample == s, , drop = FALSE]
     imgs <- list()
+    # QC: UMIs vs genes — linear axes from 0, dashed acceptance box (config QC thresholds)
     imgs[["QC: UMIs vs genes"]] <- tryCatch(mk_uri(
-      ggplot(cs, aes(nCount_RNA, nFeature_RNA, color = percent.mt)) +
-        geom_point(size = 0.35, alpha = 0.6) + scale_x_log10() + scale_y_log10() +
-        scale_color_viridis_c(name = "% MT") + theme_minimal(base_size = 11) +
-        labs(x = "UMIs / cell (log)", y = "genes / cell (log)", title = paste(s, "- QC")),
-      w = 6.4, h = 4.4), error = function(e) NULL)
-    if (!all(is.na(cs$doublet_score)))
-      imgs[["Doublet score (UMAP)"]] <- tryCatch(mk_uri(
-        ggplot(cs, aes(UMAP_1, UMAP_2, color = doublet_score)) + geom_point(size = 0.4) +
-          scale_color_viridis_c(option = "magma", name = "score") + theme_void(base_size = 11) +
-          labs(title = paste(s, "- doublet score")),
-        w = 5.8, h = 5), error = function(e) NULL)
+      ggplot(cs, aes(nCount_RNA, nFeature_RNA)) +
+        annotate("rect", xmin = QC_THRESH$min_counts, xmax = QC_THRESH$max_counts,
+                 ymin = QC_THRESH$min_features, ymax = QC_THRESH$max_features,
+                 fill = NA, colour = "#E64B35", linetype = "dashed", linewidth = 0.5) +
+        geom_point(aes(colour = percent.mt), size = 0.35, alpha = 0.6) +
+        scale_colour_viridis_c(name = "% MT") +
+        scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .03))) +
+        scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .03))) +
+        theme_classic(base_size = 11) +
+        labs(x = "UMIs / cell", y = "genes / cell", title = paste(s, "- UMIs vs genes")),
+      w = 6.2, h = 4.4), error = function(e) NULL)
+    # QC: UMIs vs % MT — axes from 0, dashed %MT threshold
+    imgs[["QC: UMIs vs % MT"]] <- tryCatch(mk_uri(
+      ggplot(cs, aes(nCount_RNA, percent.mt)) +
+        geom_point(size = 0.35, alpha = 0.5, colour = "#4DBBD5") +
+        geom_hline(yintercept = QC_THRESH$max_percent_mt, linetype = "dashed", colour = "#E64B35") +
+        scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .03))) +
+        scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .03))) +
+        theme_classic(base_size = 11) +
+        labs(x = "UMIs / cell", y = "% MT", title = paste(s, "- UMIs vs % MT")),
+      w = 6.2, h = 4.4), error = function(e) NULL)
+    # Doublets — rasterise the step-02 PDFs (the integrated object has doublets ALREADY
+    # removed, so recomputing here gives 0/sample; 02_doublets.R drew these pre-removal
+    # with the true counts). Samples served from sample_cache/ were not re-run here, so
+    # their PDFs live in the run that first processed them — fall back across Results/*.
+    dbl_umap <- find_dbl_pdf(s, "umap")
+    if (!is.na(dbl_umap)) imgs[["Doublets (UMAP)"]] <- rasterize_pdf(dbl_umap, dpi = 120)
+    dbl_hist <- find_dbl_pdf(s, "score_hist")
+    if (!is.na(dbl_hist)) imgs[["Doublet score distribution"]] <- rasterize_pdf(dbl_hist, dpi = 120)
+    # HVG — VariableFeaturePlot + the top-10 labelled dots (03_individual.R)
     hf <- list.files(file.path(run_dir, "individual"),
                      pattern = paste0("^", s, "_(seurat|filtered|singlets)\\.rds$"),
                      recursive = TRUE, full.names = TRUE)
     hf <- hf[order(!grepl("_seurat", hf))]   # prefer the object that has HVG computed
     for (cand in hf) {
-      img <- tryCatch(mk_uri(Seurat::VariableFeaturePlot(readRDS(cand)), w = 6.4, h = 4.4),
-                      error = function(e) NULL)
+      img <- tryCatch({
+        so <- readRDS(cand)
+        top10 <- utils::head(Seurat::VariableFeatures(so), 10)
+        ph <- Seurat::VariableFeaturePlot(so)
+        ph <- Seurat::LabelPoints(plot = ph, points = top10, repel = TRUE, xnudge = 0, ynudge = 0)
+        mk_uri(ph + labs(title = paste(s, "- Variable genes (top 10 labelled)")), w = 6.6, h = 4.6)
+      }, error = function(e) NULL)
       if (!is.null(img)) { imgs[["Highly variable genes"]] <- img; break }
     }
     imgs <- drop_null(imgs)
@@ -300,11 +387,7 @@ if (!lite) {
 
   ## run-level galleries (one family per left-nav entry)
   stage <- list()
-  fmark <- intersect(c("CD3D","MS4A1","NKG7","CD14","LYZ","FCER1A","PPBP","GNLY"), rownames(obj))
-  if (length(fmark)) stage[["Marker feature plots"]] <- tryCatch(
-    mk_uri(Seurat::FeaturePlot(obj, features = fmark, reduction = umap_name, order = FALSE,
-                               raster = TRUE, raster.dpi = c(200, 200)),
-           w = 9, h = 2.7 * ceiling(length(fmark) / 3), dpi = 72), error = function(e) NULL)
+  # Top DE marker heatmap (kept) — top genes per type x scaled mean expression
   if (!is.null(de)) stage[["Top DE marker heatmap"]] <- tryCatch({
     top <- do.call(rbind, lapply(split(de, de$cell_type),
               function(d) utils::head(d[order(-d$avg_log2FC), ], 5)))
@@ -318,34 +401,18 @@ if (!lite) {
       theme_minimal(base_size = 9) +
       theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_blank()),
       w = 7.5, h = max(4, 0.17 * length(genes))) }, error = function(e) NULL)
-  if (any(c("percent.mt","percent.ribo") %in% colnames(md))) stage[["Contamination (MT / ribo)"]] <- tryCatch({
-    parts <- list()
-    if ("percent.mt"   %in% colnames(md)) parts[["% MT"]]   <- suppressWarnings(as.numeric(md$percent.mt))
-    if ("percent.ribo" %in% colnames(md)) parts[["% ribo"]] <- suppressWarnings(as.numeric(md$percent.ribo))
-    ccl <- do.call(rbind, lapply(names(parts), function(nm)
-             data.frame(cell_type = md$.cell_type, metric = nm, value = parts[[nm]])))
-    mk_uri(ggplot(ccl, aes(cell_type, value, fill = cell_type)) +
-      geom_violin(scale = "width", linewidth = 0.2) +
-      facet_wrap(~ metric, scales = "free_y", ncol = 1) + theme_minimal(base_size = 10) +
-      theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
-            axis.title.x = element_blank()),
-      w = 8, h = 6) }, error = function(e) NULL)
-  if ("singler_delta" %in% colnames(md)) stage[["SingleR delta (annotation confidence)"]] <- tryCatch({
-    cd <- data.frame(cell_type = md$.cell_type, delta = suppressWarnings(as.numeric(md$singler_delta)))
-    cd <- cd[is.finite(cd$delta), , drop = FALSE]
-    mk_uri(ggplot(cd, aes(cell_type, delta, fill = cell_type)) +
-      geom_violin(scale = "width", linewidth = 0.2) + theme_minimal(base_size = 10) +
-      theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
-            axis.title.x = element_blank()) +
-      labs(y = "SingleR delta (higher = more confident)"),
-      w = 8, h = 4) }, error = function(e) NULL)
-  if ("singler_label_clean" %in% colnames(md)) stage[["SingleR vs final label"]] <- tryCatch({
-    tb <- as.data.frame(table(SingleR = as.character(md$singler_label_clean), Final = md$.cell_type))
-    tb <- tb[tb$Freq > 0, , drop = FALSE]
-    mk_uri(ggplot(tb, aes(Final, SingleR, fill = Freq)) + geom_tile() +
-      scale_fill_viridis_c(trans = "log10", name = "cells") + theme_minimal(base_size = 9) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1)),
-      w = 7.6, h = 5.6) }, error = function(e) NULL)
+  # Key lineage marker expression (replaces SingleR delta) — 05_annotate.R FeaturePlot style
+  lin <- intersect(c("CD3D","CD4","CD8A","CCR7","MS4A1","CD79A","NKG7","GNLY",
+                     "CD14","LYZ","FCGR3A","FCER1A","PPBP"), rownames(obj))
+  if (length(lin)) stage[["Key lineage marker expression"]] <- tryCatch(
+    mk_uri(Seurat::FeaturePlot(obj, features = lin, reduction = umap_name, ncol = 4, order = TRUE,
+                               cols = c("lightgrey", "#E64B35"), raster = TRUE, raster.dpi = c(200, 200)) &
+             theme(plot.title = element_text(size = 10), axis.text = element_blank(), axis.ticks = element_blank()),
+           w = 10, h = 2.5 * ceiling(length(lin) / 4), dpi = 72), error = function(e) NULL)
+  # SingleR reference score heatmap (replaces SingleR-vs-final) — the raw SingleR result is
+  # not stored in the rds, so rasterise the pipeline's annotation/singler_scores_heatmap.pdf.
+  stage[["SingleR reference heatmap"]] <-
+    rasterize_pdf(file.path(run_dir, "annotation", "singler_scores_heatmap.pdf"), dpi = 130)
   stage <- drop_null(stage)
 
   galleries <- list(by_sample = by_sample, stage = stage)
@@ -360,7 +427,8 @@ bundle <- list(
   delta = delta, summary = summary, umap_name = umap_name, de = de,
   markers_dot = markers_dot,
   galleries = galleries, lite = lite,
-  umap_static = umap_static, umap_panels = umap_panels
+  umap_static = umap_static, umap_panels = umap_panels,
+  cell_colors = PAL
 )
 bpath <- file.path(tempdir(), paste0("report_bundle_", Sys.getpid(), ".rds"))
 saveRDS(bundle, bpath)

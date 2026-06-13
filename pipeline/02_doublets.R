@@ -96,6 +96,27 @@ run_doubletfinder <- function(seu, sample_name) {
 
 report_plots <- list()
 
+# The doublet UMAP + score-histogram PDFs are computed ONCE in run_doubletfinder()
+# (with the full pre-removal cells, hence the true doublet counts). The HTML report
+# reads them from this run's doublets/. Cache them next to the sample and restore them
+# on a cache hit so reused samples still get their plots — the doublets themselves are
+# gone from the saved _singlets.rds, so they cannot be regenerated downstream.
+DBL_PDF_SUFFIXES <- c("_doublet_umap.pdf", "_doublet_score_hist.pdf")
+cache_doublet_plots <- function(nm) {            # run doublets/ -> sample_cache/
+  dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
+  for (suf in DBL_PDF_SUFFIXES) {
+    src <- file.path(DIRS$doublets, paste0(nm, suf))
+    if (file.exists(src)) file.copy(src, file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, suf)), overwrite = TRUE)
+  }
+}
+restore_doublet_plots <- function(nm) {          # sample_cache/ -> run doublets/
+  for (suf in DBL_PDF_SUFFIXES) {
+    cp <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, suf))
+    if (file.exists(cp)) file.copy(cp, file.path(DIRS$doublets, paste0(nm, suf)), overwrite = TRUE)
+    else message("  [CACHE] note: no cached doublet plot ", paste0(nm, suf), " (pre-dates plot caching)")
+  }
+}
+
 for (nm in SAMPLE_NAMES) {
   out_path   <- file.path(DIRS$individual, nm, paste0(nm, "_singlets.rds"))
   cache_path <- file.path(SAMPLE_CACHE_DIR, nm, paste0(nm, "_singlets.rds"))
@@ -105,6 +126,7 @@ for (nm in SAMPLE_NAMES) {
     if (stored == cache_hash(nm, "02")) {
       message("  [CACHE HIT] ", nm, ": loading _singlets.rds from sample_cache/ (skipping doublet detection)")
       file.copy(cache_path, out_path, overwrite = TRUE)
+      restore_doublet_plots(nm)
     } else {
       message("  [CACHE STALE] ", nm, ": config changed — recomputing")
       seu <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_filtered.rds")))
@@ -115,7 +137,8 @@ for (nm in SAMPLE_NAMES) {
       dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
       file.copy(out_path, cache_path, overwrite = TRUE)
       writeLines(cache_hash(nm, "02"), hash_path)
-      message("  [CACHE] Saved ", nm, "_singlets.rds to sample_cache/")
+      cache_doublet_plots(nm)
+      message("  [CACHE] Saved ", nm, "_singlets.rds + doublet plots to sample_cache/")
     }
   } else {
     seu <- readRDS(file.path(DIRS$individual, nm, paste0(nm, "_filtered.rds")))
@@ -126,7 +149,8 @@ for (nm in SAMPLE_NAMES) {
     dir.create(file.path(SAMPLE_CACHE_DIR, nm), recursive = TRUE, showWarnings = FALSE)
     file.copy(out_path, cache_path, overwrite = TRUE)
     writeLines(cache_hash(nm, "02"), hash_path)
-    message("  [CACHE] Saved ", nm, "_singlets.rds to sample_cache/")
+    cache_doublet_plots(nm)
+    message("  [CACHE] Saved ", nm, "_singlets.rds + doublet plots to sample_cache/")
   }
 }
 

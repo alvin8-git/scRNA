@@ -29,10 +29,14 @@ vcells <- {
   cells[sort(idx), , drop = FALSE]
 }
 PAL <- {
-  cts <- sort(unique(cells$cell_type))
+  cts  <- sort(unique(cells$cell_type))
   base <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
             "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
-  setNames(rep(base, length.out = length(cts)), cts)
+  if (!is.null(B$cell_colors)) {            # canonical CELLTYPE_COLORS from the driver
+    p <- unname(B$cell_colors[cts]); miss <- is.na(p)
+    if (any(miss)) p[miss] <- rep(base, length.out = sum(miss))
+    setNames(p, cts)
+  } else setNames(rep(base, length.out = length(cts)), cts)
 }
 n_samp   <- length(B$samples)
 # On many-sample runs the live ggplotly violins serialize ~1000-point density
@@ -58,6 +62,8 @@ fig_w    <- max(7, 4.2 * fac_ncol)
   --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
 }
 *{box-sizing:border-box}
+/* clicked nav anchors land below the fixed 52px top bar instead of behind it */
+html{scroll-padding-top:68px}
 body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
      color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5}
 /* hide R Markdown's default title/date header — the title lives in the top bar */
@@ -137,7 +143,7 @@ small{color:var(--muted)}
 .selchip:hover{border-color:#c4ccd8;color:var(--ink)}
 .selchip.on{border-color:var(--accent);background:#f2f6ff;color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
 .umapwrap{display:flex;gap:16px;align-items:flex-start}
-.umapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;flex:1;min-width:0}
+.umapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;flex:1;min-width:0}
 .umapcell{border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 6px 2px;box-shadow:var(--shadow);min-width:0}
 .umaptitle{font-weight:600;font-size:12.5px;padding:3px 6px;color:var(--ink)}
 .shlegend{width:158px;flex:none;border:1px solid var(--line);border-radius:10px;background:#fff;
@@ -156,6 +162,9 @@ small{color:var(--muted)}
 .scardlink{text-decoration:none;color:inherit;display:block}
 .scardlink:hover .scard{border-color:var(--accent);box-shadow:0 2px 7px rgba(59,130,246,.16)}
 
+/* one- or two-line grey description printed under a section title */
+.plot-desc{color:var(--muted);font-size:12.5px;line-height:1.45;margin:2px 0 14px;max-width:820px}
+
 /* static gallery figures */
 .galfig{margin:10px 0 20px}
 .galfig figcaption{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:5px}
@@ -164,7 +173,8 @@ small{color:var(--muted)}
 
 ```{r shell, results='asis'}
 top <- sprintf('<div class="report-top"><span class="title">%s</span><span class="chip">Interactive run report</span><span class="meta"><span><b>%s</b> cells</span><span><b>%s</b> samples</span><span>%s</span></span></div><button class="navtoggle" title="Show / hide the navigation rail" onclick="document.body.classList.toggle(\'nav-collapsed\')">&#9776;</button>',
-  htmltools::htmlEscape(B$run_name), format(B$n_cells_total, big.mark=","), n_samp, format(Sys.Date(), "%d %b %Y"))
+  htmltools::htmlEscape(B$run_name), format(B$n_cells_total, big.mark=","), n_samp,
+  paste(format(Sys.Date(), "%d"), month.abb[as.integer(format(Sys.Date(), "%m"))], format(Sys.Date(), "%Y")))
 slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
 gal  <- !isTRUE(B$lite) && !is.null(B$galleries)
 stage_links <- if (gal && length(B$galleries$stage)) paste0('<div class="grouplabel">Per stage</div>',
@@ -177,8 +187,8 @@ nav <- paste0('<nav class="report-nav">',
   '<div class="grouplabel">Run</div><a href="#overview">Overview</a>',
   '<div class="grouplabel">Compare</div>',
   '<a href="#sample-comparison">Sample comparison</a>',
-  '<a href="#cell-type-markers">Cell-type markers</a>',
   '<a href="#cell-proportions">Cell proportions</a>',
+  '<a href="#cell-type-markers">Cell-type markers</a>',
   stage_links, sample_links,
   '</nav>')
 cat(top, nav)
@@ -249,12 +259,16 @@ if (static) {
 } else {
   mk_umap <- function(s) {
     dd <- cells[cells$sample == s, , drop = FALSE]
+    nc <- B$summary$Cells[match(s, B$summary$Sample)]; if (is.na(nc)) nc <- nrow(dd)
     plot_ly(dd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
             type = "scattergl", mode = "markers",
-            marker = list(size = 4, opacity = 0.75),
-            text = ~cell_type, hoverinfo = "text", showlegend = FALSE, height = 290) |>
-      layout(xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
-             margin = list(l = 2, r = 2, t = 2, b = 2)) |>
+            marker = list(size = 4, opacity = 0.8),
+            text = ~cell_type, hoverinfo = "text", showlegend = FALSE, height = 360) |>
+      layout(title = list(text = sprintf("%s  (%s cells)", s, format(nc, big.mark = ",")),
+                          x = 0.03, y = 0.97, font = list(size = 13)),
+             xaxis = list(title = "UMAP 1", zeroline = FALSE, showticklabels = FALSE),
+             yaxis = list(title = "UMAP 2", zeroline = FALSE, showticklabels = FALSE),
+             margin = list(l = 42, r = 8, t = 30, b = 36)) |>
       toWebGL()
   }
   panels <- lapply(B$samples, function(s)
@@ -287,60 +301,44 @@ across every UMAP at once (e.g. isolate CD14+ Mono pre vs post to read the sort)
 
 ## QC
 
+<p class="plot-desc">Distribution of genes detected, UMIs and mitochondrial % per cell, one violin per sample
+(PDF style — no scatter dots). Hover for the median and quartiles; compare spreads to spot
+low-complexity or high-MT samples. Drag to zoom.</p>
+
 ```{r qc_violin}
+# Use ggplot geom_violin(scale="width") — the SAME engine as the pipeline's Seurat
+# VlnPlot (01_load_qc.R) — so the violin shapes match Overall_Report.pdf exactly.
+# trim=TRUE clips the density to the data range; no jitter points (PDF style).
 long <- do.call(rbind, lapply(c("nFeature_RNA","nCount_RNA","percent.mt"), function(m)
   data.frame(sample = vcells$sample, metric = m, value = vcells[[m]])))
 long$metric <- factor(long$metric, levels = c("nFeature_RNA","nCount_RNA","percent.mt"),
                       labels = c("Genes / cell","UMIs / cell","% mito"))
 gv <- ggplot(long, aes(sample, value, fill = sample)) +
-  geom_violin(scale = "width", linewidth = 0.2, n = 64) +
+  geom_violin(scale = "width", trim = TRUE, linewidth = 0.2) +
   facet_wrap(~ metric, scales = "free_y", ncol = 3) +
   theme_minimal(base_size = 11) +
   theme(axis.text.x = element_text(angle = 30, hjust = 1), legend.position = "none",
         axis.title = element_blank(), strip.text = element_text(face = "bold"))
-if (STATIC) htmltools::tags$img(src = to_uri(gv, w = 9, h = 4.4), style = "width:100%") else ggplotly(gv, height = 430)
+ggplotly(gv, height = 430, tooltip = "y")
 ```
 
 ## Doublets
 
+<p class="plot-desc">Residual scDblFinder scores of the <i>retained</i> cells per sample (interactive violin, no dots) —
+called doublets were already removed before integration, so this shows how cleanly each sample
+separated. For the per-sample doublet calls and counts, see the Doublets panels in Per-sample detail.</p>
+
 ```{r doublets}
 if (all(is.na(cells$doublet_score))) {
-  cat("Doublet scores are not stored in this object; see the per-sample doublet PDFs.")
+  cat("Doublet scores are not stored in this object; see the per-sample doublet plots below.")
 } else {
   gd <- ggplot(vcells, aes(sample, doublet_score, fill = sample)) +
-    geom_violin(scale = "width", linewidth = 0.2, n = 64) +
+    geom_violin(scale = "width", trim = TRUE, linewidth = 0.2) +
     theme_minimal(base_size = 11) +
-    theme(legend.position = "none", axis.title.x = element_blank()) +
+    theme(legend.position = "none", axis.title.x = element_blank(),
+          axis.text.x = element_text(angle = 30, hjust = 1)) +
     labs(y = "scDblFinder score")
-  if (STATIC) htmltools::tags$img(src = to_uri(gd, w = 9, h = 4), style = "width:100%") else ggplotly(gd, height = 390)
-}
-```
-
-# Cell-type markers
-
-Canonical marker panel across the annotated types — dot **size** is the % of cells in that type
-expressing the gene, **colour** is the scaled average expression. This is the evidence behind the
-labels (e.g. CD14/LYZ/S100A8 lighting up CD14+ Mono, MS4A1/CD79A on B cells).
-
-```{r marker_dot}
-md_ <- B$markers_dot
-if (is.null(md_) || !nrow(md_)) {
-  cat("Marker dot plot is unavailable for this run.")
-} else {
-  go <- attr(md_, "gene_order"); if (is.null(go)) go <- unique(md_$gene)
-  md_$gene <- factor(md_$gene, levels = go)
-  md_$cell_type <- factor(md_$cell_type, levels = rev(sort(unique(md_$cell_type))))
-  gp <- ggplot(md_, aes(gene, cell_type, size = pct_exp, color = avg_scaled,
-                 text = paste0("<b>", gene, "</b> in ", cell_type, "<br>",
-                               round(pct_exp), "% expressing<br>scaled avg ", round(avg_scaled, 2)))) +
-    geom_point() +
-    scale_color_gradient2(low = "#4575b4", mid = "#f7f7f7", high = "#d73027",
-                          midpoint = 0, name = "scaled avg") +
-    scale_size(range = c(0, 6), name = "% expressing") +
-    theme_minimal(base_size = 11) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 9),
-          axis.title = element_blank(), panel.grid.major = element_line(color = "#f0f0f0"))
-  ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 130))
+  ggplotly(gd, height = 390, tooltip = "y")
 }
 ```
 
@@ -389,6 +387,33 @@ if (is.null(B$delta)) {
 }
 ```
 
+# Cell-type markers
+
+Canonical marker panel across the annotated types — dot **size** is the % of cells in that type
+expressing the gene, **colour** is the scaled average expression. This is the evidence behind the
+labels (e.g. CD14/LYZ/S100A8 lighting up CD14+ Mono, MS4A1/CD79A on B cells).
+
+```{r marker_dot}
+md_ <- B$markers_dot
+if (is.null(md_) || !nrow(md_)) {
+  cat("Marker dot plot is unavailable for this run.")
+} else {
+  go <- attr(md_, "gene_order"); if (is.null(go)) go <- unique(md_$gene)
+  md_$gene <- factor(md_$gene, levels = go)
+  md_$cell_type <- factor(md_$cell_type, levels = rev(sort(unique(md_$cell_type))))
+  gp <- ggplot(md_, aes(gene, cell_type, size = pct_exp, color = avg_scaled,
+                 text = paste0("<b>", gene, "</b> in ", cell_type, "<br>",
+                               round(pct_exp), "% expressing<br>scaled avg ", round(avg_scaled, 2)))) +
+    geom_point() +
+    scale_color_viridis_c(option = "plasma", name = "scaled avg") +
+    scale_size(range = c(0, 6), name = "% expressing") +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5, size = 9),
+          axis.title = element_blank(), panel.grid.major = element_line(color = "#f0f0f0"))
+  ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 130))
+}
+```
+
 ```{r galleries, results='asis'}
 # Emit real markdown headers (not raw <h1>/<h2>) so pandoc CLOSES the proportions
 # {.tabset} above. Raw HTML headers left the galleries trapped inside the last (hidden)
@@ -396,18 +421,42 @@ if (is.null(B$delta)) {
 if (!isTRUE(B$lite) && !is.null(B$galleries)) {
   G <- B$galleries
   slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+  # one- or two-line plain-English description for each plot family (cf. Overall_Report.pdf)
+  DESC <- c(
+    "Top DE marker heatmap" =
+      "Top differentially expressed genes per cell type (rows), scaled across types (columns). Bright red marks the type where each gene is most enriched — the molecular signature behind each label.",
+    "Key lineage marker expression" =
+      "Canonical lineage genes projected on the shared UMAP. Each panel lights up where one marker is expressed (CD3D = T, MS4A1/CD79A = B, NKG7/GNLY = NK, CD14/LYZ = monocyte), confirming the annotation spatially.",
+    "SingleR reference heatmap" =
+      "SingleR correlation scores of every cell (columns) against each reference label (rows). Strong diagonal blocks indicate confident, unambiguous assignments.",
+    "QC: UMIs vs genes" =
+      "Each dot is a cell: total UMIs vs genes detected, coloured by mitochondrial %. The dashed box is the acceptance window — cells outside it were filtered out.",
+    "QC: UMIs vs % MT" =
+      "UMIs vs mitochondrial fraction per cell. The dashed line is the %MT cutoff; stressed or dying cells (high MT, low UMI) sit above it and are removed.",
+    "Doublets (UMAP)" =
+      "Per-sample UMAP (pre-removal, from step 02) coloured by scDblFinder call. Red doublets tend to fall between lineages or in high-UMI regions and are dropped before integration. Counts reflect the full sample, not the plotting cap.",
+    "Doublet score distribution" =
+      "Histogram of scDblFinder doublet scores for the sample, coloured by called class. The singlet/doublet split shows where the score threshold fell.",
+    "Highly variable genes" =
+      "Mean expression vs standardized variance per gene; the 10 most variable genes are labelled. These highly variable genes drive PCA and clustering.")
+  desc_of <- function(name) if (!is.na(DESC[name])) sprintf('<p class="plot-desc">%s</p>\n', DESC[name]) else ""
   emit_fig <- function(uri, cap = NULL) {
     fc <- if (is.null(cap)) "" else sprintf('<figcaption>%s</figcaption>', htmltools::htmlEscape(cap))
-    cat(sprintf('\n<figure class="galfig">%s<img src="%s"></figure>\n', fc, uri))
+    desc <- if (is.null(cap)) "" else desc_of(cap)
+    cat(sprintf('\n<figure class="galfig">%s%s<img src="%s"></figure>\n', fc, desc, uri))
   }
   if (length(G$stage)) {
     cat('\n# Stage galleries {#galleries}\n\n')
     cat('Regenerated from the saved objects. The SingleR panels stand in for the raw score heatmap (the pipeline does not keep the score matrix in the object).\n')
-    for (t in names(G$stage)) { cat(sprintf('\n## %s {#stage-%s}\n\n', t, slug(t))); emit_fig(G$stage[[t]]) }
+    for (t in names(G$stage)) {
+      cat(sprintf('\n## %s {#stage-%s}\n\n', t, slug(t)))
+      cat(desc_of(t))
+      emit_fig(G$stage[[t]])
+    }
   }
   if (length(G$by_sample)) {
     cat('\n# Per-sample detail {#per-sample}\n\n')
-    cat('Each panel is regenerated from the saved objects. Use the Overview cards to jump here.\n')
+    cat('Each panel is regenerated from the saved objects. Use the Overview cards to jump here. <span class="plot-desc" style="display:inline">Doublet panels appear only for samples whose doublet detection ran in this analysis; samples loaded from cache (pre-removed singlets) show the other diagnostics only.</span>\n')
     for (s in names(G$by_sample)) {
       cat(sprintf('\n## %s {#sample-%s}\n\n', s, slug(s)))
       imgs <- G$by_sample[[s]]; for (t in names(imgs)) emit_fig(imgs[[t]], t)
