@@ -148,6 +148,8 @@ small{color:var(--muted)}
 .selchip.on{border-color:var(--accent);background:#f2f6ff;color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
 .umapwrap{display:flex;gap:16px;align-items:flex-start}
 .umapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;flex:1;min-width:0}
+/* one visible panel (single-sample run, or all but one chip deselected) spans full width */
+.umapgrid.solo{grid-template-columns:1fr}
 .umapcell{border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 6px 2px;box-shadow:var(--shadow);min-width:0}
 .umaptitle{font-weight:600;font-size:12.5px;padding:3px 6px;color:var(--ink)}
 .shlegend{width:158px;flex:none;border:1px solid var(--line);border-radius:10px;background:#fff;
@@ -331,7 +333,11 @@ legitems <- lapply(cts, function(ct)
   htmltools::tags$div(class = if (static) "legitem static" else "legitem", `data-ct` = ct,
     htmltools::tags$span(class = "legsw", style = sprintf("background:%s", PAL[[ct]])),
     htmltools::tags$span(ct)))
-js_chip <- "document.querySelectorAll('.selrow .selchip').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w) w.style.display=on?'':'none';});});"
+js_solo <- "function umSolo(){var g=document.querySelector('.umapgrid');if(!g)return;var n=0;Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')n++;});g.classList.toggle('solo',n===1);if(window.Plotly)requestAnimationFrame(function(){g.querySelectorAll('.js-plotly-plot').forEach(function(p){try{Plotly.Plots.resize(p);}catch(e){}});});}"
+js_chip <- "document.querySelectorAll('.selrow .selchip').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w) w.style.display=on?'':'none';umSolo();});});"
+# linked zoom/pan: every UMAP shares the integrated coordinate space, so syncing axis ranges
+# across the plotly widgets makes a zoom/pan on one repeat on all (interactive runs only)
+js_sync <- if (static) "" else "(function s(){var g=document.querySelectorAll('.umapgrid .js-plotly-plot');if(!g.length||!g[0].on){return setTimeout(s,300);}var busy=false;Array.prototype.forEach.call(g,function(gd){gd.on('plotly_relayout',function(e){if(busy)return;var u={};if('xaxis.range[0]'in e){u['xaxis.range[0]']=e['xaxis.range[0]'];u['xaxis.range[1]']=e['xaxis.range[1]'];}if('yaxis.range[0]'in e){u['yaxis.range[0]']=e['yaxis.range[0]'];u['yaxis.range[1]']=e['yaxis.range[1]'];}if('xaxis.autorange'in e){u['xaxis.autorange']=true;u['yaxis.autorange']=true;}if(!Object.keys(u).length)return;busy=true;Array.prototype.forEach.call(g,function(o){if(o!==gd&&window.Plotly)Plotly.relayout(o,u);});busy=false;});});})();"
 js_leg  <- if (static) "" else "document.querySelectorAll('.shlegend .legitem').forEach(function(it){it.addEventListener('click',function(){var off=it.classList.toggle('off'),name=it.getAttribute('data-ct');document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){if(!gd.data) return;var idx=[];gd.data.forEach(function(t,i){if(t.name===name) idx.push(i);});if(idx.length&&window.Plotly) Plotly.restyle(gd,{visible:off?'legendonly':true},idx);});});});"
 note <- if (static) htmltools::tags$p(class = "muted-note",
   sprintf("%d samples: panels are high-resolution static snapshots (live zoom + legend toggle kick in automatically for runs of 8 samples or fewer). Use the chips to show or hide samples.", length(B$samples))) else NULL
@@ -342,7 +348,8 @@ htmltools::browsable(htmltools::tagList(
     htmltools::div(class = "umapgrid", panels),
     htmltools::div(class = "shlegend",
       htmltools::div(class = "lgtitle", "Cell type"), legitems)),
-  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s})();", js_chip, js_leg)))
+  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s%s umSolo(); %s})();",
+    js_solo, js_chip, js_leg, js_sync)))
 ))
 ```
 
@@ -490,12 +497,15 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
     "Doublet score distribution" =
       "Histogram of scDblFinder doublet scores for the sample, coloured by called class. The singlet/doublet split shows where the score threshold fell.",
     "Highly variable genes" =
-      "Mean expression vs standardized variance per gene; the 10 most variable genes are labelled. These highly variable genes drive PCA and clustering.")
+      sprintf("Mean expression vs standardized variance per gene; the 10 most variable are labelled. The dashed line marks standardized variance %s — the Overview HVG count is the number of genes above it. These variable genes drive PCA and clustering.",
+              if (is.null(B$hvg_var_threshold)) "1.3" else B$hvg_var_threshold))
   desc_of <- function(name) if (!is.na(DESC[name])) sprintf('<p class="plot-desc">%s</p>\n', DESC[name]) else ""
   emit_fig <- function(uri, cap = NULL) {
+    # caption (one line) ABOVE the image, description BELOW it — so two figures sharing a grid
+    # row have their image tops flush regardless of how long each description is
     fc <- if (is.null(cap)) "" else sprintf('<figcaption>%s</figcaption>', htmltools::htmlEscape(cap))
     desc <- if (is.null(cap)) "" else desc_of(cap)
-    cat(sprintf('\n<figure class="galfig">%s%s<img src="%s"></figure>\n', fc, desc, uri))
+    cat(sprintf('\n<figure class="galfig">%s<img src="%s">%s</figure>\n', fc, uri, desc))
   }
   if (length(G$stage)) {
     cat('\n# Stage galleries {#galleries}\n\n')

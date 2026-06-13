@@ -152,6 +152,19 @@ PAL["Unassigned"] <- "#B0B0B0"
 QC_THRESH <- list(min_features = 200, max_features = 5000,
                   min_counts = 500, max_counts = 25000, max_percent_mt = 20)
 
+# Overview "HVG" count = genes whose vst standardized variance exceeds this (more meaningful
+# than reporting the fixed top-2000 selection). The HVG plot draws a dashed line here.
+# 1.3 ≈ "clearly above the expected variance" and lands near the real HVG magnitude
+# (e.g. ~1460 genes); >5 is far too stringent (only ~17), >1 too inclusive (~6300).
+HVG_VAR_THRESHOLD <- 1.3
+hvg_count <- function(so, thr = HVG_VAR_THRESHOLD) {
+  hvi <- tryCatch(Seurat::HVFInfo(so), error = function(e) NULL)
+  if (is.null(hvi)) return(NA_integer_)
+  col <- grep("variance\\.standardized$", colnames(hvi), value = TRUE)
+  if (!length(col)) return(NA_integer_)
+  as.integer(sum(hvi[[col[1]]] > thr, na.rm = TRUE))
+}
+
 if (length(samples_all) > 8)
   msg("WARNING: %d samples (>8). UMAP comparison panels render as static images; interactive zoom is available only for runs of 8 or fewer.", length(samples_all))
 to_uri <- function(g, w, h, dpi = 72) {
@@ -256,8 +269,8 @@ hvg_n <- vapply(samples_all, function(s) {
   if (!length(f)) return(NA_integer_)
   f <- f[order(!grepl("_(seurat|singlets)\\.rds$", f))]   # HVG-bearing objects first
   for (cand in f) {
-    n <- tryCatch(length(Seurat::VariableFeatures(readRDS(cand))), error = function(e) NA_integer_)
-    if (!is.na(n) && n > 0) return(n)
+    n <- tryCatch(hvg_count(readRDS(cand)), error = function(e) NA_integer_)
+    if (!is.na(n)) return(n)
   }
   NA_integer_
 }, integer(1))
@@ -394,22 +407,25 @@ if (!lite) {
                                     repel = TRUE, xnudge = 0, ynudge = 0, size = 3)
           # the default legend sits on the right and eats ~half the panel; move it under the
           # plot and shrink it so the scatter owns the space (aspect matched to the doublet UMAP)
-          ph <- ph + ggplot2::theme(
-            legend.position = "bottom", legend.direction = "horizontal",
-            legend.title = ggplot2::element_blank(), legend.text = ggplot2::element_text(size = 8),
-            legend.key.size = grid::unit(9, "pt"), legend.margin = ggplot2::margin(t = -2)) +
+          ph <- ph +
+            ggplot2::geom_hline(yintercept = HVG_VAR_THRESHOLD, linetype = "dashed",
+                                colour = "#888888", linewidth = 0.4) +
+            ggplot2::theme(
+              legend.position = "bottom", legend.direction = "horizontal",
+              legend.title = ggplot2::element_blank(), legend.text = ggplot2::element_text(size = 8),
+              legend.key.size = grid::unit(9, "pt"), legend.margin = ggplot2::margin(t = -2)) +
             ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(size = 2)))
           mk_uri(ph + labs(title = paste(s, "- Variable genes (top 10 labelled)")),
-                 w = GAL_W, h = GAL_W * 0.857, dpi = GAL_DPI)
+                 w = GAL_W, h = GAL_W * 0.70, dpi = GAL_DPI)
         }
       }, error = function(e) NULL)
       if (!is.null(img)) { imgs[["Highly variable genes"]] <- img; break }
     }
     imgs <- drop_null(imgs)
-    # order so each 2-up gallery row is level: QC pair, then UMAP|HVG (same aspect), then the
-    # short score-distribution histogram on its own row (no taller neighbour to be uneven with)
-    ord <- c("QC: UMIs vs genes", "QC: UMIs vs % MT", "Doublets (UMAP)",
-             "Highly variable genes", "Doublet score distribution")
+    # 2-up gallery rows: QC pair, then the two doublet panels together, then HVG. Figures use a
+    # one-line caption above the image (description below), so image tops are flush within a row.
+    ord <- c("QC: UMIs vs genes", "QC: UMIs vs % MT",
+             "Doublets (UMAP)", "Doublet score distribution", "Highly variable genes")
     imgs <- imgs[c(intersect(ord, names(imgs)), setdiff(names(imgs), ord))]
     if (length(imgs)) by_sample[[s]] <- imgs
   }
@@ -477,7 +493,8 @@ bundle <- list(
   markers_dot = markers_dot,
   galleries = galleries, lite = lite,
   umap_static = umap_static, umap_panels = umap_panels,
-  cell_colors = PAL, tool_versions = tool_versions
+  cell_colors = PAL, tool_versions = tool_versions,
+  hvg_var_threshold = HVG_VAR_THRESHOLD
 )
 bpath <- file.path(tempdir(), paste0("report_bundle_", Sys.getpid(), ".rds"))
 saveRDS(bundle, bpath)
