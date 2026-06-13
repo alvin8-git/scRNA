@@ -20,3 +20,4 @@ Rplots.pdf
 
 # OS
 .DS_Store
+pipeline/report_template.knit.md
