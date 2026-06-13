@@ -299,9 +299,9 @@ if (file.exists(de_path)) {
 galleries <- NULL
 if (!lite) {
   msg("building static galleries (pass --lite to skip) ...")
-  # uniform render target for every per-sample figure: ~1100 px wide so they display at one
-  # tidy width (the report CSS stretches them to the marker/container width) without upscaling.
-  GAL_W   <- 7.3    # inches
+  # uniform render target for every per-sample figure. The report CSS caps gallery images at
+  # 680 px wide; render a touch larger (~840 px) so they stay crisp without bloating the file.
+  GAL_W   <- 5.6    # inches  (5.6 x 150 = 840 px)
   GAL_DPI <- 150
   mk_uri <- function(g, w = 7, h = 4.4, dpi = 96) {
     tf <- tempfile(fileext = ".png")
