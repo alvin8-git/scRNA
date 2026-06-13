@@ -146,6 +146,19 @@ small{color:var(--muted)}
   cursor:pointer;color:var(--muted);font-weight:500}
 .selchip:hover{border-color:#c4ccd8;color:var(--ink)}
 .selchip.on{border-color:var(--accent);background:#f2f6ff;color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
+/* small text controls (Select all / Unselect all) next to the sample chips */
+.selctl{background:none;border:0;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;
+  padding:6px 6px;text-decoration:underline;text-underline-offset:2px}
+.selctl:hover{color:#1d4ed8}
+/* Overview column glossary */
+.glossary{margin:14px 0 22px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:4px 14px 12px}
+.glossary>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ink);padding:8px 0;list-style:none}
+.glossary>summary::-webkit-details-marker{display:none}
+.glossary>summary:before{content:"\25B8 ";color:var(--muted)}
+.glossary[open]>summary:before{content:"\25BE "}
+.gloss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:4px 22px}
+.gloss-item{font-size:12.5px;color:var(--muted);padding:3px 0;line-height:1.4}
+.gloss-item b{color:var(--ink);font-weight:600;margin-right:5px}
 .umapwrap{display:flex;gap:16px;align-items:flex-start}
 .umapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;flex:1;min-width:0}
 /* one visible panel (single-sample run, or all but one chip deselected) spans full width */
@@ -290,6 +303,24 @@ datatable(S2, rownames = FALSE,
   formatRound(roundable, 1)
 ```
 
+```{r glossary, results='asis'}
+thr <- if (is.null(B$hvg_var_threshold)) 1.3 else B$hvg_var_threshold
+defs <- c(
+  "Cells"                = "Cells passing QC filtering and doublet removal.",
+  "% retained"           = "Percentage of input GEM barcodes kept after QC and doublet removal.",
+  "Median genes"         = "Median number of genes detected per cell (nFeature_RNA).",
+  "Median UMI"           = "Median transcript (UMI) count per cell (nCount_RNA).",
+  "% MT (Median %MT)"    = "Median fraction of reads from mitochondrial genes per cell; high values flag stressed or dying cells.",
+  "Median %ribo"         = "Median fraction of reads from ribosomal genes per cell.",
+  "Doublets (Doublet %)" = "Percentage of cells flagged as multiplets by scDblFinder and removed before integration.",
+  "HVG"                  = sprintf("Highly Variable Genes: genes with vst standardized variance &gt; %s.", thr),
+  "Cell types"           = "Number of distinct annotated cell types in the sample.",
+  "Top type"             = "Most abundant cell type in the sample.")
+items <- paste(sprintf('<div class="gloss-item"><b>%s</b><span>%s</span></div>',
+                       htmltools::htmlEscape(names(defs)), defs), collapse = "")
+cat(sprintf('<details class="glossary" open><summary>What the columns mean</summary><div class="gloss-grid">%s</div></details>', items))
+```
+
 # Sample comparison {.tabset .tabset-pills}
 
 Pick a metric below, then choose which samples to compare with the chips. Every panel shares the
@@ -334,19 +365,24 @@ legitems <- lapply(cts, function(ct)
     htmltools::tags$span(class = "legsw", style = sprintf("background:%s", PAL[[ct]])),
     htmltools::tags$span(ct)))
 js_solo <- "var _wasSolo=null;function umResize(c,solo){var w=c.querySelector('.html-widget'),p=c.querySelector('.js-plotly-plot');if(w)w.style.height=(solo?700:360)+'px';if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}}function umSolo(){var g=document.querySelector('.umapgrid');if(!g)return;var n=0;Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')n++;});var solo=n===1;g.classList.toggle('solo',solo);if(solo===_wasSolo)return;_wasSolo=solo;requestAnimationFrame(function(){Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')umResize(c,solo);});});}"
-js_chip <- "document.querySelectorAll('.selrow .selchip').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on)requestAnimationFrame(function(){var p=w.querySelector('.js-plotly-plot');if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}});}umSolo();});});"
+js_chip <- "document.querySelectorAll('.selrow .selchip[data-sample]').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on)requestAnimationFrame(function(){var p=w.querySelector('.js-plotly-plot');if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}});}umSolo();});});"
+# Select all / Unselect all controls for the UMAP sample chips
+js_ctl <- "document.querySelectorAll('.selrow .selctl').forEach(function(b){b.addEventListener('click',function(){var on=b.getAttribute('data-act')==='all';document.querySelectorAll('.selrow .selchip[data-sample]').forEach(function(ch){ch.classList.toggle('on',on);var w=document.getElementById('umapwrap-'+ch.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on&&window.Plotly){var p=w.querySelector('.js-plotly-plot');if(p){try{Plotly.Plots.resize(p);}catch(e){}}}}});umSolo();});});"
 js_leg  <- if (static) "" else "document.querySelectorAll('.shlegend .legitem').forEach(function(it){it.addEventListener('click',function(){var off=it.classList.toggle('off'),name=it.getAttribute('data-ct');document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){if(!gd.data) return;var idx=[];gd.data.forEach(function(t,i){if(t.name===name) idx.push(i);});if(idx.length&&window.Plotly) Plotly.restyle(gd,{visible:off?'legendonly':true},idx);});});});"
 note <- if (static) htmltools::tags$p(class = "muted-note",
   sprintf("%d samples: panels are high-resolution static snapshots (live zoom + legend toggle kick in automatically for runs of 8 samples or fewer). Use the chips to show or hide samples.", length(B$samples))) else NULL
+ctl <- htmltools::tagList(
+  htmltools::tags$button(class = "selctl", `data-act` = "all", "Select all"),
+  htmltools::tags$button(class = "selctl", `data-act` = "none", "Unselect all"))
 htmltools::browsable(htmltools::tagList(
-  htmltools::div(class = "selrow", htmltools::tags$span(class = "sellabel", "Samples"), chips),
+  htmltools::div(class = "selrow", htmltools::tags$span(class = "sellabel", "Samples"), chips, ctl),
   note,
   htmltools::div(class = "umapwrap",
     htmltools::div(class = "umapgrid", panels),
     htmltools::div(class = "shlegend",
       htmltools::div(class = "lgtitle", "Cell type"), legitems)),
-  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s%s umSolo();})();",
-    js_solo, js_chip, js_leg)))
+  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s%s%s umSolo();})();",
+    js_solo, js_chip, js_leg, js_ctl)))
 ))
 ```
 
@@ -551,7 +587,7 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
       cat('\n</div>\n')
     }
     # show one sample at a time; reveal on chip click or on a #sample-<slug> deep-link
-    cat('<script>(function(){var secs=document.querySelectorAll("#per-sample .level2");var chips=document.querySelectorAll(".psel .selchip");if(!secs.length)return;var hdr=document.getElementById("per-sample");function show(sl){secs.forEach(function(s){s.style.display=(s.id==="sample-"+sl)?"":"none";});chips.forEach(function(c){c.classList.toggle("on",c.getAttribute("data-psample")===sl);});}function goPS(sl){show(sl);if(hdr)hdr.scrollIntoView();}chips.forEach(function(c){c.addEventListener("click",function(){goPS(c.getAttribute("data-psample"));});});function fromHash(){var m=(location.hash||"").match(/^#sample-(.+)$/);if(m)goPS(m[1]);}window.addEventListener("hashchange",fromHash);if(/^#sample-/.test(location.hash)){fromHash();}else{show(chips[0].getAttribute("data-psample"));}})();</script>\n')
+    cat('<script>(function(){var secs=document.querySelectorAll("#per-sample .level2");var chips=document.querySelectorAll(".psel .selchip");if(!secs.length)return;var hdr=document.getElementById("per-sample");function show(sl){secs.forEach(function(s){s.style.display=(s.id==="sample-"+sl)?"":"none";});chips.forEach(function(c){c.classList.toggle("on",c.getAttribute("data-psample")===sl);});}function goPS(sl){show(sl);if(hdr)hdr.scrollIntoView();}var valid={};chips.forEach(function(c){valid[c.getAttribute("data-psample")]=1;});chips.forEach(function(c){c.addEventListener("click",function(){goPS(c.getAttribute("data-psample"));});});function fromHash(){var m=(location.hash||"").match(/^#sample-(.+)$/);if(m&&valid[m[1]])goPS(m[1]);}window.addEventListener("hashchange",fromHash);if(/^#sample-/.test(location.hash)){fromHash();}else{show(chips[0].getAttribute("data-psample"));}})();</script>\n')
   }
 }
 ```
