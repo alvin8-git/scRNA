@@ -246,13 +246,20 @@ if ("percent.ribo" %in% colnames(md)) {
   rib <- tapply(suppressWarnings(as.numeric(md$percent.ribo)), md$.sample, median, na.rm = TRUE)
   summary$Median_pct_ribo <- round(rib[summary$Sample], 2)
 }
-# highly-variable genes per sample (from the per-sample objects, if present)
+# highly-variable genes per sample. FindVariableFeatures runs in step 03 on the
+# _seurat/_singlets object; the _filtered object pre-dates it (0 HVGs), so prefer the
+# computed objects and take the first non-zero count (matches the HVG plot's selection).
 hvg_n <- vapply(samples_all, function(s) {
   f <- list.files(file.path(run_dir, "individual"),
-                  pattern = paste0("^", s, "_(filtered|seurat|singlets)\\.rds$"),
+                  pattern = paste0("^", s, "_(seurat|singlets|filtered)\\.rds$"),
                   recursive = TRUE, full.names = TRUE)
   if (!length(f)) return(NA_integer_)
-  tryCatch(length(Seurat::VariableFeatures(readRDS(f[1]))), error = function(e) NA_integer_)
+  f <- f[order(!grepl("_(seurat|singlets)\\.rds$", f))]   # HVG-bearing objects first
+  for (cand in f) {
+    n <- tryCatch(length(Seurat::VariableFeatures(readRDS(cand))), error = function(e) NA_integer_)
+    if (!is.na(n) && n > 0) return(n)
+  }
+  NA_integer_
 }, integer(1))
 summary$HVG <- hvg_n[summary$Sample]
 
@@ -380,15 +387,30 @@ if (!lite) {
     for (cand in hf) {
       img <- tryCatch({
         so <- readRDS(cand)
-        top10 <- utils::head(Seurat::VariableFeatures(so), 10)
-        ph <- Seurat::VariableFeaturePlot(so)
-        ph <- Seurat::LabelPoints(plot = ph, points = top10, repel = TRUE, xnudge = 0, ynudge = 0)
-        mk_uri(ph + labs(title = paste(s, "- Variable genes (top 10 labelled)")),
-               w = GAL_W, h = GAL_W * 0.70, dpi = GAL_DPI)
+        hvf <- Seurat::VariableFeatures(so)
+        if (!length(hvf)) NULL else {       # skip objects without HVG (e.g. _filtered)
+          ph <- Seurat::VariableFeaturePlot(so)
+          ph <- Seurat::LabelPoints(plot = ph, points = utils::head(hvf, 10),
+                                    repel = TRUE, xnudge = 0, ynudge = 0, size = 3)
+          # the default legend sits on the right and eats ~half the panel; move it under the
+          # plot and shrink it so the scatter owns the space (aspect matched to the doublet UMAP)
+          ph <- ph + ggplot2::theme(
+            legend.position = "bottom", legend.direction = "horizontal",
+            legend.title = ggplot2::element_blank(), legend.text = ggplot2::element_text(size = 8),
+            legend.key.size = grid::unit(9, "pt"), legend.margin = ggplot2::margin(t = -2)) +
+            ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(size = 2)))
+          mk_uri(ph + labs(title = paste(s, "- Variable genes (top 10 labelled)")),
+                 w = GAL_W, h = GAL_W * 0.857, dpi = GAL_DPI)
+        }
       }, error = function(e) NULL)
       if (!is.null(img)) { imgs[["Highly variable genes"]] <- img; break }
     }
     imgs <- drop_null(imgs)
+    # order so each 2-up gallery row is level: QC pair, then UMAP|HVG (same aspect), then the
+    # short score-distribution histogram on its own row (no taller neighbour to be uneven with)
+    ord <- c("QC: UMIs vs genes", "QC: UMIs vs % MT", "Doublets (UMAP)",
+             "Highly variable genes", "Doublet score distribution")
+    imgs <- imgs[c(intersect(ord, names(imgs)), setdiff(names(imgs), ord))]
     if (length(imgs)) by_sample[[s]] <- imgs
   }
 
@@ -426,6 +448,26 @@ if (!lite) {
   msg("galleries: %d per-sample sets, %d run-level panels", length(by_sample), length(stage))
 }
 
+# ---- scRNA analysis tool versions (only the single-cell stack; report-gen tools excluded) ----
+tool_roles <- c(
+  Seurat               = "Core single-cell toolkit (QC, normalization, clustering, UMAP)",
+  SeuratObject         = "Single-cell data structures for Seurat",
+  harmony              = "Batch integration across samples",
+  scDblFinder          = "Doublet detection",
+  SingleR              = "Reference-based cell-type annotation",
+  celldex              = "Reference expression datasets for SingleR",
+  SingleCellExperiment = "Bioconductor single-cell data container")
+tv_rows <- lapply(names(tool_roles), function(p) {
+  v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
+  if (is.na(v)) NULL else data.frame(Tool = p, Version = v, Role = unname(tool_roles[p]),
+                                     stringsAsFactors = FALSE)
+})
+tool_versions <- do.call(rbind, c(
+  list(data.frame(Tool = "R", Version = paste(R.version$major, R.version$minor, sep = "."),
+                  Role = "Statistical computing environment", stringsAsFactors = FALSE)),
+  tv_rows))
+msg("tool versions: %s", paste(tool_versions$Tool, tool_versions$Version, collapse = ", "))
+
 # ---- bundle + render ----
 bundle <- list(
   run_name = run_name, generated = as.character(Sys.time()),
@@ -435,7 +477,7 @@ bundle <- list(
   markers_dot = markers_dot,
   galleries = galleries, lite = lite,
   umap_static = umap_static, umap_panels = umap_panels,
-  cell_colors = PAL
+  cell_colors = PAL, tool_versions = tool_versions
 )
 bpath <- file.path(tempdir(), paste0("report_bundle_", Sys.getpid(), ".rds"))
 saveRDS(bundle, bpath)

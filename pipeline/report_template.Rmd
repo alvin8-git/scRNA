@@ -226,6 +226,7 @@ nav <- paste0('<nav class="report-nav">',
   '<a href="#cell-proportions">Cell proportions</a>',
   '<a href="#cell-type-markers">Cell-type markers</a>',
   stage_links, sample_links,
+  '<div class="grouplabel">About</div><a href="#versions">Versions</a>',
   '</nav>')
 cat(top, nav)
 ```
@@ -515,6 +516,21 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
       cat('\n</div>\n')
     }
   }
+}
+```
+
+# Versions {#versions}
+
+<p class="plot-desc">Versions of the single-cell analysis packages used to produce this run. Report-generation
+tooling (R Markdown, plotly, etc.) is intentionally excluded.</p>
+
+```{r versions}
+tv <- B$tool_versions
+if (is.null(tv) || !nrow(tv)) {
+  cat("Tool versions are unavailable for this run.")
+} else {
+  datatable(tv, rownames = FALSE, class = "compact stripe hover",
+            options = list(dom = "t", paging = FALSE, ordering = FALSE, scrollX = TRUE))
 }
 ```
 
