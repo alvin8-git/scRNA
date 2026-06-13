@@ -167,9 +167,13 @@ hvg_count <- function(so, thr = HVG_VAR_THRESHOLD) {
 
 if (length(samples_all) > 8)
   msg("WARNING: %d samples (>8). UMAP comparison panels render as static images; interactive zoom is available only for runs of 8 or fewer.", length(samples_all))
-to_uri <- function(g, w, h, dpi = 72) {
+to_uri <- function(g, w, h, dpi = 150) {
   tf <- tempfile(fileext = ".png")
-  ggplot2::ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
+  # ragg's agg_png antialiases small points better and compresses tighter than the
+  # base png device, so we get crisp individual cell dots at modest file size.
+  dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else "png"
+  ggplot2::ggsave(tf, plot = g, width = w, height = h, dpi = dpi,
+                  bg = "white", limitsize = FALSE, device = dev)
   on.exit(unlink(tf), add = TRUE); knitr::image_uri(tf)
 }
 
@@ -186,7 +190,7 @@ if (umap_static) {
     # cluster labels at each cell type's centroid (median UMAP coords), as in DimPlot(label=TRUE)
     ctr <- aggregate(cbind(UMAP_1, UMAP_2) ~ cell_type, data = dd, FUN = median)
     g <- ggplot(dd, aes(UMAP_1, UMAP_2, color = cell_type)) +
-      geom_point(size = 0.4, alpha = 0.8, stroke = 0) +
+      geom_point(size = 0.35, alpha = 0.85, stroke = 0) +
       scale_color_manual(values = PAL, guide = "none") +
       labs(x = "UMAP 1", y = "UMAP 2",
            title = sprintf("%s  (%s cells)", s, format(as.integer(n_full[s]), big.mark = ","))) +
@@ -201,7 +205,7 @@ if (umap_static) {
     else
       g + geom_text(data = ctr, aes(UMAP_1, UMAP_2, label = cell_type),
             inherit.aes = FALSE, size = 2.7, fontface = "bold", colour = "black")
-    to_uri(g, w = 4.4, h = 4.0)
+    to_uri(g, w = 4.8, h = 4.4, dpi = 150)   # ~720x660 px: enough to resolve single cells
   })
   names(umap_panels) <- samples_all
   msg("static UMAP panels: %d (n_samples > 8)", length(umap_panels))

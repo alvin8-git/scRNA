@@ -39,19 +39,9 @@ PAL <- {
   } else setNames(rep(base, length.out = length(cts)), cts)
 }
 n_samp   <- length(B$samples)
-# On many-sample runs the live ggplotly violins serialize ~1000-point density
-# polygons per (sample x metric) trace (42 traces => ~5 MB), which is what blocked
-# the file from opening. For those runs render the violins as static PNGs instead.
+# Past 8 samples the UMAP comparison panels are pre-rendered static snapshots (built
+# in the driver), so live zoom and legend-toggling do not apply; the intro text adapts.
 STATIC <- isTRUE(B$umap_static) && !is.null(B$umap_panels)
-to_uri <- function(g, w, h, dpi = 72) {
-  tf <- tempfile(fileext = ".png")
-  ggsave(tf, plot = g, width = w, height = h, dpi = dpi, bg = "white", limitsize = FALSE)
-  knitr::image_uri(tf)
-}
-fac_ncol <- min(3, n_samp)
-fac_nrow <- ceiling(n_samp / fac_ncol)
-fig_h    <- max(420, 380 * fac_nrow)
-fig_w    <- max(7, 4.2 * fac_ncol)
 ```
 
 ```{css, echo=FALSE}
@@ -72,7 +62,8 @@ body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
 /* full-width fixed top bar */
 .report-top{position:fixed;top:0;left:0;right:0;height:52px;z-index:100;display:flex;
   align-items:center;gap:14px;background:var(--rail);color:#fff;padding:0 18px;box-shadow:var(--shadow)}
-.report-top .title{font-weight:600;font-size:15px;letter-spacing:.01em}
+.report-top .title{font-weight:600;font-size:15px;letter-spacing:.01em;
+  max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .report-top .chip{background:#2b3548;color:var(--rail-ink);border-radius:999px;padding:3px 11px;font-size:12px}
 .report-top .meta{margin-left:auto;color:#9aa6b5;font-size:12px;display:flex;gap:16px;align-items:center}
 .report-top .meta b{color:#fff;font-weight:600}
@@ -90,8 +81,8 @@ body.nav-collapsed .navtoggle{left:10px}
   border-left:3px solid transparent;cursor:pointer}
 .report-nav a:hover{background:#f7f9fc;color:var(--ink)}
 .report-nav a.active{color:var(--ink);font-weight:600;border-left-color:var(--accent);background:#f2f6ff}
-.report-nav .grouplabel{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa6b5;
-  padding:14px 18px 4px}
+.report-nav .grouplabel{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#5b6675;
+  font-weight:700;padding:14px 18px 4px}
 
 /* main column clears the fixed top bar + nav; collapsing the nav frees the whole page */
 .main-container{margin:52px 0 0 208px !important;max-width:1080px;padding:10px 30px 70px;transition:margin .15s}
@@ -150,6 +141,8 @@ small{color:var(--muted)}
 .selctl{background:none;border:0;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;
   padding:6px 6px;text-decoration:underline;text-underline-offset:2px}
 .selctl:hover{color:#1d4ed8}
+/* visible keyboard focus for the interactive chips, controls and legend toggles */
+.selchip:focus-visible,.selctl:focus-visible,.legitem:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* Overview column glossary */
 .glossary{margin:14px 0 22px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:4px 14px 12px}
 .glossary>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ink);padding:8px 0;list-style:none}
@@ -163,6 +156,10 @@ small{color:var(--muted)}
 .umapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;flex:1;min-width:0}
 /* one visible panel (single-sample run, or all but one chip deselected) spans full width */
 .umapgrid.solo{grid-template-columns:1fr}
+/* shown when every sample chip is deselected (Unselect all) so the grid is not just blank */
+.umapgrid .umapempty{display:none;grid-column:1/-1;padding:30px 14px;text-align:center;color:var(--muted);
+  font-size:13px;border:1px dashed var(--line);border-radius:10px;background:#fff}
+.umapgrid.empty .umapempty{display:block}
 .umapcell{border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 6px 2px;box-shadow:var(--shadow);min-width:0}
 .umaptitle{font-weight:600;font-size:12.5px;padding:3px 6px;color:var(--ink)}
 .shlegend{width:158px;flex:none;border:1px solid var(--line);border-radius:10px;background:#fff;
@@ -200,7 +197,9 @@ small{color:var(--muted)}
   border-left:3px solid var(--accent);border-radius:6px;font-size:15.5px;color:var(--ink)}
 
 /* WCAG-AA contrast: darken the small on-white labels (the on-dark top-bar meta is left alone) */
-.report-nav .grouplabel,.crosstalk-input .control-label,.selrow .sellabel,.shlegend .lgtitle{color:#6b7686}
+.crosstalk-input .control-label,.selrow .sellabel,.shlegend .lgtitle{color:#6b7686}
+/* nav group headers darker than their links so RUN / COMPARE / PER SAMPLE read as headers */
+.report-nav .grouplabel{color:#3c4350}
 .scard .tag{background:#c0392b}
 
 /* responsive: below 820px the fixed 208px rail becomes an off-canvas drawer and every
@@ -223,8 +222,8 @@ small{color:var(--muted)}
 ```
 
 ```{r shell, results='asis'}
-top <- sprintf('<div class="report-top"><span class="title">%s</span><span class="chip">Interactive run report</span><span class="meta"><span><b>%s</b> cells</span><span><b>%s</b> samples</span><span>%s</span></span></div><button class="navtoggle" title="Show / hide the navigation rail" onclick="document.body.classList.toggle(matchMedia(\'(max-width:820px)\').matches?\'nav-open\':\'nav-collapsed\')">&#9776;</button>',
-  htmltools::htmlEscape(B$run_name), format(B$n_cells_total, big.mark=","), n_samp,
+top <- sprintf('<div class="report-top"><span class="title" title="%s">%s</span><span class="chip">Interactive run report</span><span class="meta"><span><b>%s</b> cells</span><span><b>%s</b> samples</span><span>%s</span></span></div><button class="navtoggle" title="Show / hide the navigation rail" onclick="document.body.classList.toggle(matchMedia(\'(max-width:820px)\').matches?\'nav-open\':\'nav-collapsed\')">&#9776;</button>',
+  htmltools::htmlEscape(B$run_name), htmltools::htmlEscape(B$run_name), format(B$n_cells_total, big.mark=","), n_samp,
   paste(format(Sys.Date(), "%d"), month.abb[as.integer(format(Sys.Date(), "%m"))], format(Sys.Date(), "%Y")))
 slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
 gal  <- !isTRUE(B$lite) && !is.null(B$galleries)
@@ -246,9 +245,14 @@ nav <- paste0('<nav class="report-nav">',
 cat(top, nav)
 ```
 
-Hover any plot for values, drag to zoom, and click a cell type in a legend to toggle it across every
-panel — that toggle *is* the depletion view. Source: `integrated_annotated.rds` (reduction
-`r B$umap_name`) + the QC tables. No data is recomputed.
+```{r intro, results='asis'}
+cat(if (STATIC)
+  'Each UMAP comparison panel is a high-resolution static snapshot (live zoom and legend-toggling apply automatically to runs of 8 samples or fewer). Hover the violins and bar charts for values, and drag to zoom. '
+else
+  'Hover any plot for values, drag to zoom, and click a cell type in a legend to toggle it across every panel — that toggle <em>is</em> the depletion view. ')
+cat(sprintf('Source: <code>integrated_annotated.rds</code> (reduction <code>%s</code>) + the QC tables. No data is recomputed.',
+            htmltools::htmlEscape(B$umap_name)))
+```
 
 # Overview
 
@@ -338,7 +342,8 @@ if (static) {
   panels <- lapply(B$samples, function(s)
     htmltools::div(class = "umapcell", id = paste0("umapwrap-", slugv(s)),
       htmltools::div(class = "umaptitle", s),
-      htmltools::tags$img(src = B$umap_panels[[s]], style = "width:100%;display:block;border-radius:6px")))
+      htmltools::tags$img(src = B$umap_panels[[s]], alt = sprintf("UMAP of %s", s),
+                          style = "width:100%;display:block;border-radius:6px")))
 } else {
   mk_umap <- function(s) {
     dd <- cells[cells$sample == s, , drop = FALSE]
@@ -359,16 +364,24 @@ if (static) {
                    htmltools::div(class = "umaptitle", s), mk_umap(s)))
 }
 chips <- lapply(B$samples, function(s)
-  htmltools::tags$button(class = "selchip on", `data-sample` = slugv(s), s))
+  htmltools::tags$button(class = "selchip on", `data-sample` = slugv(s), `aria-pressed` = "true", s))
 legitems <- lapply(cts, function(ct)
   htmltools::tags$div(class = if (static) "legitem static" else "legitem", `data-ct` = ct,
+    role = if (static) NULL else "button", tabindex = if (static) NULL else "0",
+    `aria-pressed` = if (static) NULL else "true",
     htmltools::tags$span(class = "legsw", style = sprintf("background:%s", PAL[[ct]])),
     htmltools::tags$span(ct)))
-js_solo <- "var _wasSolo=null;function umResize(c,solo){var w=c.querySelector('.html-widget'),p=c.querySelector('.js-plotly-plot');if(w)w.style.height=(solo?700:360)+'px';if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}}function umSolo(){var g=document.querySelector('.umapgrid');if(!g)return;var n=0;Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')n++;});var solo=n===1;g.classList.toggle('solo',solo);if(solo===_wasSolo)return;_wasSolo=solo;requestAnimationFrame(function(){Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')umResize(c,solo);});});}"
-js_chip <- "document.querySelectorAll('.selrow .selchip[data-sample]').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on)requestAnimationFrame(function(){var p=w.querySelector('.js-plotly-plot');if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}});}umSolo();});});"
+js_solo <- "var _wasSolo=null;function umResize(c,solo){var w=c.querySelector('.html-widget'),p=c.querySelector('.js-plotly-plot');if(w)w.style.height=(solo?700:360)+'px';if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}}function umSolo(){var g=document.querySelector('.umapgrid');if(!g)return;var n=0;Array.prototype.forEach.call(g.children,function(c){if(c.classList.contains('umapcell')&&c.style.display!=='none')n++;});g.classList.toggle('empty',n===0);var solo=n===1;g.classList.toggle('solo',solo);if(solo===_wasSolo)return;_wasSolo=solo;requestAnimationFrame(function(){Array.prototype.forEach.call(g.children,function(c){if(c.style.display!=='none')umResize(c,solo);});});}"
+js_chip <- "document.querySelectorAll('.selrow .selchip[data-sample]').forEach(function(b){b.addEventListener('click',function(){var on=b.classList.toggle('on');b.setAttribute('aria-pressed',on);var w=document.getElementById('umapwrap-'+b.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on)requestAnimationFrame(function(){var p=w.querySelector('.js-plotly-plot');if(p&&window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}});}umSolo();});});"
 # Select all / Unselect all controls for the UMAP sample chips
-js_ctl <- "document.querySelectorAll('.selrow .selctl').forEach(function(b){b.addEventListener('click',function(){var on=b.getAttribute('data-act')==='all';document.querySelectorAll('.selrow .selchip[data-sample]').forEach(function(ch){ch.classList.toggle('on',on);var w=document.getElementById('umapwrap-'+ch.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on&&window.Plotly){var p=w.querySelector('.js-plotly-plot');if(p){try{Plotly.Plots.resize(p);}catch(e){}}}}});umSolo();});});"
-js_leg  <- if (static) "" else "document.querySelectorAll('.shlegend .legitem').forEach(function(it){it.addEventListener('click',function(){var off=it.classList.toggle('off'),name=it.getAttribute('data-ct');document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){if(!gd.data) return;var idx=[];gd.data.forEach(function(t,i){if(t.name===name) idx.push(i);});if(idx.length&&window.Plotly) Plotly.restyle(gd,{visible:off?'legendonly':true},idx);});});});"
+js_ctl <- "document.querySelectorAll('.selrow .selctl').forEach(function(b){b.addEventListener('click',function(){var on=b.getAttribute('data-act')==='all';document.querySelectorAll('.selrow .selchip[data-sample]').forEach(function(ch){ch.classList.toggle('on',on);ch.setAttribute('aria-pressed',on);var w=document.getElementById('umapwrap-'+ch.getAttribute('data-sample'));if(w){w.style.display=on?'':'none';if(on&&window.Plotly){var p=w.querySelector('.js-plotly-plot');if(p){try{Plotly.Plots.resize(p);}catch(e){}}}}});umSolo();});});"
+js_leg  <- if (static) "" else "document.querySelectorAll('.shlegend .legitem').forEach(function(it){function tog(){var off=it.classList.toggle('off');it.setAttribute('aria-pressed',String(!off));var name=it.getAttribute('data-ct');document.querySelectorAll('.umapgrid .js-plotly-plot').forEach(function(gd){if(!gd.data) return;var idx=[];gd.data.forEach(function(t,i){if(t.name===name) idx.push(i);});if(idx.length&&window.Plotly) Plotly.restyle(gd,{visible:off?'legendonly':true},idx);});}it.addEventListener('click',tog);it.addEventListener('keydown',function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();tog();}});});"
+# Re-fit visible UMAPs when the window is resized or dragged to a screen with a different
+# pixel density. Plotly.Plots.resize skips when it thinks the CSS size is unchanged, so on a
+# devicePixelRatio change we force a full redraw — otherwise a solo panel stays stuck at the
+# old monitor's resolution until you toggle a *different* sample. Interactive (<=8 sample) path
+# only; static PNG panels already scale with their container via CSS.
+js_resize <- if (static) "" else "var _dpr=window.devicePixelRatio;function umRefit(force){document.querySelectorAll('.umapgrid .umapcell').forEach(function(c){if(c.style.display==='none')return;var p=c.querySelector('.js-plotly-plot');if(p&&window.Plotly){try{Plotly.Plots.resize(p);if(force)Plotly.redraw(p);}catch(e){}}});}var _rt;window.addEventListener('resize',function(){clearTimeout(_rt);_rt=setTimeout(function(){var d=window.devicePixelRatio!==_dpr;_dpr=window.devicePixelRatio;umRefit(d);},150);});function _watchDpr(){try{var mq=window.matchMedia('(resolution: '+window.devicePixelRatio+'dppx)');mq.addEventListener('change',function(){_dpr=window.devicePixelRatio;umRefit(true);_watchDpr();},{once:true});}catch(e){}}_watchDpr();"
 note <- if (static) htmltools::tags$p(class = "muted-note",
   sprintf("%d samples: panels are high-resolution static snapshots (live zoom + legend toggle kick in automatically for runs of 8 samples or fewer). Use the chips to show or hide samples.", length(B$samples))) else NULL
 ctl <- htmltools::tagList(
@@ -378,11 +391,14 @@ htmltools::browsable(htmltools::tagList(
   htmltools::div(class = "selrow", htmltools::tags$span(class = "sellabel", "Samples"), chips, ctl),
   note,
   htmltools::div(class = "umapwrap",
-    htmltools::div(class = "umapgrid", panels),
+    htmltools::div(class = "umapgrid",
+      htmltools::div(class = "umapempty",
+        "No samples selected — pick one or more chips above, or use Select all."),
+      panels),
     htmltools::div(class = "shlegend",
       htmltools::div(class = "lgtitle", "Cell type"), legitems)),
-  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s%s%s umSolo();})();",
-    js_solo, js_chip, js_leg, js_ctl)))
+  htmltools::tags$script(htmltools::HTML(sprintf("(function(){%s%s%s%s%s umSolo();})();",
+    js_solo, js_chip, js_leg, js_ctl, js_resize)))
 ))
 ```
 
@@ -562,7 +578,8 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
     # row have their image tops flush regardless of how long each description is
     fc <- if (is.null(cap)) "" else sprintf('<figcaption>%s</figcaption>', htmltools::htmlEscape(cap))
     desc <- if (is.null(cap)) "" else desc_of(cap)
-    cat(sprintf('\n<figure class="galfig">%s<img src="%s">%s</figure>\n', fc, uri, desc))
+    alt <- if (is.null(cap)) "plot" else htmltools::htmlEscape(cap)
+    cat(sprintf('\n<figure class="galfig">%s<img src="%s" alt="%s">%s</figure>\n', fc, uri, alt, desc))
   }
   if (length(G$stage)) {
     cat('\n# Stage galleries {#galleries}\n\n')
@@ -622,7 +639,7 @@ cat('<script>
   var secs=links.map(function(a){return document.querySelector(a.getAttribute("href"));});
   function onScroll(){
     var y=(window.scrollY||window.pageYOffset)+90, idx=0;
-    for(var i=0;i<secs.length;i++){ if(secs[i] && secs[i].offsetTop<=y) idx=i; }
+    for(var i=0;i<secs.length;i++){ if(secs[i] && secs[i].offsetParent!==null && secs[i].offsetTop<=y) idx=i; }
     links.forEach(function(a,i){ a.classList.toggle("active", i===idx); });
   }
   window.addEventListener("scroll", onScroll, {passive:true});
