@@ -212,6 +212,9 @@ tab <- table(cells$cell_type, cells$sample)
 prop_wide <- sweep(tab, 2, colSums(tab), "/") * 100   # cell_type x sample, % within sample
 prop_long <- as.data.frame(as.table(prop_wide), stringsAsFactors = FALSE)
 colnames(prop_long) <- c("cell_type", "sample", "pct")
+# same shape but ABSOLUTE counts (for the Cell-numbers stacked bar, cf. Overall_Report.pdf p43)
+counts_long <- as.data.frame(as.table(tab), stringsAsFactors = FALSE)
+colnames(counts_long) <- c("cell_type", "sample", "n")
 
 delta <- NULL
 if (length(samples_all) == 2) {
@@ -498,7 +501,7 @@ msg("tool versions: %s", paste(tool_versions$Tool, tool_versions$Version, collap
 bundle <- list(
   run_name = run_name, generated = as.character(Sys.time()),
   samples = samples_all, n_cells_total = nrow(cells),
-  cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide,
+  cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide, counts_long = counts_long,
   delta = delta, summary = summary, umap_name = umap_name, de = de,
   markers_dot = markers_dot,
   galleries = galleries, lite = lite,
