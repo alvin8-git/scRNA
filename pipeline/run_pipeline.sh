@@ -306,6 +306,17 @@ else
   log "HTML report skipped (--no-report)."
 fi
 
+# --- Frozen-reference label transfer (05r) + cross-run benchmark (08c) — additive ---
+# Self-skip when REFERENCE_MODEL is unset (config.R / SCRNA_REFERENCE_MODEL). Never fail run.
+if [[ -f "${RESULTS_DIR}/integrated/integrated_annotated.rds" ]]; then
+  for _rs in 05r_reference_transfer 08c_benchmark_concordance; do
+    _rl="${LOG_DIR}/${_rs}.log"
+    if Rscript "${PIPELINE_DIR}/${_rs}.R" "${RESULTS_DIR}" 2>&1 | tee "${_rl}"; then :; else
+      warn "${_rs} failed (pipeline outputs unaffected) — see ${_rl}"
+    fi
+  done
+fi
+
 TOTAL_ELAPSED=$(( $(date +%s) - TOTAL_START ))
 step_hdr "Pipeline complete in ${TOTAL_ELAPSED}s"
 echo -e "  ${GREEN}Results :${NC} ${RESULTS_DIR}"

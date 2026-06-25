@@ -205,6 +205,18 @@ MARKERS$compute_integrated <- FALSE
 # "HumanPrimaryCellAtlas" (default, broad) | "MonacoImmune" (blood-optimised, resolves CD4/CD8/γδ)
 SINGLER_REF <- "HumanPrimaryCellAtlas"
 
+# --- Frozen reference benchmark (optional; see docs/frozen_reference_scope.md) ---
+# Run-INDEPENDENT labels via a pre-trained SingleR model (built by pipeline/build_reference.R).
+# When REFERENCE_MODEL points to a model .rds, run_pipeline.sh runs step 05r (label
+# transfer -> cell_type_ref) + 08c (cross-run anchor concordance). Empty = skip (default).
+REFERENCE_MODEL <- Sys.getenv("SCRNA_REFERENCE_MODEL", unset = "")
+# Anchor samples carried across runs as the reproducibility control (benchmark).
+ANCHOR_SAMPLES  <- { .a <- Sys.getenv("SCRNA_ANCHORS", unset = "Aksh1,ES332")
+                     if (nzchar(.a)) strsplit(.a, ",")[[1]] else character(0) }
+DRIFT_FLAG_PP   <- as.numeric(Sys.getenv("SCRNA_DRIFT_PP", unset = "5"))  # flag anchor drift > N pp
+REF_FINE_TUNE   <- TRUE   # fine.tune the transfer (sharper; slower). Must match the baseline's
+                          # setting in build_reference.R for a fair benchmark.
+
 # --- Sub-type Refinement Markers ---
 # Used by 05_annotate.R to refine generic SingleR labels into biologically
 # meaningful sub-types (e.g. "CD4 T" → "CD4 T (naive)" / "(memory)" / "(effector)").
