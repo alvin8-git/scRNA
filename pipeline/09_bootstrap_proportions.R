@@ -26,8 +26,10 @@ suppressPackageStartupMessages({
 })
 
 seu <- readRDS(file.path(DIRS$integrated, "integrated_annotated.rds"))
+seu <- apply_reference_labels(seu)   # use frozen-reference labels when 05r has run (additive)
+.lblsrc <- getOption("scrna.label_source", "de-novo")
 message("Loaded: ", ncol(seu), " cells across samples: ",
-        paste(unique(seu$sample), collapse = ", "))
+        paste(unique(seu$sample), collapse = ", "), "  | labels: ", .lblsrc)
 
 meta       <- seu@meta.data
 n_boot     <- 1000
@@ -126,7 +128,7 @@ p_obs <- ggplot(obs, aes(x = sample, y = prop, fill = cell_type)) +
   scale_fill_manual(values = ct_colors_use, name = "Cell Type") +
   scale_y_continuous(labels = percent_format()) +
   labs(title = "Observed Cell Type Proportions per Sample",
-       subtitle = paste0("Error bars = multinomial 95% CI  |  n cells: ",
+       subtitle = paste0("Labels: ", .lblsrc, "  |  Error bars = multinomial 95% CI  |  n cells: ",
                          paste(paste0(sample_sizes$sample, "=", sample_sizes$total),
                                collapse = ", ")),
        x = NULL, y = "Proportion") +
@@ -145,7 +147,7 @@ p_boot <- ggplot(boot_df, aes(x = sample, y = boot_mean, fill = cell_type)) +
   scale_fill_manual(values = ct_colors_use, name = "Cell Type") +
   scale_y_continuous(labels = percent_format()) +
   labs(title = paste0("Bootstrap-Normalised Proportions (", n_min, " cells × ", n_boot, " draws)"),
-       subtitle = "All samples downsampled to smallest n — removes capture-depth bias",
+       subtitle = paste0("Labels: ", .lblsrc, " — all samples downsampled to smallest n (removes capture-depth bias)"),
        x = NULL, y = "Proportion") +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 10),

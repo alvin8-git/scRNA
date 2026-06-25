@@ -115,6 +115,34 @@ cells <- data.frame(
                     if (is.na(dc)) NA_character_ else as.character(md[[dc]]) },
   stringsAsFactors = FALSE
 )
+
+# ---- frozen-reference per-cell labels: make them the PRIMARY view when present ----
+# Additive: keep the de-novo call as cell_type_denovo; the report toggles between them.
+# cell_type_ref is run-INDEPENDENT (label transfer onto a frozen reference) and is the
+# correct view for cross-species runs where de-novo SingleR mislabels (e.g. bat neutrophils
+# collapsing into CD14+ Mono). See 05r_reference_transfer.R / docs/frozen_reference_scope.md.
+cells$cell_type_denovo <- cells$cell_type
+label_source <- "denovo"
+ref_path <- file.path(run_dir, "annotation", "reference_transfer_cells.csv.gz")
+if (file.exists(ref_path)) {
+  rt <- tryCatch(read.csv(gzfile(ref_path), stringsAsFactors = FALSE), error = function(e) NULL)
+  if (!is.null(rt) && all(c("barcode", "cell_type_ref") %in% names(rt))) {
+    refmap <- setNames(rt$cell_type_ref, rt$barcode)
+    rv <- unname(refmap[rownames(md)])                       # aligned to cells rows
+    hit <- sum(!is.na(rv))
+    if (hit > 0.5 * nrow(md)) {
+      rv[is.na(rv) | rv == ""] <- "Unassigned"
+      cells$cell_type_ref <- rv
+      cells$cell_type     <- rv                              # PRIMARY = frozen reference
+      label_source        <- "ref"
+      # mirror onto the Seurat object so the marker dot plot / DE heatmap group by ref too
+      ov <- refmap[colnames(obj)]; ov[is.na(ov) | ov == ""] <- "Unassigned"
+      obj$cell_type_ref <- unname(ov); ct_col <- "cell_type_ref"
+      msg("frozen-ref labels joined (%d/%d cells); main views now use cell_type_ref", hit, nrow(md))
+    } else msg("frozen-ref barcode overlap too low (%d/%d) — keeping de-novo labels", hit, nrow(md))
+  }
+}
+
 set.seed(1)
 if (is.finite(max_cells) && max_cells > 0) {
   keep <- unlist(lapply(split(seq_len(nrow(cells)), cells$sample), function(idx)
@@ -141,7 +169,7 @@ CELLTYPE_COLORS <- c(
   "Endothelial"="#636363","Epithelial"="#969696","Fibroblast"="#BDBDBD","Smooth Muscle"="#D9D9D9","Unknown"="#B09C85")
 PAL_fallback <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
                   "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
-ctlev <- sort(unique(cells_plot$cell_type))
+ctlev <- sort(unique(c(cells_plot$cell_type, cells_plot$cell_type_denovo)))
 PAL <- CELLTYPE_COLORS[ctlev]
 miss <- is.na(PAL)
 if (any(miss)) PAL[miss] <- rep(PAL_fallback, length.out = sum(miss))
@@ -219,6 +247,13 @@ colnames(prop_long) <- c("cell_type", "sample", "pct")
 # same shape but ABSOLUTE counts (for the Cell-numbers stacked bar, cf. Overall_Report.pdf p43)
 counts_long <- as.data.frame(as.table(tab), stringsAsFactors = FALSE)
 colnames(counts_long) <- c("cell_type", "sample", "n")
+
+# de-novo equivalents (for the label-source toggle) — only differ from the above when ref is primary
+tab_dn         <- table(cells$cell_type_denovo, cells$sample)
+prop_long_dn   <- as.data.frame(as.table(sweep(tab_dn, 2, colSums(tab_dn), "/") * 100), stringsAsFactors = FALSE)
+colnames(prop_long_dn)   <- c("cell_type", "sample", "pct")
+counts_long_dn <- as.data.frame(as.table(tab_dn), stringsAsFactors = FALSE)
+colnames(counts_long_dn) <- c("cell_type", "sample", "n")
 
 delta <- NULL
 if (length(samples_all) == 2) {
@@ -321,6 +356,30 @@ if (file.exists(de_path)) {
     msg("DE: %d rows across %d cell types", nrow(de), length(unique(de$cell_type)))
   } else de <- NULL
 }
+
+# ---- frozen-reference benchmark (steps 05r / 08c), optional ----
+# Additive: present only when the run was label-transferred onto a frozen reference.
+benchmark <- local({
+  conc_p <- file.path(run_dir, "benchmark", "concordance.csv")
+  sig_p  <- file.path(run_dir, "benchmark", "wholeblood_signature.csv")
+  comp_p <- file.path(run_dir, "annotation", "reference_transfer_composition.csv")
+  rep_p  <- file.path(run_dir, "benchmark", "benchmark_report.md")
+  if (!file.exists(conc_p) && !file.exists(comp_p)) return(NULL)
+  rd <- function(p) if (file.exists(p)) tryCatch(read.csv(p, check.names = FALSE), error = function(e) NULL) else NULL
+  verdict <- model <- NA_character_
+  if (file.exists(rep_p)) {
+    ln <- readLines(rep_p, warn = FALSE)
+    v <- grep("Verdict", ln, value = TRUE)
+    if (length(v)) verdict <- trimws(gsub("\\*\\*|^#+\\s*|Verdict:\\s*", "", v[1]))
+    m <- grep("^Model:", ln, value = TRUE)
+    if (length(m)) model <- trimws(gsub("Model:\\s*|`", "", m[1]))
+  }
+  list(concordance = rd(conc_p), signature = rd(sig_p),
+       composition = rd(comp_p), verdict = verdict, model = model)
+})
+if (!is.null(benchmark))
+  msg("benchmark: verdict='%s', %d concordance rows", benchmark$verdict,
+      if (is.null(benchmark$concordance)) 0L else nrow(benchmark$concordance))
 
 # ---- static plot galleries (regenerated natively in R; skipped under --lite) ----
 galleries <- NULL
@@ -506,9 +565,10 @@ bundle <- list(
   run_name = run_name, generated = as.character(Sys.time()),
   samples = samples_all, n_cells_total = nrow(cells),
   cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide, counts_long = counts_long,
+  label_source = label_source, prop_long_denovo = prop_long_dn, counts_long_denovo = counts_long_dn,
   delta = delta, summary = summary, umap_name = umap_name, de = de,
   markers_dot = markers_dot,
-  galleries = galleries, lite = lite,
+  galleries = galleries, lite = lite, benchmark = benchmark,
   umap_static = umap_static, umap_panels = umap_panels,
   cell_colors = PAL, tool_versions = tool_versions,
   hvg_var_threshold = HVG_VAR_THRESHOLD

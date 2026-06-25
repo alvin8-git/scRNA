@@ -230,6 +230,19 @@ small{color:var(--muted)}
 .report-nav .grouplabel{color:#3c4350}
 .scard .tag{background:#c0392b}
 
+/* frozen-reference benchmark tables (static, small — no widget needed) */
+.benchtab{border-collapse:collapse;margin:6px 0 18px;font-size:12.5px}
+.benchtab th,.benchtab td{border:1px solid var(--line);padding:4px 11px;text-align:right;font-variant-numeric:tabular-nums}
+.benchtab th:first-child,.benchtab td:first-child{text-align:left}
+.benchtab thead th{background:#fafbfd;color:var(--muted);font-weight:600}
+.benchtab caption{caption-side:top;text-align:left;color:var(--ink);font-weight:600;font-size:13px;padding:8px 0 4px}
+.bench-details{margin:4px 0 18px}
+.bench-details>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ink);padding:6px 0}
+
+/* label-source toggle (Frozen reference vs De-novo) above the proportion bars */
+.lblsrc-toggle{display:flex;align-items:center;gap:8px;margin:8px 0 4px}
+.lblsrc-toggle .sellabel{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7686;font-weight:600}
+
 /* responsive: below 820px the fixed 208px rail becomes an off-canvas drawer and every
    multi-column grid collapses to one column (the desktop layout otherwise squeezes the
    main content to a sliver on tablets/phones and overflows wide tables) */
@@ -267,6 +280,7 @@ nav <- paste0('<nav class="report-nav">',
   '<a href="#sample-comparison">Sample comparison</a>',
   '<a href="#cell-proportions">Cell proportions</a>',
   '<a href="#cell-type-markers">Cell-type markers</a>',
+  if (!is.null(B$benchmark)) '<a href="#benchmark">Frozen-ref benchmark</a>' else '',
   stage_links, sample_links,
   '<div class="grouplabel">About</div><a href="#versions">Versions</a>',
   '</nav>')
@@ -373,13 +387,15 @@ if (static) {
       htmltools::tags$img(src = B$umap_panels[[s]], alt = sprintf("UMAP of %s", s),
                           style = "width:100%;display:block;border-radius:6px")))
 } else {
+  htext <- if (isTRUE(B$label_source == "ref"))
+    ~paste0(cell_type, "<br>de-novo: ", cell_type_denovo) else ~cell_type
   mk_umap <- function(s) {
     dd <- cells[cells$sample == s, , drop = FALSE]
     nc <- B$summary$Cells[match(s, B$summary$Sample)]; if (is.na(nc)) nc <- nrow(dd)
     plot_ly(dd, x = ~UMAP_1, y = ~UMAP_2, color = ~cell_type, colors = PAL,
             type = "scattergl", mode = "markers",
             marker = list(size = 4, opacity = 0.8),
-            text = ~cell_type, hoverinfo = "text", showlegend = FALSE, height = 360) |>
+            text = htext, hoverinfo = "text", showlegend = FALSE, height = 360) |>
       layout(title = list(text = sprintf("%s  (%s cells)", s, format(nc, big.mark = ",")),
                           x = 0.03, y = 0.97, font = list(size = 13)),
              xaxis = list(title = "UMAP 1", zeroline = FALSE, showticklabels = FALSE),
@@ -478,21 +494,35 @@ if (all(is.na(cells$doublet_score))) {
 
 # Cell proportions {.tabset .tabset-pills}
 
+```{r lblsrc, results='asis', eval=isTRUE(B$label_source=="ref")}
+cat('<div class="read-line"><b>Labels:</b> these bars show the <b>frozen-reference</b> call (<code>cell_type_ref</code>) — run-independent, transferred onto a fixed bat reference. It is the correct view where the per-run de-novo annotation mislabels across species (e.g. bat neutrophils collapsing into CD14+ Mono). Switch to <b>De-novo</b> to see this run\'s own clustering call.</div>')
+cat('<div class="lblsrc-toggle"><span class="sellabel">Labels</span>',
+    '<button class="selchip on" data-src="ref" aria-pressed="true">Frozen reference</button>',
+    '<button class="selchip" data-src="denovo" aria-pressed="false">De-novo (this run)</button></div>')
+cat('<script>(function(){document.querySelectorAll(".lblsrc-toggle button[data-src]").forEach(function(b){b.addEventListener("click",function(){var src=b.getAttribute("data-src");document.querySelectorAll(".lblsrc-toggle button[data-src]").forEach(function(x){var on=x.getAttribute("data-src")===src;x.classList.toggle("on",on);x.setAttribute("aria-pressed",String(on));});document.querySelectorAll(".lblsrc-ref").forEach(function(d){d.style.display=src==="ref"?"":"none";});document.querySelectorAll(".lblsrc-denovo").forEach(function(d){d.style.display=src==="denovo"?"":"none";});requestAnimationFrame(function(){document.querySelectorAll((src==="ref"?".lblsrc-ref":".lblsrc-denovo")+" .js-plotly-plot").forEach(function(p){if(window.Plotly){try{Plotly.Plots.resize(p);}catch(e){}}});});});});})();</script>')
+```
+
 ## Composition
 
 ```{r prop_bar}
-pl <- B$prop_long
-pb <- plot_ly(pl, x = ~sample, y = ~pct, color = ~cell_type, colors = PAL,
-              type = "bar", text = ~paste0(cell_type, ": ", round(pct,1), "%"),
-              hoverinfo = "text", height = 470) |>
-  layout(barmode = "stack", yaxis = list(title = "% of sample"),
-         xaxis = list(title = ""), legend = list(title = list(text = "Cell type")),
-         updatemenus = list(list(type = "buttons", direction = "right",
-           x = 0, y = 1.08, xanchor = "left", showactive = FALSE, pad = list(t = 2),
-           buttons = list(
-             list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
-             list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
-style_ct_bars(pb)
+mk_comp <- function(pl) {
+  pb <- plot_ly(pl, x = ~sample, y = ~pct, color = ~cell_type, colors = PAL,
+                type = "bar", text = ~paste0(cell_type, ": ", round(pct,1), "%"),
+                hoverinfo = "text", height = 470) |>
+    layout(barmode = "stack", yaxis = list(title = "% of sample"),
+           xaxis = list(title = ""), legend = list(title = list(text = "Cell type")),
+           updatemenus = list(list(type = "buttons", direction = "right",
+             x = 0, y = 1.08, xanchor = "left", showactive = FALSE, pad = list(t = 2),
+             buttons = list(
+               list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
+               list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
+  style_ct_bars(pb)
+}
+if (isTRUE(B$label_source == "ref") && !is.null(B$prop_long_denovo)) {
+  htmltools::browsable(htmltools::tagList(
+    htmltools::div(class = "lblsrc-ref", mk_comp(B$prop_long)),
+    htmltools::div(class = "lblsrc-denovo", style = "display:none", mk_comp(B$prop_long_denovo))))
+} else mk_comp(B$prop_long)
 ```
 
 Each segment is labelled with its cell type where it is large enough to fit (and textured per type, so
@@ -504,10 +534,7 @@ lymphocyte-sorted sample flags carry-over.
 ## Cell numbers
 
 ```{r count_bar}
-cl <- B$counts_long
-if (is.null(cl) || !nrow(cl)) {
-  cat("Absolute cell counts are unavailable for this run.")
-} else {
+mk_count <- function(cl) {
   cb <- plot_ly(cl, x = ~sample, y = ~n, color = ~cell_type, colors = PAL,
                 type = "bar", text = ~paste0(cell_type, ": ", format(n, big.mark = ","), " cells"),
                 hoverinfo = "text", height = 470) |>
@@ -520,6 +547,14 @@ if (is.null(cl) || !nrow(cl)) {
                list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
   style_ct_bars(cb)
 }
+cl <- B$counts_long
+if (is.null(cl) || !nrow(cl)) {
+  cat("Absolute cell counts are unavailable for this run.")
+} else if (isTRUE(B$label_source == "ref") && !is.null(B$counts_long_denovo)) {
+  htmltools::browsable(htmltools::tagList(
+    htmltools::div(class = "lblsrc-ref", mk_count(cl)),
+    htmltools::div(class = "lblsrc-denovo", style = "display:none", mk_count(B$counts_long_denovo))))
+} else mk_count(cl)
 ```
 
 Same stacked bars as Composition, but **absolute cell counts** per sample (one column each). Tall bars are
@@ -573,6 +608,72 @@ if (is.null(md_) || !nrow(md_)) {
           axis.title = element_blank(), panel.grid.major = element_line(color = "#f0f0f0"))
   ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 150)) |>
     layout(xaxis = list(automargin = TRUE), yaxis = list(automargin = TRUE))
+}
+```
+
+```{r benchmark, results='asis', eval=!is.null(B$benchmark)}
+BM  <- B$benchmark
+esc <- htmltools::htmlEscape
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0 || (length(a) == 1 && is.na(a))) b else a
+# small static HTML table; `style` is an optional per-row vector of <td> style attrs for col 1..n
+htab <- function(df, caption = NULL, cellstyle = NULL) {
+  if (is.null(df) || !nrow(df)) return("")
+  hd <- paste0("<th>", esc(names(df)), "</th>", collapse = "")
+  rows <- vapply(seq_len(nrow(df)), function(i) {
+    tds <- vapply(seq_along(df), function(j) {
+      st <- if (!is.null(cellstyle)) cellstyle(i, j, df) else ""
+      sprintf('<td%s>%s</td>', if (nzchar(st)) sprintf(' style="%s"', st) else "",
+              esc(as.character(df[i, j])))
+    }, character(1))
+    paste0("<tr>", paste(tds, collapse = ""), "</tr>")
+  }, character(1))
+  cap <- if (is.null(caption)) "" else sprintf("<caption>%s</caption>", esc(caption))
+  sprintf('<table class="benchtab">%s<thead><tr>%s</tr></thead><tbody>%s</tbody></table>',
+          cap, hd, paste(rows, collapse = ""))
+}
+
+cat('\n# Frozen-reference benchmark {#benchmark}\n\n')
+pass <- grepl("^PASS", BM$verdict %||% "")
+vcol <- if (pass) "var(--good)" else "var(--bad)"
+cat(sprintf('<div class="read-line" style="border-left-color:%s"><b>Verdict:</b> %s</div>\n',
+            vcol, esc(BM$verdict %||% "(see benchmark_report.md)")))
+cat('Cells were classified against a **frozen bat reference** (built once from a canonical run), so these labels (`cell_type_ref`) are *run-independent*: they do not shift with this run\'s sample mix. The anchor samples carried into every run are the reproducibility control — identical input + same model should give the same proportions across runs, so any drift is a pipeline/run artifact, not biology.\n\n')
+if (!is.null(BM$model) && !is.na(BM$model))
+  cat(sprintf('<p class="plot-desc">Reference model: <code>%s</code></p>\n', esc(BM$model)))
+
+# ---- concordance, one sub-table per anchor, sorted by |drift|, drift cells flagged red ----
+conc <- BM$concordance
+if (!is.null(conc) && nrow(conc)) {
+  cat('<h2>Anchor concordance vs frozen baseline</h2>\n')
+  cat('<p class="plot-desc">Each anchor\'s composition in THIS run (run %) against the reference\'s stored baseline. &Delta;pp is the gap; a flagged row exceeds the drift threshold.</p>\n')
+  dcol <- which(names(conc) == "delta_pp"); fcol <- which(names(conc) == "flag")
+  style_fn <- function(i, j, df) {
+    flagged <- length(fcol) && !is.na(df[i, fcol]) && nzchar(as.character(df[i, fcol]))
+    if (length(dcol) && j == dcol) sprintf("font-weight:600;color:%s",
+        if (flagged) "var(--bad)" else if (abs(suppressWarnings(as.numeric(df[i, j]))) < 2) "var(--good)" else "var(--warn)")
+    else ""
+  }
+  for (a in unique(conc$anchor)) {
+    sub <- conc[conc$anchor == a, setdiff(names(conc), "anchor"), drop = FALSE]
+    sub <- sub[order(-abs(suppressWarnings(as.numeric(sub$delta_pp)))), , drop = FALSE]
+    cat(htab(sub, caption = sprintf("%s", a), cellstyle = style_fn))
+  }
+}
+
+# ---- whole-blood / sort-status signature ----
+sig <- BM$signature
+if (!is.null(sig) && nrow(sig)) {
+  cat('<h2>Whole-blood signature (sort readout)</h2>\n')
+  cat('<p class="plot-desc">Granulocyte / RBC / platelet fractions per sample under the frozen reference. High values indicate presort / whole blood; depleted values indicate postsort PBMC.</p>\n')
+  cat(htab(sig))
+}
+
+# ---- full run-independent composition, collapsed ----
+comp <- BM$composition
+if (!is.null(comp) && nrow(comp)) {
+  cat('<details class="bench-details"><summary>Full run-independent composition (cell_type_ref %, per sample)</summary>\n')
+  cat(htab(comp))
+  cat('</details>\n')
 }
 ```
 

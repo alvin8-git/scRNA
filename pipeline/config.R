@@ -109,9 +109,12 @@ if (exists(".kv"))    rm(.kv)
 # --- Results directory — always under BASE_DIR/Results/ for organisation ---
 # Single sample  : Results/results_H1_filtered/
 # Multiple samples: Results/results_H1-H2-H3_filtered/
-RESULTS_DIR <- file.path(BASE_DIR, "Results",
-  paste0("results_", paste(SAMPLE_NAMES, collapse = "-"), "_", .mtag)
-)
+# SCRNA_RESULTS_DIR points any step at an existing run dir (e.g. to re-render PDFs/reports onto
+# a finished run without reconstructing every SCRNA_SAMPLE* env var). Otherwise derive from samples.
+RESULTS_DIR <- Sys.getenv("SCRNA_RESULTS_DIR", unset = "")
+if (!nzchar(RESULTS_DIR))
+  RESULTS_DIR <- file.path(BASE_DIR, "Results",
+    paste0("results_", paste(SAMPLE_NAMES, collapse = "-"), "_", .mtag))
 rm(.mtag)
 
 # --- QC Thresholds ---
@@ -450,8 +453,37 @@ DIRS <- list(
 )
 
 invisible(lapply(DIRS, dir.create, recursive = TRUE, showWarnings = FALSE))
-invisible(lapply(file.path(DIRS$individual, SAMPLE_NAMES),
-                 dir.create, recursive = TRUE, showWarnings = FALSE))
+# Skip per-sample individual/ dirs when re-pointing at a finished run (avoids stray default dirs).
+if (!nzchar(Sys.getenv("SCRNA_RESULTS_DIR")))
+  invisible(lapply(file.path(DIRS$individual, SAMPLE_NAMES),
+                   dir.create, recursive = TRUE, showWarnings = FALSE))
+
+# Override de-novo cell_type with the frozen-reference label transfer (05r_reference_transfer.R)
+# when that output exists. Run-INDEPENDENT labels are the correct view for cross-species runs
+# where de-novo SingleR mislabels (bat neutrophils collapsing into CD14+ Mono). Additive: the
+# de-novo call is kept as cell_type_denovo, and options("scrna.label_source") records which is live
+# so plots can annotate it. No CSV (e.g. non-bat runs) => object returned unchanged. Idempotent.
+apply_reference_labels <- function(obj, run_dir = RESULTS_DIR, verbose = TRUE) {
+  options(scrna.label_source = "de-novo")
+  p <- file.path(run_dir, "annotation", "reference_transfer_cells.csv.gz")
+  if (!file.exists(p)) return(obj)
+  rt <- tryCatch(read.csv(gzfile(p), stringsAsFactors = FALSE), error = function(e) NULL)
+  if (is.null(rt) || !all(c("barcode", "cell_type_ref") %in% names(rt))) return(obj)
+  m  <- setNames(rt$cell_type_ref, rt$barcode)
+  rv <- m[colnames(obj)]; hit <- sum(!is.na(rv))
+  if (hit <= 0.5 * ncol(obj)) {
+    if (verbose) message("reference labels: barcode overlap too low (", hit, "/", ncol(obj),
+                         ") — keeping de-novo cell_type")
+    return(obj)
+  }
+  rv[is.na(rv) | rv == ""] <- "Unassigned"
+  if (!"cell_type_denovo" %in% colnames(obj@meta.data)) obj$cell_type_denovo <- obj$cell_type
+  obj$cell_type <- unname(rv)
+  options(scrna.label_source = "frozen reference")
+  if (verbose) message("reference labels applied: ", hit, "/", ncol(obj),
+                       " cells now use cell_type_ref (de-novo kept as cell_type_denovo)")
+  obj
+}
 
 # =============================================================================
 # PDF Report Helpers

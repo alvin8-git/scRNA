@@ -30,9 +30,15 @@ options(future.globals.maxSize = PARALLEL$merge_mem_gb * 1024^3)
 message("Parallelism: ", PARALLEL$merge_workers, " cores (future multicore, merged-object phase)")
 
 merged <- readRDS(file.path(DIRS$integrated, "integrated_annotated.rds"))
+merged <- apply_reference_labels(merged)   # frozen-reference labels when 05r has run (additive)
+.lblsrc <- getOption("scrna.label_source", "de-novo")
+# Trust the object's sample list. config SAMPLE_NAMES is the H1/H2 fallback when re-pointing at a
+# finished run via SCRNA_RESULTS_DIR without SCRNA_SAMPLE* env vars — iterating it would subset
+# zero cells. Authoritative source for which samples to plot is the integrated object itself.
+SAMPLE_NAMES <- sort(unique(as.character(merged$sample)))
 Idents(merged) <- "cell_type"
 message("Loaded: ", ncol(merged), " cells | ",
-        length(unique(merged$cell_type)), " cell types")
+        length(unique(merged$cell_type)), " cell types | labels: ", .lblsrc)
 
 theme_pub <- theme_classic(base_size = 11) +
   theme(plot.title  = element_text(size = 12, face = "bold"),
@@ -292,7 +298,8 @@ p_bar <- ggplot(prop_df, aes(x = sample, y = prop, fill = cell_type)) +
             size = 2.5, colour = "white", fontface = "bold", lineheight = 0.85) +
   scale_fill_manual(values = ct_cols) +
   scale_y_continuous(labels = percent_format()) +
-  labs(title = "Cell Type  -  % of Sample", x = NULL, y = "Proportion") +
+  labs(title = "Cell Type  -  % of Sample",
+       subtitle = paste0("Labels: ", .lblsrc), x = NULL, y = "Proportion") +
   theme_pub +
   theme(legend.position = "none")
 

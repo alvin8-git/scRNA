@@ -97,13 +97,37 @@ verdict <- if (any_flag) {
 } else {
   sprintf("PASS (max anchor drift %.1f pp <= %.0f pp)", max_drift, DRIFT)
 }
+# Per-sample collection method (terminal cardiac puncture vs peripheral vein draw). Drives the
+# leukogram: a terminal central bleed avoids restraint stress neutrophilia (and can pick up
+# splenic/central pooled lymphocytes), so such samples read low-neutrophil / high-lymphoid.
+COLLECTION <- c(Aksh1 = "cardiac puncture (terminal/sacrifice)")
+coll_of <- function(s) if (s %in% names(COLLECTION)) COLLECTION[[s]] else "peripheral vein draw"
+coll_lines <- vapply(sort(unique(cells$sample)), function(s)
+  sprintf("- **%s** — %s", s, coll_of(s)), character(1))
+
 md <- c(sprintf("# Benchmark concordance — %s", basename(RUN_DIR)),
         sprintf("Model: `%s`", basename(MODEL)),
         sprintf("Anchors: %s | drift flag: %g pp", paste(ANCHORS, collapse=", "), DRIFT),
         sprintf("\n**Verdict: %s**\n", verdict),
         "Anchor proportions are run-INDEPENDENT (frozen reference); identical input + same model",
         "should reproduce across runs. Drift = pipeline/run artifact, not biology.\n",
-        "See concordance.csv and wholeblood_signature.csv.")
+        "See concordance.csv and wholeblood_signature.csv.\n",
+        "## Collection method", coll_lines, "",
+        "## Caveats (biological interpretation)",
+        "- **Aksh1 is a methodological outlier, not a biological baseline.** It was obtained by",
+        "  terminal cardiac puncture, the others by conscious peripheral vein draw. Aksh1 has the",
+        "  lowest neutrophils (~10%) and the highest lymphoid fractions (B cell ~15%, CD4 T ~29%).",
+        "  Terminal central bleeds avoid restraint stress neutrophilia and may include splenic/central",
+        "  pooled lymphocytes, so this profile reflects HOW it was collected. Aksh1 stays valid as a",
+        "  reproducibility anchor (labels reproduce across runs); ES332 (vein) is the representative anchor.",
+        "- **B cells (0.1–7% in vein samples) are normal-to-low for neutrophil-dominated whole blood.**",
+        "  Proportions are a closed sum: high neutrophils suppress the lymphoid %. B cells are well",
+        "  captured in droplet scRNA (trustworthy as relative values), UNLIKE neutrophils which suffer",
+        "  granulocyte dropout — so a de-novo 0% neutrophil result is the artifact, not the high values.",
+        "- **Draw volume does not change proportions** (fixed cell loading); collection site/stress does.",
+        "- **Whole-blood signature (high neutrophil + RBC + platelet) => presort / whole blood.** High",
+        "  neutrophils in captive bats are biologically credible (neutrophil-dominant adult pteropodids;",
+        "  amplified by captivity + handling stress). See docs/bat_neutrophil_literature.md.")
 writeLines(md, file.path(RUN_DIR, "benchmark", "benchmark_report.md"))
 message("\n=== ", verdict, " ===")
 message("  report: ", file.path(RUN_DIR, "benchmark", "benchmark_report.md"))

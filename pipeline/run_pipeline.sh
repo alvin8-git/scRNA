@@ -287,6 +287,15 @@ for step in "${STEPS[@]}"; do
     exit 1
   fi
   run_step "${step}"
+  # Frozen-reference label transfer right after annotation (05), BEFORE 06/09, so the PDF
+  # deliverables use run-independent labels. Self-skips when REFERENCE_MODEL is unset. Never fails.
+  if [[ "$step" == "05" && -f "${RESULTS_DIR}/integrated/integrated_annotated.rds" ]]; then
+    step_hdr "Frozen-reference label transfer (05r)"
+    _rl="${LOG_DIR}/05r_reference_transfer.log"
+    if Rscript "${PIPELINE_DIR}/05r_reference_transfer.R" "${RESULTS_DIR}" 2>&1 | tee "${_rl}"; then :; else
+      warn "05r_reference_transfer failed (pipeline outputs unaffected) — see ${_rl}"
+    fi
+  fi
 done
 
 # --- Interactive HTML run report (step 08b) — additive; never fails the pipeline ---
@@ -306,15 +315,13 @@ else
   log "HTML report skipped (--no-report)."
 fi
 
-# --- Frozen-reference label transfer (05r) + cross-run benchmark (08c) — additive ---
+# --- Cross-run benchmark (08c) — additive; 05r already ran after step 05 above ---
 # Self-skip when REFERENCE_MODEL is unset (config.R / SCRNA_REFERENCE_MODEL). Never fail run.
 if [[ -f "${RESULTS_DIR}/integrated/integrated_annotated.rds" ]]; then
-  for _rs in 05r_reference_transfer 08c_benchmark_concordance; do
-    _rl="${LOG_DIR}/${_rs}.log"
-    if Rscript "${PIPELINE_DIR}/${_rs}.R" "${RESULTS_DIR}" 2>&1 | tee "${_rl}"; then :; else
-      warn "${_rs} failed (pipeline outputs unaffected) — see ${_rl}"
-    fi
-  done
+  _rl="${LOG_DIR}/08c_benchmark_concordance.log"
+  if Rscript "${PIPELINE_DIR}/08c_benchmark_concordance.R" "${RESULTS_DIR}" 2>&1 | tee "${_rl}"; then :; else
+    warn "08c_benchmark_concordance failed (pipeline outputs unaffected) — see ${_rl}"
+  fi
 fi
 
 TOTAL_ELAPSED=$(( $(date +%s) - TOTAL_START ))
