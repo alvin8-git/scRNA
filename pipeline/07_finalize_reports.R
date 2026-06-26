@@ -21,6 +21,14 @@
 })
 source(file.path(.pipeline_dir, "config.R"))
 
+# Re-render safety: SCRNA_RESULTS_DIR points at a finished run, but without SCRNA_SAMPLE* env vars
+# config falls back to the H1/H2 SAMPLE_NAMES default. Recover the real sample list from the run-dir
+# name (results_<s1>-<s2>-..._filtered) so the per-sample Overall_report sections resolve correctly.
+if (nzchar(Sys.getenv("SCRNA_RESULTS_DIR"))) {
+  .bn <- sub("_(filtered|raw)$", "", sub("^results_", "", basename(RESULTS_DIR)))
+  if (nzchar(.bn)) SAMPLE_NAMES <- strsplit(.bn, "-", fixed = TRUE)[[1]]
+}
+
 combine <- function(inputs, output) {
   existing <- inputs[file.exists(inputs)]
   if (length(existing) == 0) {
