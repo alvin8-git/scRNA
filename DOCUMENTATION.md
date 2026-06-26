@@ -45,10 +45,12 @@ The pipeline is a sequence of R scripts in `pipeline/`. Core steps (run by defau
 | 03 | `03_individual.R` | Per-sample normalise → HVG → PCA → UMAP → cluster → markers |
 | 04 | `04_integrate.R` | Merge + Harmony batch integration (multi-sample) |
 | 05 | `05_annotate.R` | SingleR + scType + consensus + manual cell-type annotation |
+| 05r | `05r_reference_transfer.R` | Run-independent `cell_type_ref` labels from a frozen reference (optional; gated on `REFERENCE_MODEL`) |
 | 06 | `06_visualize.R` | Publication figures |
 | 06b | `06b_differential.R` | Differential expression between samples per cell type (multi-sample) |
 | 07 | `07_finalize_reports.R` | Merge per-step PDFs into 5 category reports + `Overall_report.pdf` |
 | 08 | `08_comparison_report.R` | Standalone cross-sample comparison report |
+| 08c | `08c_benchmark_concordance.R` | Cross-run anchor benchmark vs frozen baseline + whole-blood sort readout (optional; gated on `REFERENCE_MODEL`) |
 | 09 | `09_bootstrap_proportions.R` | Bootstrap-normalised proportion CIs + pairwise chi-squared |
 | 10 | `10_rarefaction.R` | Minimum-capture-depth rarefaction analysis |
 
@@ -198,7 +200,37 @@ For H1 (~350 cells), consider using `resolution = 0.4` to avoid over-clustering.
 
 ---
 
+### Step 05r — Frozen-Reference Label Transfer (`05r_reference_transfer.R`)
+
+**Input:** `integrated/integrated_annotated.rds`, a frozen model bundle (`REFERENCE_MODEL`)
+**Output:** `annotation/reference_transfer_cells.csv.gz`, `annotation/reference_transfer_composition.csv`
+
+De-novo annotation (step 05) is run-relative: clustering and the SingleR/scType consensus are
+recomputed over whatever samples are in the run, so the same sample can get different proportions
+in different runs, and cross-species runs mislabel (bat neutrophils collapse into CD14+ Mono at
+the human Neutrophil/Monocyte decision boundary). Step 05r removes that dependency.
+
+It loads a **frozen reference model** built once by `pipeline/build_reference.R` (a
+`trainSingleR` classifier saved with its gene set and per-anchor baseline), aligns the run's genes
+to the model's gene set (zero-filling any missing), and runs `classifySingleR(fine.tune = TRUE)`
+to give every cell a label that depends only on the fixed model, not the run. The result is
+written as a second column, **`cell_type_ref`**, alongside the de-novo `cell_type` (additive,
+never overwrites). Per-cell confidence is the top1-top2 score gap (`ref_delta`).
+
+- Gated on `REFERENCE_MODEL` (`config.R` / `SCRNA_REFERENCE_MODEL`). No model → the script
+  quits cleanly and the whole feature is a no-op, so default human runs are unaffected.
+- `fine.tune` is per-cell inference against a fixed model; it sharpens calls but cannot overfit
+  the query and does not fix batch effects.
+- Build a reference: `SCRNA_SPECIES=bat Rscript pipeline/build_reference.R <run_dir> --holdout=Aksh1,ES332`.
+
+---
+
 ### Step 06 — Visualisation (`06_visualize.R`)
+
+> **Note on label source:** when a 05r transfer exists, `06` calls `apply_reference_labels()`
+> and plots `cell_type_ref` (run-independent); the proportion-bar subtitle reads
+> `Labels: frozen reference`. Without a transfer it plots the de-novo `cell_type`
+> (`Labels: de-novo`). The de-novo call is preserved as `cell_type_denovo`.
 
 > **Note on split-by-sample UMAP:** panels are produced at ≤2 per page. A shared cell-type legend (extracted from the full merged object via `cowplot::get_legend()`) is placed as a right column; each per-sample panel uses `NoLegend()` to prevent duplicate legends.
 
@@ -295,6 +327,31 @@ Run it alone: `bash run_pipeline.sh <samples> 08`
 
 ---
 
+### Step 08c — Cross-Run Benchmark (`08c_benchmark_concordance.R`)
+
+**Input:** `annotation/reference_transfer_cells.csv.gz` (from 05r), the frozen model's baseline
+**Output:** `benchmark/concordance.csv`, `benchmark/wholeblood_signature.csv`, `benchmark/benchmark_report.md`
+
+Once labels are run-independent (05r), the **anchor** samples carried into every run become a
+real reproducibility control. Step 08c compares each anchor's `cell_type_ref` composition in THIS
+run against the model's stored baseline (the same anchors classified when the model was built).
+Identical input + same model should reproduce, so any drift beyond `DRIFT_FLAG_PP` (default 5 pp)
+is a pipeline/run artifact, not biology. In practice the anchors reproduce within ~2.3–2.4 pp
+across the ES03-batch and ES17-batch integrations, which is what resolved the original cross-run
+proportion discrepancy.
+
+It also prints a per-sample **whole-blood signature** (Neutrophil / RBC / Platelet %): high values
+indicate presort / whole blood, depleted values indicate postsort PBMC. The generated
+`benchmark_report.md` includes a collection-method table and biological caveats (e.g. the Aksh1
+cardiac-puncture outlier; why a de-novo 0% neutrophil result is a scRNA artifact, not a sort).
+
+> **Statistical note:** two anchor samples are a valid reproducibility *control* (a fixed
+> reference point), not a biological population *benchmark* (no variance, cannot generalise).
+
+Gated on `REFERENCE_MODEL`; self-skips if 05r has not run. Design: `docs/frozen_reference_scope.md`.
+
+---
+
 ## Configuration Reference (`config.R`)
 
 All parameters are centralised in `config.R`. Every script sources this file at startup.
@@ -343,6 +400,33 @@ Steps 04+ are not cached, so `HARMONY` / `MARKERS` / `SINGLER_REF` changes take 
 
 Two RAM-governed worker pools: `PARALLEL$workers` for the per-sample phase (01–03, 8 GB/worker) and `PARALLEL$merge_workers` for the merged-object phase (04–06b, 16 GB/worker → fewer workers, since each holds a copy of the full merged object). A governor reads `MemAvailable` and caps both so `workers × budget` leaves ~20% headroom. OMP/OpenBLAS/MKL/BLAS are pinned to 1 thread per worker to stop CPU thrashing.
 
+### Frozen-reference labels & benchmark
+
+| Parameter | Env | Default | Effect |
+|---|---|---|---|
+| `REFERENCE_MODEL` | `SCRNA_REFERENCE_MODEL` | `""` (off) | Path to the model bundle from `build_reference.R`. Set it to turn on `05r` (label transfer) and `08c` (benchmark). Empty = both self-skip. |
+| `ANCHOR_SAMPLES` | `SCRNA_ANCHORS` | `Aksh1,ES332` | Control samples carried into every run; their drift vs baseline is the benchmark metric. |
+| `DRIFT_FLAG_PP` | `SCRNA_DRIFT_PP` | `5` | Anchor drift (percentage points) above which 08c flags a run/pipeline artifact. |
+| `REF_FINE_TUNE` | — | `TRUE` | Per-cell `classifySingleR` fine-tuning in 05r (sharpens calls; cannot overfit the query). |
+
+`apply_reference_labels(obj, run_dir)` (in `config.R`) is the shared helper that steps 06 and 09
+call after loading the object: if `<run_dir>/annotation/reference_transfer_cells.csv.gz` exists it
+swaps `cell_type` to `cell_type_ref` (keeping the de-novo call as `cell_type_denovo`) and records
+`options(scrna.label_source)` so plots can label which view they show. Idempotent; a no-op when no
+transfer exists, so non-bat runs are unchanged.
+
+`SCRNA_RESULTS_DIR` points any step at a finished run directory (overrides the
+samples-derived `RESULTS_DIR`), so you can re-render its PDFs/reports without reconstructing
+every `SCRNA_SAMPLE*` var. Steps 06 and 07 recover the true sample list from the object and the
+run-dir name rather than the config fallback. Example:
+
+```bash
+SCRNA_SPECIES=bat SCRNA_RESULTS_DIR=Results/results_<run>_filtered \
+  Rscript pipeline/06_visualize.R && \
+SCRNA_SPECIES=bat SCRNA_RESULTS_DIR=Results/results_<run>_filtered \
+  Rscript pipeline/09_bootstrap_proportions.R
+```
+
 ---
 
 ## Bat (*Eonycteris spelaea*) Whole-Blood Support
@@ -388,6 +472,28 @@ The `bat` keyword exports `SCRNA_SPECIES=bat`; `config.R` reads it and automatic
 - HSPC-labelled clusters with S100A8/A9 100% and CSF3R >30% → **Neutrophil**
 
 **Minimum recommended capture depth:** ≥5,000 cells per sample for ±1% CI on all populations (rarefaction analysis using ES03_newkit as ground truth).
+
+### Sample type: unsorted whole blood (presort)
+
+The bat ES cohorts are **unsorted whole blood** (presort): not FACS-sorted and not
+density-gradient (Ficoll/PBMC) separated, so granulocytes, RBC, and platelets are retained
+(typically RBC-lysed, not density-separated). Confirmed for both the ES03 and ES17 batches via the
+frozen-reference whole-blood signature (high Neutrophil + RBC + Platelet move together).
+
+This is why the de-novo annotation's **0% neutrophils** in the ES17 cohort was an artifact, not
+biology: the 24,737-cell neutrophil cluster was mislabeled CD14+ Mono (cross-species SingleR vote
+flip), and droplet scRNA also systematically under-captures granulocytes. The frozen bat reference
+recovers them (ES18 63%, ES171 59%). High neutrophil fractions in captive bat whole blood are
+biologically credible: adult pteropodids are neutrophil-dominant, and captivity plus handling
+stress amplify the count. Full citations: [`docs/bat_neutrophil_literature.md`](docs/bat_neutrophil_literature.md).
+
+**Collection-method caveat:** `Aksh1` was drawn by terminal cardiac puncture, the other samples by
+conscious vein draw. The terminal bleed avoids stress neutrophilia and may pool splenic/central
+lymphocytes, so Aksh1 reads lowest-neutrophil / highest-lymphoid (B ~15%). It is valid as a
+reproducibility anchor but not as a biological baseline; `ES332` is the representative anchor. Draw
+volume does not change scRNA proportions (fixed cell loading); collection site and stress do. B-cell
+fractions of 0.1–7% in the vein-draw samples are normal-to-low for neutrophil-dominated whole blood
+(closed-sum: abundant neutrophils suppress the lymphoid percentage).
 
 ---
 

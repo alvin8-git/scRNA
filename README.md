@@ -137,7 +137,9 @@ Results/results_<...>_filtered/
 ├── doublets/            # scDblFinder score plots
 ├── individual/          # per-sample UMAP, markers, dot plots
 ├── integrated/          # integrated_annotated.rds (the atlas), Harmony UMAP, heatmaps
-├── annotation/          # SingleR scores, canonical marker feature plots
+├── annotation/          # SingleR scores, canonical marker feature plots,
+│                        #   reference_transfer_cells.csv.gz + _composition.csv (if 05r ran)
+├── benchmark/           # concordance.csv, wholeblood_signature.csv, benchmark_report.md (if 08c ran)
 ├── differential/        # DE tables and plots (multi-sample runs)
 ├── logs/                # one log per step
 ├── reports/             # <run>_report.html  +  build_report.log
@@ -165,11 +167,13 @@ own location, so any step can be run on its own.
 | 03 | `03_individual.R` | Per-sample normalise, HVGs, PCA, UMAP, clustering, markers |
 | 04 | `04_integrate.R` | Merge and integrate with Harmony |
 | 05 | `05_annotate.R` | SingleR + canonical markers → cell-type labels; T-cell sub-clustering |
+| 05r | `05r_reference_transfer.R` | Optional: transfer run-independent `cell_type_ref` labels from a frozen reference (gated on `REFERENCE_MODEL`) |
 | 06 | `06_visualize.R` | Integrated UMAPs, proportion plots, marker dot plots |
 | 06b | `06b_differential.R` | Differential expression across conditions (multi-sample) |
 | 07 | `07_finalize_reports.R` | Assemble the per-stage PDFs and `Overall_report.pdf` |
 | 08 | `08_comparison_report.R` | Optional cross-condition comparison report |
 | 08b | `08b_html_report.R` | The interactive HTML report (auto-built at the end of a run) |
+| 08c | `08c_benchmark_concordance.R` | Optional: cross-run anchor benchmark vs the frozen baseline + whole-blood sort readout (gated on `REFERENCE_MODEL`) |
 
 Default step set: multi-sample runs do `01 02 03 04 05 06 06b 07`; single-sample runs do
 `01 02 03 04 05 06 07` (no DE). Then 08b runs automatically **if**
@@ -183,6 +187,42 @@ bash pipeline/run_pipeline.sh --no-report /path/to/A /path/to/B   # skip the HTM
 
 The bat-wing project adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory) under
 `pipeline/projects/bat_wing/`, triggered by the `bat_wing` species keyword.
+
+When a frozen reference is configured (`SCRNA_REFERENCE_MODEL`), `05r` runs right after `05`
+(so the PDFs and HTML pick up run-independent labels) and `08c` runs at the end. Both self-skip
+when no model is set and never fail the run, so they are invisible on a default human run.
+
+### Run-independent labels and cross-run benchmark (frozen reference)
+
+De-novo annotation is run-relative: the same sample gets different cell-type proportions in
+different runs, because clustering and the SingleR/scType consensus are recomputed over whatever
+samples are in the run. On cross-species data this also mislabels (bat neutrophils collapse into
+CD14+ Mono at the human Neutrophil/Monocyte boundary), so a sample can read 0% neutrophils in one
+run and 25% in another.
+
+The frozen reference fixes both. `build_reference.R` trains a SingleR classifier once from a
+canonical annotated run and saves a model bundle under `Results/frozen_reference/`. On any later
+run, `05r_reference_transfer.R` classifies every cell against that fixed model and writes a
+second label column, `cell_type_ref`, that does not depend on the run's sample mix. `08c` then
+checks the shared anchor samples against the model's baseline and flags drift over 5 pp; in
+practice the anchors reproduce within ~2.3 pp across different batches.
+
+To turn it on, build a reference once and point runs at it:
+
+```bash
+# build once from a finished, well-annotated run
+SCRNA_SPECIES=bat Rscript pipeline/build_reference.R \
+  Results/results_<canonical-run>_filtered --holdout=Aksh1,ES332
+
+# every subsequent run: set the model; 05r + 08c run automatically
+SCRNA_SPECIES=bat SCRNA_REFERENCE_MODEL=Results/frozen_reference/<model>.rds \
+  bash pipeline/run_pipeline.sh bat /path/A /path/B
+```
+
+In the HTML report the bars and UMAP default to `cell_type_ref` with a **Frozen reference vs
+De-novo** toggle, and a **Frozen-reference benchmark** section shows the concordance and the
+per-sample whole-blood signature. The proportion PDFs (`06`, `09`) print `Labels: frozen
+reference` in the subtitle. Full design: [`docs/frozen_reference_scope.md`](docs/frozen_reference_scope.md).
 
 ### Config drift protection: `validate_config.R`
 
@@ -223,7 +263,11 @@ pins BLAS/OMP to one thread per process so workers don't oversubscribe cores.
 
 **Environment overrides** (no config edit needed): `SCRNA_BASE_DIR` (relocate the project
 root), `SCRNA_SAMPLE1..N` (sample paths), `SCRNA_SPECIES` (`human` / `bat`), `SCRNA_CONDITION`
-(`name=label,...`). The wrapper sets these for you from its CLI args.
+(`name=label,...`), `SCRNA_RESULTS_DIR` (point a step at an existing run dir to re-render its
+PDFs/reports without re-listing samples). Frozen-reference knobs: `SCRNA_REFERENCE_MODEL` (path
+to the model bundle; turns on `05r`/`08c`), `SCRNA_ANCHORS` (benchmark control samples, default
+`Aksh1,ES332`), `SCRNA_DRIFT_PP` (drift-flag threshold, default 5). The wrapper sets the common
+ones for you from its CLI args.
 
 **Report downsampling** is a flag on the HTML build, not a config edit. The plotting frame is
 capped per sample (default 6,000 cells) for a responsive file; proportion and count bars always

@@ -1,5 +1,40 @@
 # Version History
 
+## v0.9.0 — 2026-06-26
+
+### Run-independent labels (frozen reference) + cross-run benchmark + report/PDF wiring
+
+#### New features
+
+- **Frozen bat reference** (`pipeline/build_reference.R`) — trains a SingleR classifier ONCE from a canonical annotated run (ES03 8-sample), marker-validated and population-complete (12 labels including CD8 T, RBC, Platelet, Neutrophil). Saved as a model bundle (`model` + `meta` + per-anchor `baseline`) under `Results/frozen_reference/` (gitignored, ~96 MB). Makes cell-type labels run-INDEPENDENT: they stop shifting with a run's sample mix.
+- **Step 05r — reference transfer** (`05r_reference_transfer.R`) — `classifySingleR` (fine.tune) transfers the frozen labels onto a finished run, aligning genes to the model's gene set (zero-fills missing). Writes `annotation/reference_transfer_cells.csv.gz` (`cell_type_ref` per barcode) + `reference_transfer_composition.csv`. Additive: `cell_type_ref` sits alongside the de-novo `cell_type`. Gated on `REFERENCE_MODEL`; self-skips when unset, so non-bat runs are untouched.
+- **Step 08c — cross-run benchmark** (`08c_benchmark_concordance.R`) — compares each anchor sample's frozen-reference composition in THIS run against the model's stored baseline; flags drift > `DRIFT_FLAG_PP` (5 pp). Emits a per-sample whole-blood signature (Neutrophil/RBC/Platelet %) as a sort readout. Writes `benchmark/concordance.csv`, `wholeblood_signature.csv`, `benchmark_report.md` (with collection-method + biological caveats). PASS: shared anchors reproduce within ~2.3–2.4 pp across the ES03-batch and ES17-batch integrations, resolving the original cross-run proportion discrepancy.
+- **`apply_reference_labels()`** (`config.R`) — shared helper that swaps `cell_type` to `cell_type_ref` (keeping de-novo as `cell_type_denovo`) when the 05r CSV exists; records `options(scrna.label_source)`. Used by steps 06 and 09 so the PDFs show run-independent labels. Idempotent; no-op without a transfer.
+- **HTML report (08b) frozen-reference view** — composition / cell-number bars and the UMAP default to `cell_type_ref` with a **Frozen reference vs De-novo toggle**; UMAP hover shows both calls; a new **Frozen-reference benchmark** nav section renders the concordance + whole-blood-signature tables. Falls back to de-novo when no transfer exists.
+- **PDF label source** — `06_visualize.R` and `09_bootstrap_proportions.R` apply the frozen-reference labels; proportion plots print `Labels: frozen reference | de-novo` in the subtitle.
+- **`SCRNA_RESULTS_DIR`** — env override pointing any step at a finished run dir, to re-render PDFs/reports without reconstructing `SCRNA_SAMPLE*`. Steps 06/07 recover the real sample list from the object / run-dir name.
+- **Config knobs** — `REFERENCE_MODEL` (`SCRNA_REFERENCE_MODEL`), `ANCHOR_SAMPLES` (`SCRNA_ANCHORS`, default `Aksh1,ES332`), `DRIFT_FLAG_PP` (`SCRNA_DRIFT_PP`, 5), `REF_FINE_TUNE` (TRUE).
+- **`run_pipeline.sh`** — 05r now runs immediately after step 05 (so 06/09 PDFs and the 08b HTML all get run-independent labels); 08c runs at the end. Both self-skip without a model and never fail the run.
+
+#### Findings (bat whole blood)
+
+- **ES17 cohort neutrophils recovered** — the de-novo annotation mislabeled the 24,737-cell neutrophil cluster as CD14+ Mono (cross-species SingleR vote flip at the human Neutrophil/Monocyte boundary). The frozen bat reference recovers them: ES18 63%, ES171 59%, ALL 35%. The original 0% was the artifact.
+- **Both cohorts are unsorted whole blood (presort)** — high Neutrophil + RBC + Platelet together; confirmed not FACS- or Ficoll/PBMC-sorted. The earlier "assume postsort" guess for ES17 is superseded.
+- **Aksh1 is a collection outlier** — terminal cardiac puncture (vs conscious vein draw) gives the lowest neutrophils and inflated lymphoid (B ~15%). Valid as a reproducibility anchor, not a biological baseline; use ES332 as the representative anchor.
+- **Literature validation** (`docs/bat_neutrophil_literature.md`) — 25–63% neutrophils in captive bat whole blood is credible: neutrophil-dominant adult pteropodids, droplet-scRNA granulocyte dropout (so 0% is the artifact), captivity/handling stress amplification.
+
+#### Files changed
+
+- `pipeline/build_reference.R`, `pipeline/05r_reference_transfer.R`, `pipeline/08c_benchmark_concordance.R` — **new**
+- `pipeline/config.R` — `apply_reference_labels()`; `REFERENCE_MODEL` / `ANCHOR_SAMPLES` / `DRIFT_FLAG_PP` / `REF_FINE_TUNE`; `SCRNA_RESULTS_DIR`
+- `pipeline/08b_html_report.R` + `pipeline/report_template.Rmd` — ref-label default + toggle + benchmark section
+- `pipeline/06_visualize.R`, `pipeline/09_bootstrap_proportions.R` — `apply_reference_labels()` + label-source subtitle; 06 takes its sample list from the object
+- `pipeline/07_finalize_reports.R` — sample-list recovery under `SCRNA_RESULTS_DIR`
+- `pipeline/run_pipeline.sh` — 05r after step 05; 08c at end
+- `docs/frozen_reference_scope.md`, `docs/bat_neutrophil_literature.md` — **new**
+
+---
+
 ## v0.8.0 — 2026-06-10
 
 ### Config Validation, Performance Hardening, Data Integrity Guard Rails, DX Improvements

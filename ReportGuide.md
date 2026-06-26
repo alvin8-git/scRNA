@@ -453,6 +453,12 @@ Red dashed lines mark the QC thresholds from `config.R`.
 - Technical differences: If one sample has very few cells of all types compared to another, check QC metrics — the sample may have been under-loaded or over-filtered
 - Unlabelled segments (<2%) are present but too small to annotate; check the absolute count panel for their exact numbers
 
+> **Label source:** when a frozen reference is configured (step 05r), these bars use the
+> run-independent `cell_type_ref` labels and the subtitle reads `Labels: frozen reference`;
+> otherwise they use the de-novo `cell_type` (`Labels: de-novo`). On cross-species runs the
+> two can differ sharply (e.g. de-novo can mislabel bat neutrophils as CD14+ Mono). See the
+> "Frozen-reference labels & cross-run benchmark" section below.
+
 ---
 
 ### 28. Violin Plots — Key Lineage Markers per Cell Type
@@ -645,6 +651,45 @@ This standalone report consolidates the most diagnostically useful cross-sample 
 - Share as a self-contained QC + analysis summary without requiring access to the full results directory
 - Use the Cell Fate table to quickly spot samples with unusually high QC or doublet loss rates
 - Use the Composition section to compare cell type proportions across donors before deeper DE analysis
+
+---
+
+## Frozen-reference labels & cross-run benchmark
+
+These appear only when a run was processed with a frozen reference configured
+(`SCRNA_REFERENCE_MODEL`; steps 05r + 08c). They make labels run-independent and let shared
+anchor samples act as a reproducibility control across runs.
+
+### Two label columns: `cell_type` vs `cell_type_ref`
+
+- **`cell_type`** (de-novo) is computed within the run: cluster, then SingleR/scType consensus.
+  It is run-relative, so the same sample can get different proportions in different runs, and on
+  cross-species data it can mislabel (bat neutrophils land on the human Neutrophil/Monocyte
+  boundary and collapse into CD14+ Mono).
+- **`cell_type_ref`** (frozen reference) is transferred from a fixed model that does not depend
+  on the run's sample mix. It is the correct view for cross-species work and for comparing the
+  same sample across runs.
+
+In the **HTML report**, the composition / cell-number bars and the UMAP default to
+`cell_type_ref` with a **Frozen reference vs De-novo** toggle (top of Cell proportions); the UMAP
+hover shows both calls. In the **PDFs** (`06`, `09`) the proportion subtitle records which is in
+use. If you see neutrophils in the frozen-reference view but not the de-novo view, the de-novo
+call was the artifact, not the frozen one.
+
+### `benchmark/benchmark_report.md` (step 08c)
+
+- **Verdict** — PASS when every anchor's drift vs the frozen baseline is within the threshold
+  (default 5 pp). Drift is a pipeline/run artifact, not biology, because the input and the model
+  are identical across runs.
+- **Concordance** (`concordance.csv`) — per anchor × cell type: this run's % vs baseline % vs
+  delta, with a DRIFT flag on large gaps.
+- **Whole-blood signature** (`wholeblood_signature.csv`) — per-sample Neutrophil / RBC / Platelet
+  %. High values together indicate presort / whole blood; depleted values indicate postsort PBMC.
+- **Caveats** — the report flags collection-method outliers (e.g. a cardiac-puncture sample that
+  reads low-neutrophil / high-lymphoid) so anchor composition is not misread as biology.
+
+> Two anchor samples are a reproducibility control (a fixed point checked across runs), not a
+> biological population benchmark (no variance, cannot generalise).
 
 ---
 
