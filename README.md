@@ -222,7 +222,8 @@ SCRNA_SPECIES=bat SCRNA_REFERENCE_MODEL=Results/frozen_reference/<model>.rds \
 In the HTML report the bars and UMAP default to `cell_type_ref` with a **Frozen reference vs
 De-novo** toggle, and a **Frozen-reference benchmark** section shows the concordance and the
 per-sample whole-blood signature. The proportion PDFs (`06`, `09`) print `Labels: frozen
-reference` in the subtitle. Full design: [`docs/frozen_reference_scope.md`](docs/frozen_reference_scope.md).
+reference` in the subtitle. Step-by-step: [`docs/howto-frozen-reference.md`](docs/howto-frozen-reference.md);
+design: [`docs/frozen_reference_scope.md`](docs/frozen_reference_scope.md).
 
 ### Config drift protection: `validate_config.R`
 

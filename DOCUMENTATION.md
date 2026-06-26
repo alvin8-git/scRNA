@@ -222,6 +222,7 @@ never overwrites). Per-cell confidence is the top1-top2 score gap (`ref_delta`).
 - `fine.tune` is per-cell inference against a fixed model; it sharpens calls but cannot overfit
   the query and does not fix batch effects.
 - Build a reference: `SCRNA_SPECIES=bat Rscript pipeline/build_reference.R <run_dir> --holdout=Aksh1,ES332`.
+- Full walk-through (build → transfer → benchmark → re-render): [`docs/howto-frozen-reference.md`](docs/howto-frozen-reference.md).
 
 ---
 
