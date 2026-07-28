@@ -1,5 +1,26 @@
 # Version History
 
+## v0.9.1 — 2026-07-28
+
+### bat_wing made usable on real wing tissue
+
+#### Changed
+
+- **`bat_wing` QC gates widened** (`config_species_bat.R`) — `QC$max_features` 5000 → 8000 and `QC$max_counts` 25000 → 60000. The blood caps discarded 5–11% of genuine keratinocytes and fibroblasts, which are far larger than lymphocytes. `max_percent_mt` deliberately stays at 20: median mito is 0.04–2.68% across 40 historical samples (human PBMC at 0.04–0.06%), so 20% is already a near-inert filter and raising it buys nothing. This is the only overlay that touches `QC`, so switching a sample between `bat` and `bat_wing` invalidates its 01–03 cache.
+- **Marker genes absent from the bat annotation removed or renamed** — `CTGF` → `CCN2` (`SUBTYPE_MARKERS$Fibroblast`, `WOUND_MODULES$Myofibroblast`); `KRT5` dropped from `MARKERS$Keratinocyte` and `SUBTYPE_MARKERS` basal (KRT14/TP63/COL17A1 remain); `LOR` dropped from suprabasal (KRT1/KRT10/FLG remain); `TRGC2` dropped from `MARKERS$gamma_delta_T` in **both** the bat and bat_wing blocks. Verified against `Samples/T1/filter_matrix/features.tsv.gz`.
+- **`CELLTYPE_COLORS` 35 → 52 entries** (`config.R`) — added every wing label (`Keratinocyte` + basal/suprabasal/wound, `Fibroblast (resting)`/`(wound)`, `Myofibroblast`, `Pericyte`, `Melanocyte`, `Melanocyte/Schwann`, `Macrophage` + M1/M2/proliferating, `Wound_keratinocyte`, `Chondrocyte`, `MSC`). This unblocks the annotation loop: `validate_config.R` hard-errors when a `CLUSTER_CELLTYPE_MAP` type has no colour.
+- **`SINGLER_NORM` 49 → 56 entries** (`05_annotate_singler_norm.R`) — `Keratinocytes → Keratinocyte` (config keys are singular, so `SUBTYPE_MARKERS[["Keratinocyte"]]` never fired), plus `Chondrocytes`, `MSC`, `Tissue_stem_cells → MSC`, `Osteoblasts → MSC`, `Macrophage`, `Macrophages`. Of HPCA's 36 `label.main` values, 25 now map and 11 pass through.
+
+#### Added
+
+- **First live `CLUSTER_CELLTYPE_MAP`** (`config.R`) — for the bat wing T1/T2/T6 run, wrapped in a `setequal(SAMPLE_NAMES, c("T1","T2","T6"))` guard so it cannot leak into a run with different cluster numbering. Needed because `HumanPrimaryCellAtlas` **swaps fibroblast and smooth muscle** in wing tissue: the cluster it calls `Smooth_muscle_cells` is DCN 176 / COL1A1 26 / LUM 37 with ACTA2 1.0 (a fibroblast), while `MSC` is ACTA2 60 / MYH11 22 / TAGLN 42 (the real smooth muscle). All 20 clusters are listed because unmapped clusters fall back to *per-cell* SingleR labels (`05_annotate.R:379`), not the cluster majority.
+- **`docs/bat_wing_readiness.md` §8** — what was actually run: `bat_wing` on T1/T2/T6 (25,924 cells) and `bat` on T3/T4/T5, with the corrected composition table and the cohort-split rationale.
+
+#### Notes
+
+- The six `Samples/T*` directories are three different sample types, not one cohort: T1/T2/T6 are wing tissue (epidermis-dominant / full-thickness / deep dermis), T3/T4 are sorted CD45+ leukocytes, T5 is whole blood. Integrating all six would make Harmony regress out the tissue difference as batch.
+- No frozen reference exists for wing tissue, so `05r`/`08c` self-skip and wing labels stay run-relative.
+
 ## v0.9.0 — 2026-06-26
 
 ### Run-independent labels (frozen reference) + cross-run benchmark + report/PDF wiring

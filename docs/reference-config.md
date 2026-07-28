@@ -67,6 +67,10 @@ Samples are set via environment variables (injected by `run_pipeline.sh`) or har
 | `SCRNA_SPECIES` | string | `human` (default) or `bat` or `bat_wing` |
 | `SCRNA_CONDITION` | string | Comma-separated `name=label` pairs for DEG grouping |
 | `SCRNA_BASE_DIR` | path | Overrides `BASE_DIR` — point outputs at a different root without editing `config.R` |
+| `SCRNA_RESULTS_DIR` | path | Point a step at an existing run directory instead of deriving one from the sample list. Also suppresses creation of per-sample `individual/` subdirectories |
+| `SCRNA_REFERENCE_MODEL` | path | Frozen SingleR model built by `build_reference.R`. Sets `REFERENCE_MODEL`; empty (default) makes steps 05r and 08c self-skip |
+| `SCRNA_ANCHORS` | string | Comma-separated anchor sample names for the cross-run benchmark. Sets `ANCHOR_SAMPLES`, default `Aksh1,ES332` |
+| `SCRNA_DRIFT_PP` | number | Anchor drift threshold in percentage points. Sets `DRIFT_FLAG_PP`, default `5` |
 
 Example:
 ```bash
@@ -103,17 +107,29 @@ QC <- list(
 
 The default `max_percent_mt = 20` is permissive for PBMC; lower to 10–15% for cleaner lymphocyte data.
 
+**`bat_wing` raises two of these.** The overlay sets `max_features = 8000` and `max_counts = 60000`,
+because keratinocytes and fibroblasts are far larger and more transcriptionally complex than
+lymphocytes — the blood caps discard 5–11% of genuine tissue cells. `max_percent_mt` stays at 20:
+this platform runs a ~0.5–1% mitochondrial baseline (median 0.80% across 40 samples, human PBMC
+included), so 20% is already a near-inert filter and raising it buys nothing.
+
 ---
 
 ## Doublet detection
 
 ```r
 DOUBLET <- list(
-  db_rate = NULL  # NULL = auto-estimate from cell count (recommended)
+  doublet_rate = list(H1 = 0.031, H2 = 0.077),  # NULL for unknown samples → auto
+  PCs  = 1:15,
+  sct  = FALSE
 )
 ```
 
-`NULL` lets scDblFinder estimate the expected doublet rate from the number of recovered cells (~0.8% per 1,000 cells). Set a numeric value (e.g. `0.05`) to fix the rate.
+`doublet_rate` is a per-sample named list of expected doublet rates — the shipped default covers the
+bundled `H1`/`H2` example data only, so add an entry per sample or set the whole field to `NULL`.
+`NULL` lets scDblFinder estimate the rate from the number of recovered cells (~0.8% per 1,000 cells).
+`PCs`: principal components fed to scDblFinder. `sct`: use SCTransform normalisation instead of
+LogNormalize for the doublet call.
 
 ---
 
@@ -121,9 +137,10 @@ DOUBLET <- list(
 
 ```r
 NORM <- list(
-  method    = "LogNormalize",
-  scale_fac = 10000,
-  n_hvg     = 2000
+  method       = "LogNormalize",
+  scale_factor = 10000,
+  n_hvg        = 2000,
+  hvg_method   = "vst"
 )
 ```
 
@@ -134,13 +151,14 @@ NORM <- list(
 ## Dimensionality reduction
 
 ```r
-DIMS <- list(
-  pca_dims = 50,   # PCs computed
-  umap_dims = 1:20 # PCs fed into UMAP and clustering
+DIM <- list(
+  npcs      = 30,    # PCs computed
+  dims_use  = 1:20,  # PCs fed into UMAP and clustering
+  umap_seed = 42     # seed for reproducible UMAP embeddings
 )
 ```
 
-Inspect the elbow plot in `03-Individual_report.pdf` to confirm `umap_dims` captures most variance. Typical PBMC: PCs 1–15; whole blood with granulocytes: PCs 1–20.
+Inspect the elbow plot in `03-Individual_report.pdf` to confirm `dims_use` captures most variance. Typical PBMC: PCs 1–15; whole blood with granulocytes: PCs 1–20.
 
 ---
 
@@ -176,7 +194,7 @@ SUBCLUSTER <- list(
 )
 ```
 
-`t_patterns`: regex matched against `final_cell_type`; clusters where the majority label matches are sub-clustered. Set `enabled = FALSE` to skip entirely. `min_cells`: clusters smaller than this are skipped.
+`t_patterns`: regex matched against `cell_type`; clusters where the majority label matches are sub-clustered. Set `enabled = FALSE` to skip entirely. `min_cells`: clusters smaller than this are skipped.
 
 ---
 
@@ -198,7 +216,7 @@ HARMONY <- list(
 | `theta` | Diversity penalty. Higher = stronger batch correction | Raise to 3–5 for strong batch effects (different sequencing runs) |
 | `lambda` | Ridge regression penalty | Rarely changed |
 | `nclust` | Harmony soft-clustering centroids | Raise for >10 samples |
-| `dims_use` | PCs fed into Harmony | Match `DIMS$umap_dims` |
+| `dims_use` | PCs fed into Harmony | Match `DIM$dims_use` |
 
 ---
 
@@ -249,24 +267,31 @@ When `FALSE` (default), step 04 skips `FindAllMarkers` entirely. The full marker
 
 ---
 
-## Sub-type refinement markers (`REFINEMENT_MARKERS`)
+## Sub-type refinement markers (`SUBTYPE_MARKERS`)
 
 Used by step 05 to split coarse SingleR labels (e.g. `"CD4 T"`) into sub-types (`"CD4 T (naive)"`, `"CD4 T (memory)"`, `"CD4 T (effector)"`).
 
 ```r
-REFINEMENT_MARKERS <- list(
+SUBTYPE_MARKERS <- list(
   "CD4 T" = list(
-    "CD4 T (naive)"    = c("CCR7", "TCF7", "LEF1", "SELL"),
-    "CD4 T (memory)"   = c("IL7R", "AQP3", "GPR183"),
-    "CD4 T (effector)" = c("GZMK", "TNFRSF4", "CCL5")
+    "CD4 T (naive)"    = c("CCR7", "SELL", "TCF7", "LEF1"),
+    "CD4 T (effector)" = c("GZMK", "GZMB", "TNFRSF4", "PRF1"),
+    "CD4 T (memory)"   = c("IL7R", "AQP3", "GPR183", "S100A4")
   ),
-  "CD8 T" = list(
-    "CD8 T (naive)"    = c("CCR7", "TCF7", "LEF1"),
-    "CD8 T (effector)" = c("GZMB", "PRF1", "GNLY", "IFNG")
+  "B cell" = list(
+    "B cell (naive)"   = c("IGHD", "IGHM", "TCL1A", "IL4R"),
+    "B cell (memory)"  = c("IGHG1", "IGHG2", "IGHA1", "TNFRSF13B"),
+    "Plasma"           = c("MZB1", "JCHAIN", "SDC1", "CD38", "XBP1", "PRDM1")
+  ),
+  "Monocyte" = list(
+    "CD14+ Mono"       = c("CD14", "S100A8", "S100A9", "LYZ"),
+    "FCGR3A+ Mono"     = c("FCGR3A", "CDKN1C", "MS4A7")
   )
 )
 ```
 
+Each top-level key must match a label SingleR can produce *after* `SINGLER_NORM` normalisation.
+Scoring is the average expression of the listed genes per cluster; the highest-scoring sub-type wins.
 Set to `NULL` to disable sub-type refinement and keep coarse labels.
 
 ---
@@ -278,6 +303,24 @@ CLUSTER_CELLTYPE_MAP <- NULL
 ```
 
 `NULL` = auto-annotate using SingleR majority vote per cluster (recommended first run). After step 05 runs, the log file `logs/05_annotate.log` prints a copy-pasteable map. Edit wrong entries and paste into `config.R`, then re-run steps 05–07.
+
+**Map every cluster, not just the wrong ones.** Clusters absent from the map fall back to the
+*per-cell* SingleR label rather than the cluster majority (`05_annotate.R:379`), which fragments
+each unmapped cluster into a mix of labels. A partial map is worse than no map.
+
+**Guard a live map by sample set.** Cluster ids only mean something for the exact sample set and
+integration that produced them, so wrap any committed map in a guard rather than assigning it at
+top level:
+
+```r
+if (length(SAMPLE_NAMES) == 3 && setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
+  CLUSTER_CELLTYPE_MAP <- c("0" = "Fibroblast", "1" = "RBC", ...)
+}
+```
+
+Adding or removing a sample silently disables the map and reverts to auto-annotation, which is the
+safe failure. `config.R` ships exactly one live map (bat wing T1/T2/T6, added because
+`HumanPrimaryCellAtlas` swaps fibroblast and smooth muscle in wing tissue); everything else is `NULL`.
 
 Partial maps are supported: listed clusters get your label; any cluster not in the map falls back to SingleR.
 
@@ -305,7 +348,7 @@ CELLTYPE_COLORS  <- c("CD4 T" = "#E64B35", "NK" = "#00A087", ...)
 
 `SAMPLE_COLORS`: add an entry for each new sample name. The pipeline auto-assigns `hue_pal()` colours for samples not in this list.
 
-`CELLTYPE_COLORS`: keys must match `final_cell_type` labels in the annotated Seurat object exactly.
+`CELLTYPE_COLORS`: keys must match `cell_type` labels in the annotated Seurat object exactly.
 
 ---
 
@@ -347,8 +390,13 @@ Set via the `SCRNA_SPECIES` env var (injected by `run_pipeline.sh`):
 | Value | Effect |
 |-------|--------|
 | `"human"` (default) | Standard PBMC settings |
-| `"bat"` | MonacoImmune reference, res=1.0, γδ T markers, bat-specific REFINEMENT_MARKERS, adjusted CONTAMINATION_TYPES |
-| `"bat_wing"` | Bat species with wing-tissue QC thresholds (higher `max_percent_mt`, lower `min_counts`) |
+| `"bat"` | MonacoImmune reference, res=1.0, γδ T markers, bat-specific SUBTYPE_MARKERS, adjusted CONTAMINATION_TYPES |
+| `"bat_wing"` | Wing-tissue markers (fibroblast, keratinocyte, endothelial, pericyte, macrophage, melanocyte), `HumanPrimaryCellAtlas` reference, res=0.5, tissue `SUBTYPE_MARKERS`, `WOUND_MODULES` for step 11, `CONTAMINATION_TYPES` reduced to RBC/HSPC/Platelet |
+
+The `bat` overlay does not change `QC`. The `bat_wing` overlay raises `QC$max_features` to 8000 and
+`QC$max_counts` to 60000 (see [QC](#qc)); `max_percent_mt` stays at the base value of 20 for every
+species. Because step 01's cache key hashes `QC`, changing species between `bat` and `bat_wing`
+invalidates the step 01–03 cache for a sample.
 
 ---
 

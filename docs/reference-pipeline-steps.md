@@ -30,17 +30,19 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 **Inputs:** 10x Genomics matrix folders (`filter_matrix/` or `filtered_feature_bc_matrix/`)
 
-**Outputs** (per sample, in `results_*/qc/<sample>/`):
+**Outputs** — the checkpoint goes to `individual/<sample>/` (plus `sample_cache/<sample>/`), the plots
+and tables to `qc/`:
 
 | File | Description |
 |------|-------------|
-| `<sample>_seurat_raw.rds` | Seurat object before QC filtering |
-| `<sample>_seurat.rds` | Seurat object after QC filtering |
-| `qc_violin.pdf` | Gene count, UMI count, and %MT distributions |
-| `qc_scatter.pdf` | UMI vs genes and UMI vs %MT scatter plots |
-| `cell_fate.csv` | Per-cell QC pass/fail with reason |
+| `individual/<sample>/<sample>_filtered.rds` | Seurat object after QC filtering |
+| `qc/<sample>_violin_qc.pdf` | Gene count, UMI count, and %MT distributions |
+| `qc/<sample>_scatter_qc.pdf` | UMI vs genes and UMI vs %MT scatter plots |
+| `qc/cell_fate.csv` | Per-**sample** attrition funnel (loaded → post-QC → post-doublet, % retained) |
+| `qc/qc_summary_table.csv` | Per-sample cell/gene counts and medians |
+| `qc/qc_report.pdf` | The QC plots in one paginated report |
 
-**What it does:** Reads 10x matrices with `Read10X()`, creates Seurat objects, computes QC metrics (`nFeature_RNA`, `nCount_RNA`, `percent.mt`), filters cells outside thresholds in `QC`, and writes per-sample `.rds` objects.
+**What it does:** Reads 10x matrices with `Read10X()`, creates Seurat objects, computes QC metrics (`nFeature_RNA`, `nCount_RNA`, `percent.mt`), filters cells outside thresholds in `QC`, and writes per-sample `.rds` objects. There is no pre-filter `.rds` — only the filtered object is saved.
 
 **Config keys:** `QC`, `QC$min_features`, `QC$max_features`, `QC$min_counts`, `QC$max_counts`, `QC$max_percent_mt`
 
@@ -48,41 +50,46 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 ## Step 02 — `02_doublets.R`
 
-**Inputs:** `qc/<sample>/<sample>_seurat.rds` (from step 01)
+**Inputs:** `individual/<sample>/<sample>_filtered.rds` (from step 01)
 
-**Outputs** (per sample, in `results_*/doublets/<sample>/`):
+**Outputs** — the checkpoint goes to `individual/<sample>/`, the plots to `doublets/`:
 
 | File | Description |
 |------|-------------|
-| `<sample>_seurat.rds` | Seurat object with `scDblFinder.score` and `scDblFinder.class` in metadata |
-| `doublet_umap.pdf` | UMAP coloured by doublet/singlet classification |
-| `doublet_score_hist.pdf` | Distribution of doublet probability scores |
+| `individual/<sample>/<sample>_singlets.rds` | Seurat object with `scDblFinder.score` and `scDblFinder.class` in metadata, doublets removed |
+| `doublets/<sample>_doublet_umap.pdf` | UMAP coloured by doublet/singlet classification |
+| `doublets/<sample>_doublet_score_hist.pdf` | Distribution of doublet probability scores |
+| `doublets/doublets_report.pdf` | The doublet plots in one paginated report |
 
 **What it does:** Runs `scDblFinder()` on each sample independently, adds doublet scores to cell metadata, and removes cells classified as doublets.
 
-**Config keys:** `DOUBLET$db_rate` (NULL = auto)
+**Config keys:** `DOUBLET$doublet_rate` (NULL = auto)
 
 ---
 
 ## Step 03 — `03_individual.R`
 
-**Inputs:** `doublets/<sample>/<sample>_seurat.rds` (from step 02)
+**Inputs:** `individual/<sample>/<sample>_singlets.rds` (from step 02)
 
 **Outputs** (per sample, in `results_*/individual/<sample>/` AND `sample_cache/<sample>/`):
 
 | File | Description |
 |------|-------------|
 | `<sample>_seurat.rds` | Normalised, clustered Seurat object with UMAP |
-| `<sample>_umap_clusters.pdf` | UMAP coloured by cluster |
-| `<sample>_umap_celltype.pdf` | UMAP coloured by cell count per cluster |
-| `<sample>_top_markers.pdf` | Top 5 DE markers per cluster (dot plot) |
+| `<sample>_umap_cluster.pdf` | UMAP coloured by cluster |
+| `<sample>_umap_sample.pdf` | UMAP coloured by sample |
+| `<sample>_umap_markers.pdf` | Canonical marker feature plots on UMAP |
+| `<sample>_dotplot_markers.pdf` | Canonical markers × clusters (dot plot) |
 | `<sample>_elbow.pdf` | PCA elbow plot |
-| `<sample>_variable_genes.pdf` | Highly variable genes plot |
-| `<sample>_markers.csv` | Full marker gene table (Wilcoxon, all clusters) |
+| `<sample>_hvg.pdf` | Highly variable genes plot |
+| `<sample>_pc_heatmaps.pdf` | Per-PC loading heatmaps |
+| `<sample>_cluster_markers.csv` | Full marker gene table (Wilcoxon, all clusters) |
+
+`individual/individual_report.pdf` collects the per-sample plots into one paginated report.
 
 **What it does:** Normalises (`LogNormalize`), finds HVGs, scales, runs PCA and UMAP, clusters at all resolutions in `CLUSTER$resolutions`, and finds cluster markers. Results are also written to `sample_cache/` so multi-sample runs do not re-process the same sample twice.
 
-**Config keys:** `NORM`, `DIMS`, `CLUSTER`, `PLOT`
+**Config keys:** `NORM`, `DIM`, `CLUSTER`, `PLOT`
 
 ---
 
@@ -95,13 +102,14 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 | File | Description |
 |------|-------------|
 | `integrated_seurat.rds` | Merged + Harmony-corrected Seurat object |
-| `integration_umap_before.pdf` | UMAP before Harmony (coloured by sample) |
-| `integration_umap_after.pdf` | UMAP after Harmony (coloured by sample) |
+| `harmony_before_after.pdf` | UMAP before and after Harmony, coloured by sample |
+| `integrated_umap_cluster.pdf`, `integrated_umap_sample.pdf`, `integrated_umap_split_sample.pdf` | Integrated UMAP variants |
+| `integration_report.pdf` | The integration plots in one paginated report |
 | `cluster_resolution_comparison.pdf` | Side-by-side UMAPs at `compare_res` resolutions |
 
 **What it does:** Merges all per-sample objects, runs Harmony batch correction (or direct UMAP/clustering for a single sample), and saves an integrated Seurat object ready for annotation.
 
-**Config keys:** `HARMONY`, `CLUSTER$compare_res`, `DIMS`, `MARKERS$compute_integrated`
+**Config keys:** `HARMONY`, `CLUSTER$compare_res`, `DIM`, `MARKERS$compute_integrated`
 
 **`MARKERS$compute_integrated`:** When `TRUE`, runs `FindAllMarkers` after integration and writes `integrated/integrated_cluster_markers.csv`. Defaults to `FALSE` — skips the sweep, which saves 20–30 minutes on typical runs. Enable only when you need the full per-cluster marker table.
 
@@ -113,30 +121,33 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 **Inputs:** `integrated/integrated_seurat.rds`
 
-**Outputs** (in `results_*/annotation/`):
+**Outputs** — the annotated object goes to `integrated/`, everything else to `annotation/`:
 
 | File | Description |
 |------|-------------|
-| `integrated_annotated.rds` | Seurat object with `final_cell_type` in metadata |
+| `integrated/integrated_annotated.rds` | Seurat object with `cell_type` in metadata |
+| `cluster_annotation_table.csv` | Per-cluster majority label (column `final_cell_type`) and SingleR majority |
+| `consensus_annotation.csv`, `singler_vs_sctype_comparison.csv` | SingleR vs ScType agreement tables |
+| `contamination_summary.pdf` | Contamination-type prevalence per sample |
 | `singler_scores_heatmap.pdf` | Per-cell SingleR score heatmap |
 | `singler_delta_umap.pdf` | Annotation confidence (delta score) on UMAP |
 | `canonical_markers_dotplot.pdf` | Canonical markers × clusters (use to fill `CLUSTER_CELLTYPE_MAP`) |
-| `annotation_umap.pdf` | UMAP coloured by `final_cell_type` |
+| `celltype_umap.pdf` | UMAP coloured by `cell_type` |
 | `tcell_subclusters_umap.pdf` | T cell sub-cluster UMAP (if `SUBCLUSTER$enabled`) |
 | `tcell_subclusters_dotplot.pdf` | T cell sub-cluster marker dot plot |
 | `tcell_subcluster_summary.csv` | Sub-cluster cell counts and parent mapping |
 
-**What it does:** Runs SingleR against the configured reference, normalises raw labels via `SINGLER_NORM` (30-entry mapping), applies per-cell contamination-type overrides, optionally applies `CLUSTER_CELLTYPE_MAP`, refines coarse T/B/mono labels using `REFINEMENT_MARKERS`, and writes `final_cell_type` to cell metadata. Prints a copy-pasteable `CLUSTER_CELLTYPE_MAP` to `logs/05_annotate.log`.
+**What it does:** Runs SingleR against the configured reference, normalises raw labels via `SINGLER_NORM` (56-entry mapping), applies per-cell contamination-type overrides, optionally applies `CLUSTER_CELLTYPE_MAP`, refines coarse T/B/mono labels using `SUBTYPE_MARKERS`, and writes `cell_type` to cell metadata. Prints a copy-pasteable `CLUSTER_CELLTYPE_MAP` to `logs/05_annotate.log`.
 
 **Memory note:** `ScaleData` in this step scales only the Highly Variable Genes (HVGs) identified by `FindVariableFeatures`, not the full gene matrix. This reduces peak RAM from ~14 GB to ~1 GB on typical PBMC datasets. If `scale.data` is already present in the loaded object, scaling is skipped entirely.
 
-**Config keys:** `SINGLER_REF`, `CLUSTER_CELLTYPE_MAP`, `CONTAMINATION_TYPES`, `REFINEMENT_MARKERS`, `SUBCLUSTER`, `MARKERS`
+**Config keys:** `SINGLER_REF`, `CLUSTER_CELLTYPE_MAP`, `CONTAMINATION_TYPES`, `SUBTYPE_MARKERS`, `SUBCLUSTER`, `MARKERS`
 
 ---
 
 ## Step 06 — `06_visualize.R`
 
-**Inputs:** `annotation/integrated_annotated.rds`
+**Inputs:** `integrated/integrated_annotated.rds`
 
 **Outputs** (in `results_*/integrated/`):
 
@@ -145,7 +156,8 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 | `umap_triptych.pdf` | Cluster / sample / cell-type UMAP side-by-side |
 | `umap_split_by_sample.pdf` | Per-sample UMAP panels (2 per page) |
 | `integrated_umap_*.pdf` | Individual UMAP variants |
-| `canonical_markers_feature_*.pdf` | Per-cell-type feature plots |
+| `feature_<marker-group>.pdf` | Per-marker-group feature plots |
+| `celltype_counts_bar.pdf` | Absolute cell counts per cell type per sample |
 | `integrated_dotplot.pdf` | Canonical markers × cell type |
 | `integrated_heatmap.pdf` | Top 3 markers per cluster (heatmap) |
 | `celltype_proportions_bar.pdf` | Stacked bar: cell type proportions per sample |
@@ -161,15 +173,17 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 ## Step 06b — `06b_differential.R`
 
-**Inputs:** `annotation/integrated_annotated.rds`
+**Inputs:** `integrated/integrated_annotated.rds`
 
 **Outputs** (in `results_*/differential/`):
 
 | File | Description |
 |------|-------------|
-| `de_<celltype>.csv` | Differentially expressed genes per cell type between samples |
+| `DE_<celltype>.csv` | Differentially expressed genes per cell type between samples |
 | `volcano_<celltype>.pdf` | Volcano plot per cell type |
-| `module_scores_inflammation.pdf` | Inflammatory gene module scores across samples |
+| `DE_all_celltypes.csv`, `DE_summary.csv` | Combined DE table and per-cell-type hit counts |
+| `module_score_<module>.pdf` | Gene module scores across samples |
+| `differential_report.pdf` | The DE plots in one paginated report |
 
 **What it does:** Runs `FindMarkers()` for each cell type between samples defined by `SCRNA_CONDITION`. Skips automatically for single-sample runs.
 
@@ -181,7 +195,7 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 **Inputs:** All per-step PDF reports in `qc/`, `doublets/`, `individual/`, `annotation/`, `integrated/`
 
-**Outputs** (in `results_*/reports/`):
+**Outputs** (at the run directory root — `DIRS$reports` is `RESULTS_DIR` itself, not a `reports/` subfolder):
 
 | File | Contents |
 |------|---------|
@@ -200,9 +214,9 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 ## Step 08 — `08_comparison_report.R`
 
-**Inputs:** `annotation/integrated_annotated.rds`, output files from steps 01–06b
+**Inputs:** `integrated/integrated_annotated.rds`, output files from steps 01–06b
 
-**Outputs** (in `results_*/reports/`):
+**Outputs** (at the run directory root — `DIRS$reports` is `RESULTS_DIR` itself, not a `reports/` subfolder):
 
 | File | Description |
 |------|-------------|
@@ -214,44 +228,58 @@ Exits with code 1 on failure. All checks run before reporting, so you see every 
 
 ## Step 09 — `09_bootstrap_proportions.R`
 
-**Inputs:** `annotation/integrated_annotated.rds`
+**Inputs:** `integrated/integrated_annotated.rds`
 
-**Outputs** (in `results_*/proportions/`):
+**Outputs** (at the run directory root):
 
 | File | Description |
 |------|-------------|
-| `bootstrap_proportions.pdf` | Bootstrap-normalised proportions with 95% CI error bars |
-| `bootstrap_proportions.csv` | Per-sample per-cell-type mean, lower CI, upper CI |
-| `pairwise_chisq.csv` | Pairwise chi-squared tests between samples |
+| `bootstrap_proportions_report.pdf` | Bootstrap-normalised proportions with 95% CI error bars |
+| `bootstrap_summary.csv` | Per-sample per-cell-type observed proportion + multinomial CI + bootstrap mean/CI |
 
-**What it does:** Bootstraps cell-type proportions (1,000 resamples) to produce multinomial 95% confidence intervals. Runs pairwise chi-squared tests to identify statistically significant composition differences.
+**What it does:** Bootstraps cell-type proportions (1,000 resamples, each sample downsampled to the smallest) to produce multinomial 95% confidence intervals. Also runs pairwise chi-squared tests to identify statistically significant composition differences; those results appear in the PDF, not in a separate CSV.
+
+**Not run by `run_pipeline.sh`** — invoke it directly against a finished run:
+
+```bash
+SCRNA_RESULTS_DIR=Results/results_<samples>_filtered Rscript pipeline/09_bootstrap_proportions.R
+```
 
 ---
 
 ## Step 10 — `10_rarefaction.R`
 
-**Inputs:** `annotation/integrated_annotated.rds`
+**Inputs:** `integrated/integrated_annotated.rds`
 
-**Outputs** (in `results_*/rarefaction/`):
+**Outputs** (at the run directory root):
 
 | File | Description |
 |------|-------------|
-| `rarefaction_curves.pdf` | Proportion stability vs cell count per sample |
-| `min_capture_depth.csv` | Minimum cells needed for stable proportions per cell type |
+| `rarefaction_report.pdf` | Proportion stability vs cell count, with the fitted CI ~ a/√n curve per cell type |
+| `rarefaction_summary.csv` | Per-cell-type CI width, RMSE vs ground truth, and minimum stable cell count |
 
-**What it does:** Downsamples each sample to increasing cell counts and measures proportion estimate stability. Identifies the minimum cell count required for each cell type to converge to a stable proportion estimate.
+**What it does:** Treats the largest sample (by cell count) as ground truth, subsamples at increasing depths with 1,000 draws each, and reports the minimum *n* at which each cell type's empirical CI comes within 5% of its asymptote.
+
+**Not run by `run_pipeline.sh`** — invoke it directly against a finished run:
+
+```bash
+SCRNA_RESULTS_DIR=Results/results_<samples>_filtered Rscript pipeline/10_rarefaction.R
+```
 
 ---
 
 ## Intermediate `.rds` objects
 
+Steps 01–03 write each checkpoint twice: into `individual/<sample>/` for the run, and into
+`sample_cache/<sample>/` so later runs can skip the work.
+
 | Object | Location | Written by | Read by |
 |--------|----------|-----------|---------|
-| `<sample>_seurat_raw.rds` | `qc/<sample>/` | Step 01 | — |
-| `<sample>_seurat.rds` | `qc/<sample>/` → `doublets/<sample>/` | Steps 01, 02 | Steps 02, 03 |
-| `<sample>_seurat.rds` (cached) | `sample_cache/<sample>/` | Step 03 | Step 04 |
+| `<sample>_filtered.rds` | `individual/<sample>/` + `sample_cache/<sample>/` | Step 01 | Step 02 |
+| `<sample>_singlets.rds` | `individual/<sample>/` + `sample_cache/<sample>/` | Step 02 | Step 03 |
+| `<sample>_seurat.rds` | `individual/<sample>/` + `sample_cache/<sample>/` | Step 03 | Step 04 |
 | `integrated_seurat.rds` | `integrated/` | Step 04 | Step 05 |
-| `integrated_annotated.rds` | `annotation/` | Step 05 | Steps 06, 06b, 07, 08, 09, 10 |
+| `integrated_annotated.rds` | `integrated/` | Step 05 | Steps 05r, 06, 06b, 07, 08, 08b, 09, 10 |
 
 ---
 

@@ -19,9 +19,9 @@ Passing `bat` as the first argument to `run_pipeline.sh` sets `SCRNA_SPECIES=bat
 | `SINGLER_REF` | `"HumanPrimaryCellAtlas"` | `"MonacoImmune"` |
 | `CLUSTER$default_res` | 0.5 | 1.0 |
 | `MARKERS` | Human PBMC markers | Bat-validated orthologues |
-| `REFINEMENT_MARKERS` | Human CD4/CD8 sub-types | Bat-validated T cell sub-types |
+| `SUBTYPE_MARKERS` | CD4 T, B cell, Monocyte | Bat-validated sets for CD4 T, CD8 T, B cell, Monocyte, DC |
 | `CONTAMINATION_TYPES` | Includes Neutrophil | Neutrophil stays (abundant in whole blood) |
-| γδ T markers | Not included | TRGC2, TRGC1 added |
+| γδ T markers | Not included | TRDC, TRGC1 added (TRGC2 is absent from the bat annotation) |
 
 `MonacoImmune` is used because it resolves 29 blood cell subtypes including γδ T cells, monocyte subtypes, and pDC/mDC — critical for whole-blood samples where these populations are present.
 
@@ -89,7 +89,7 @@ SingleR on bat whole blood frequently makes these mistakes:
 | SingleR label | Actual label | Evidence |
 |---------------|-------------|---------|
 | `"NK"` | `"CD8 T"` | CD3E > 80%, NCAM1 < 1% |
-| `"NK"` | `"γδ T"` | TRGC2 or TRGC1 > 20% |
+| `"NK"` | `"γδ T"` | TRGC1 or TRDC > 20% |
 | `"Monocyte"` | `"DC"` | FCER1A > 10%, FLT3 > 5% |
 | `"Pre-B cell"` | `"Neutrophil"` | S100A12, G0S2 high |
 
@@ -114,7 +114,7 @@ Open `integrated/celltype_proportions_bar.pdf`. For whole-blood samples:
 After step 07 completes:
 
 ```bash
-ls -lh Results/results_ES03-ES12_filtered/reports/Overall_report.pdf
+ls -lh Results/results_ES03-ES12_filtered/Overall_report.pdf
 ```
 
 Open the report and check:

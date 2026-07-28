@@ -17,7 +17,7 @@ Each pipeline step writes checkpoint `.rds` files so you can restart from any po
 | Reason to re-run | Start from step |
 |-----------------|-----------------|
 | Changed `QC` thresholds | `01` |
-| Changed `CLUSTER$default_res` or `DIMS` | `03` or `04` |
+| Changed `CLUSTER$default_res` or `DIM` | `03` or `04` |
 | Corrected `CLUSTER_CELLTYPE_MAP` | `05` |
 | Changed visualisation parameters (`PLOT`, `CELLTYPE_COLORS`) | `06` |
 | Added/changed plot captions | `07` |
@@ -59,10 +59,10 @@ Each step appends to its log file. The last line will read `DONE Step XX finishe
 After re-running step 05, confirm `integrated_annotated.rds` was updated:
 
 ```bash
-ls -lh Results/results_ES03-ES12_filtered/annotation/integrated_annotated.rds
+ls -lh Results/results_ES03-ES12_filtered/integrated/integrated_annotated.rds
 ```
 
-The timestamp should match the current run. Open the regenerated `reports/05-Integrated_report.pdf` to verify the changes are reflected.
+The timestamp should match the current run. Open the regenerated `05-Integrated_report.pdf` to verify the changes are reflected.
 
 ---
 

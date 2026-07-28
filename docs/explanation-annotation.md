@@ -1,6 +1,6 @@
 # Annotation Strategy
 
-This document explains how step 05 assigns `final_cell_type` to every cell, why the pipeline uses two annotation routes simultaneously, and how to interpret annotation quality plots.
+This document explains how step 05 assigns `cell_type` to every cell, why the pipeline uses two annotation routes simultaneously, and how to interpret annotation quality plots.
 
 ---
 
@@ -27,10 +27,10 @@ Per-cell SingleR scores
              │
              ├──► CLUSTER_CELLTYPE_MAP override (optional, manual)
              │
-             └──► Sub-type refinement (REFINEMENT_MARKERS scoring)
+             └──► Sub-type refinement (SUBTYPE_MARKERS scoring)
                          │
                          ▼
-                  final_cell_type
+                  cell_type
 ```
 
 ### Route A: Per-cell contamination override
@@ -66,13 +66,13 @@ Cluster 2 labelled "CD4 T":
   → assigned "CD4 T (naive)"
 ```
 
-Set `REFINEMENT_MARKERS = NULL` to skip and keep coarse labels.
+Set `SUBTYPE_MARKERS = NULL` to skip and keep coarse labels.
 
 ---
 
 ## Label normalisation (`SINGLER_NORM`)
 
-Raw SingleR labels from `HumanPrimaryCellAtlasData` include entries like `"T_cells:CD4+"`, `"GMP"`, `"BFU-E"`. The 30-entry `SINGLER_NORM` map translates these to canonical pipeline names:
+Raw SingleR labels from `HumanPrimaryCellAtlasData` include entries like `"T_cells:CD4+"`, `"GMP"`, `"BFU-E"`. The 56-entry `SINGLER_NORM` map translates these to canonical pipeline names:
 
 | Raw label | Canonical name |
 |-----------|---------------|
@@ -131,5 +131,5 @@ When >20% of cells are `"Unassigned"`, review the delta score UMAP and the canon
 ## Related
 
 - [How to Override Annotations](howto-override-annotations.md) — step-by-step workflow
-- [Configuration Reference](reference-config.md) — `SINGLER_REF`, `REFINEMENT_MARKERS`, `CONTAMINATION_TYPES`
+- [Configuration Reference](reference-config.md) — `SINGLER_REF`, `SUBTYPE_MARKERS`, `CONTAMINATION_TYPES`
 - [Pipeline Architecture](explanation-architecture.md) — why two routes exist

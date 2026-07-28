@@ -156,7 +156,7 @@ For H1 (~350 cells), consider using `resolution = 0.4` to avoid over-clustering.
 - Run at single-cell level with `fine.tune = TRUE`
 - Low-confidence calls pruned (`prune = TRUE`)
 - Delta score (confidence margin) saved as `singler_delta`
-- Raw labels normalised via `SINGLER_NORM` lookup — covers HumanPrimaryCell granulocyte/erythroid lineages + full Monaco label.main set
+- Raw labels normalised via `SINGLER_NORM` lookup (56 entries in `05_annotate_singler_norm.R`) — covers HumanPrimaryCell granulocyte/erythroid lineages, the tissue labels needed by `bat_wing` (`Keratinocytes`, `Chondrocytes`, `MSC`, `Tissue_stem_cells`, `Osteoblasts`, `Macrophage(s)`), and the full Monaco label.main set. Of HPCA's 36 `label.main` values, 25 are mapped and 11 pass through unchanged.
 
 **Part 1b: scType marker-based scoring**
 - Runs alongside SingleR with no reference transcriptome — uses `MARKERS` gene lists directly
@@ -265,7 +265,7 @@ All figures saved at 300 DPI as PDF.
 ### Step 09 — Bootstrap Proportion Comparison (`09_bootstrap_proportions.R`)
 
 **Input:** `integrated_annotated.rds`
-**Output:** `reports/bootstrap_proportions_report.pdf`, `reports/bootstrap_summary.csv`
+**Output:** `bootstrap_proportions_report.pdf`, `bootstrap_summary.csv` (run directory root)
 
 Normalises cell type proportion estimates across samples with different capture depths:
 
@@ -283,7 +283,7 @@ Run: `bash pipeline/run_pipeline.sh <samples> 09`
 ### Step 10 — Rarefaction Analysis (`10_rarefaction.R`)
 
 **Input:** `integrated_annotated.rds`
-**Output:** `reports/rarefaction_report.pdf`, `reports/rarefaction_summary.csv`
+**Output:** `rarefaction_report.pdf`, `rarefaction_summary.csv` (run directory root)
 
 Empirically determines minimum capture depth for stable proportion estimates:
 
@@ -448,7 +448,7 @@ The `bat` keyword exports `SCRNA_SPECIES=bat`; `config.R` reads it and automatic
 | `MARKERS$CD14_mono` | CD14, LYZ, CST3, S100A8 | CD14, LYZ, S100A8, S100A9, **CSF1R** (CST3 absent; CSF1R added) |
 | `MARKERS$FCGR3A_mono` | FCGR3A, MS4A7 | FCGR2A, FCGR3B, MS4A7 (FCGR3A absent) |
 | `MARKERS$Neutrophil` | FCGR3B, CSF3R, CXCR2, CEACAM8 | FCGR3B, CSF3R, CXCR2, CEACAM6, **IDO1** (CEACAM8 absent; IDO1 bat-specific) |
-| `MARKERS$gamma_delta_T` | — | TRDC, TRGC1, TRGC2 |
+| `MARKERS$gamma_delta_T` | — | TRDC, TRGC1 (TRGC2 absent from the annotation) |
 | `CONTAMINATION_TYPES` | Neutrophil, RBC, HSPC, Platelet, … | Basophil, Eosinophil, Mast cell only |
 | B cell subtype markers | Uses IGHD, IGHM, IGHG1 | Uses TCL1A, IL4R, CD24, FCER2 (isotypes absent) |
 
@@ -548,6 +548,6 @@ All paths above are relative to the run's results directory, `Results/results_<s
 Load any object for interactive exploration:
 ```r
 library(Seurat)
-seu <- readRDS("Results/results_H1-H2_filtered/annotation/integrated_annotated.rds")
+seu <- readRDS("Results/results_H1-H2_filtered/integrated/integrated_annotated.rds")
 DimPlot(seu, group.by = "cell_type")
 ```

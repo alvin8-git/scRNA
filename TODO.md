@@ -102,7 +102,7 @@ Residual (optional, deferred): a deeper split of `05_annotate.R` into annotate-c
 
 - [x] **Bat species parameter** — `run_pipeline.sh` accepts `bat` or `human` keyword; exports `SCRNA_SPECIES`; `config.R` reads it and applies whole-blood overrides automatically
 - [x] **Bat whole-blood overrides in config.R** — substitutes 3 absent marker genes (CST3→drop, FCGR3A→FCGR2A, CEACAM8→CEACAM6); removes RBC/Neutrophil from `CONTAMINATION_TYPES` (expected in whole blood); bat-specific B cell and Monocyte `SUBTYPE_MARKERS`
-- [x] **γδ T cell markers** — `MARKERS$gamma_delta_T = c("TRDC", "TRGC1", "TRGC2")` added to bat override block; TRDC/TRGC1/TRGC2 present in merged bat GTF
+- [x] **γδ T cell markers** — `MARKERS$gamma_delta_T = c("TRDC", "TRGC1")` in the bat and bat_wing override blocks. TRGC2 was originally included but is **not** in the merged bat annotation (verified against `Samples/T1/filter_matrix/features.tsv.gz`, 2026-07-28) and was removed.
 - [x] **MonacoImmuneData reference for bat** — `SINGLER_REF <- "MonacoImmune"` set in bat block; resolves CD4 T, CD8 T, Treg, γδ T, classical/non-classical monocytes, pDC/mDC in a single pass (29 blood cell types vs 4 from HumanPrimaryCell)
 - [x] **Higher clustering resolution for bat** — `CLUSTER$resolutions`, `CLUSTER$default_res = 1.0`, `CLUSTER$compare_res` all overridden in bat block; ensures sufficient clusters for whole-blood diversity
 - [x] **Bat reference GTF** — merged old `finalsort_gtf4MT_recalc.gtf` (30,011 genes) with new TCR GTF `ESpe_Peaks2UTRed_genome_tcellgenes_ZF_Dec2024_v2.gtf`; result: `ESpe_merged_fullref.gtf` (30,180 genes = 30,011 + 169 new TCR loci); 38 TCR genes already present in old reference

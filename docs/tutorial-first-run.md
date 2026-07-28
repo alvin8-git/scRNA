@@ -89,7 +89,7 @@ You have results as soon as Step 03 finishes (~5–10 minutes) — the per-sampl
 ## Step 4: Open the QC report
 
 ```bash
-xdg-open Results/results_SampleA-SampleB_filtered/reports/01-QC_report.pdf
+xdg-open Results/results_SampleA-SampleB_filtered/01-QC_report.pdf
 ```
 
 Check the violin plots on the first two pages. You are looking for:
@@ -142,7 +142,7 @@ This takes **2–5 minutes** (no re-processing of QC or clustering).
 ## Step 6: Open the final report
 
 ```bash
-xdg-open Results/results_SampleA-SampleB_filtered/reports/Overall_report.pdf
+xdg-open Results/results_SampleA-SampleB_filtered/Overall_report.pdf
 ```
 
 This is a curated A4 summary of every stage. Each figure has a bold title banner and a `Good: … | Bad: …` interpretation caption at the bottom.
@@ -162,9 +162,9 @@ Key pages to check:
 
 You now have in `Results/results_SampleA-SampleB_filtered/`:
 
-- `annotation/integrated_annotated.rds` — the annotated Seurat object; load this in R for any downstream analysis
-- `reports/Overall_report.pdf` — shareable summary report
-- `reports/01-05_report.pdf` — detailed per-stage reports
+- `integrated/integrated_annotated.rds` — the annotated Seurat object; load this in R for any downstream analysis
+- `Overall_report.pdf` — shareable summary report
+- `01-QC_report.pdf` … `05-Integrated_report.pdf` — detailed per-stage reports
 - `integrated/celltype_proportions_bar.pdf` — cell type composition per sample
 
 To continue:

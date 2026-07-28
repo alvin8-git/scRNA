@@ -1,0 +1,129 @@
+cell_type,marker_gene,marker_role,confidence,basis
+# ============================================================
+# Bat (Eonycteris spelaea) Whole Blood scRNA-seq Cell Markers
+# Confidence: H=High, M=Moderate, L=Low
+# Basis: orthologous translation from human unless stated
+# All gene names follow human HGNC nomenclature (applied via
+# orthology mapping in ESpe GTF, rtracklayer 2024-12-18)
+# ============================================================
+#
+# TIER 1 — T CELLS (pan-T marker genes shared across all T subtypes)
+CD4 T,CD3D,top-level,H,TCR complex subunit; deeply conserved across all jawed vertebrates; validated in multiple bat species (Pteropus alecto; Rhinolophus spp.)
+CD4 T,CD3E,top-level,H,TCR complex subunit; co-expressed with CD3D; same conservation basis
+CD4 T,CD4,top-level,H,MHC class II co-receptor; protein sequence >85% identity to human; used in bat flow cytometry cross-reactivity studies (Clayton et al. 2023 PLoS Pathog)
+CD4 T,IL7R,top-level,M,IL-7 receptor; conserved but expressed on both CD4 and CD8 memory T cells — not CD4-specific; broadens CD4 T score
+CD4 T,CCR7,top-level,M,Lymph node homing receptor; conserved but also marks naive CD8 T cells; bat-specific expression breadth unclear
+#
+CD8 T,CD3D,top-level,H,TCR complex; see CD4 T above
+CD8 T,CD3E,top-level,H,TCR complex; see CD4 T above
+CD8 T,CD8A,top-level,H,MHC class I co-receptor alpha chain; 12.1% cells +ve in bat dataset; highly conserved; validated cross-species (Subudhi et al. 2022 Nat Commun)
+CD8 T,CD8B,top-level,H,MHC class I co-receptor beta chain; 10.5% cells +ve; co-expressed with CD8A; same conservation basis
+CD8 T,GZMK,top-level,L,Granzyme K; 21% cells +ve — too broad; also in CD4 T (effector) and NK; granzyme family diverged in chiroptera; should be removed
+#
+Treg,CD3D,top-level,H,TCR complex; see above
+Treg,CD3E,top-level,H,TCR complex; see above
+Treg,FOXP3,top-level,H,Master Treg transcription factor; extremely conserved across mammals; bat FOXP3 orthologue confirmed in Pteropus and Eonycteris genomes
+Treg,IL2RA,top-level,H,CD25; IL-2 receptor alpha; conserved; co-expressed with FOXP3 in regulatory T cells
+Treg,CTLA4,top-level,H,Immune checkpoint receptor; extremely conserved; used in bat immune studies as Treg marker proxy
+#
+# TIER 1 — T CELL SUBTYPES (used after top-level CD4 T assignment)
+CD4 T (naive),CCR7,subtype,M,Lymph node homing; conserved but shared with memory CD8 T; moderate specificity
+CD4 T (naive),SELL,subtype,L,CD62L; 50.4% cells +ve in bat blood — not discriminating; bat selectin biology may differ from human; recommend removal
+CD4 T (naive),TCF7,subtype,H,TCF-1; Wnt pathway TF essential for naive T identity; deeply conserved; validated in bat T cells (Subudhi et al. 2022)
+CD4 T (naive),LEF1,subtype,H,Wnt pathway TF; co-expressed with TCF7 in naive T cells; deeply conserved
+#
+CD4 T (effector),GZMK,subtype,L,Granzyme K; see CD8 T note above — shared with NK and CD8 T; should be replaced
+CD4 T (effector),GZMB,subtype,M,Granzyme B; cytotoxic; conserved but also in NK and CD8 T effectors; moderate specificity for CD4 effectors
+CD4 T (effector),TNFRSF4,subtype,H,OX40 co-stimulatory receptor; marks activated/effector CD4 T cells; conserved across mammals
+CD4 T (effector),PRF1,subtype,M,Perforin; cytotoxic marker; conserved but shared with NK and CD8 T effectors
+#
+CD4 T (memory),IL7R,subtype,M,Shared with naive T and CD8 memory — not memory-specific; conserved but lacks specificity
+CD4 T (memory),AQP3,subtype,L,Aquaporin 3; used as human memory CD4 T marker (Gattinoni et al.); no bat-specific validation; may reflect general membrane biology
+CD4 T (memory),GPR183,subtype,M,EBI2 chemokine receptor; conserved; expressed on memory B and T cells; moderate specificity
+CD4 T (memory),S100A4,subtype,L,Alarmin/metastasin; broadly expressed across many cell types including monocytes and fibroblasts; poor T cell specificity
+#
+# TIER 1 — γδ T CELLS (bat-specific addition; genes present in merged GTF since Dec 2024)
+γδ T,TRDC,top-level,H,TCR delta constant region; defines γδ T lineage; conserved across mammals; added to bat GTF Dec 2024
+γδ T,TRGC1,top-level,H,TCR gamma constant 1; conserved; used in bat γδ T identification (Papenfuss et al.)
+γδ T,TRGC2,top-level,H,TCR gamma constant 2; conserved; co-expressed with TRGC1
+#
+# TIER 2 — NK CELLS
+NK,NKG7,top-level,H,Granule membrane protein 7; among the most conserved NK/cytotoxic markers across mammals; high expression (28.9% bat cells)
+NK,GNLY,top-level,M,Granulysin; antimicrobial peptide; present in bat GTF but granulysin genes show copy number variation across bat families (Chiroptera); moderate confidence
+NK,KLRD1,top-level,M,CD94; NKG2 heterodimer partner; NK receptor superfamily diversified in bats — Chiroptera have expanded KLRB/KLRC families; orthologous function assumed
+#
+# TIER 3 — B CELLS
+B cell,MS4A1,top-level,M,CD20; MS4A gene family has expanded in some bat lineages (Jebb et al. 2020 Nature); core B cell marker but bat-specific expression fidelity less certain than CD19/CD79A
+B cell,CD79A,top-level,H,Igα; BCR signalling complex; extremely conserved across all B cell-bearing vertebrates; validated in bat B cells
+B cell,CD19,top-level,H,BCR co-receptor; highly conserved; validated in bat B cell identification studies
+#
+# BAT OVERRIDE — B cell subtypes (isotype genes IGHD/IGHM/IGHG1 absent from bat GTF annotation)
+B cell (naive),TCL1A,subtype,M,Proto-oncogene; expressed in naive/transitional B cells; conserved but limited bat-specific validation
+B cell (naive),IL4R,subtype,M,IL-4 receptor; conserved; expressed on naive B and T cells; moderate specificity
+B cell (naive),CD24,subtype,M,Heat-stable antigen; conserved; expressed on transitional/naive B cells; also on some T cells and DC
+B cell (naive),FCER2,subtype,M,CD23; low-affinity IgE receptor; IgE biology present in bats; conserved but FCER2 expression in naive B cells has limited bat-specific validation
+#
+B cell (memory),CD27,subtype,H,TNF receptor superfamily member 7; canonical memory B cell marker; highly conserved; used as human-ortholog memory B marker in bat studies
+B cell (memory),TNFRSF13B,subtype,M,TACI; conserved transmembrane receptor for BAFF/APRIL; expressed on memory B and plasma cells; moderate specificity
+B cell (memory),AIM2,subtype,M,Inflammasome sensor; expressed on memory B cells in humans (Weill et al.); no bat-specific validation for this context; used as surrogate
+#
+# TIER 3 — PLASMA CELLS (top-level scType and B cell subtype)
+Plasma,MZB1,top-level+subtype,M,Marginal zone B and B1 cell-specific protein; conserved; only 0.2% bat cells +ve — very low expression; requires co-scoring with other markers
+Plasma,JCHAIN,top-level+subtype,H,Immunoglobulin J chain; links IgM/IgA polymers; among most conserved immunoglobulin-related genes; 1.8% bat cells +ve
+Plasma,SDC1,top-level+subtype,H,CD138/syndecan-1; canonical plasma cell surface marker; highly conserved; 3.8% bat cells +ve
+Plasma,CD38,top-level+subtype,H,Ectoenzyme; highly and broadly expressed on plasma cells; conserved across mammals; 0.7% bat cells +ve (low but concentrated on plasma clusters)
+Plasma,XBP1,top-level+subtype,H,ER stress transcription factor; master regulator of antibody-secreting cell differentiation; deeply conserved; 12.1% bat cells +ve
+Plasma,PRDM1,top-level+subtype,H,BLIMP-1; master transcription factor for plasma cell differentiation; extremely conserved across all vertebrates; 6.4% bat cells +ve
+#
+# TIER 4 — MONOCYTES
+CD14+ Mono,CD14,top-level+subtype,H,LPS co-receptor; innate immunity; ancient and highly conserved across all mammals; validated in bat monocytes by flow cytometry
+CD14+ Mono,LYZ,top-level+subtype,H,Lysozyme; antimicrobial enzyme; one of the most ancient and conserved innate immunity genes; high expression expected in monocytes across species
+CD14+ Mono,CST3,top-level,H,Cystatin C; cysteine protease inhibitor; conserved; expressed in monocytes and DC; validated cross-species
+CD14+ Mono,S100A8,top-level+subtype,M,Calgranulin A; alarmin; S100 family broadly conserved but bat-specific expression distribution not validated; also expressed in neutrophils
+CD14+ Mono,S100A9,subtype,M,Calgranulin B; co-expressed with S100A8 (MRP8/14 complex); same conservation basis
+#
+# BAT OVERRIDE — FCGR3A absent from bat annotation; FCGR2A substituted
+FCGR3A+ Mono,FCGR2A,subtype,M,CD32A; FcγRIIa; Fc receptor family has duplications/divergence in bats; FCGR3A absent from ESpe GTF so FCGR2A used as substitute — conserved function but not orthologous marker
+FCGR3A+ Mono,FCGR3B,subtype,M,CD16B; neutrophil-associated in human but used here for non-classical mono scoring in bat; FCGR family divergent — moderate confidence
+FCGR3A+ Mono,CDKN1C,top-level+subtype,H,p57/KIP2; cell cycle inhibitor; marks patrolling/non-classical monocytes; highly conserved across mammals
+FCGR3A+ Mono,MS4A7,top-level+subtype,M,MS4A family member; non-classical monocyte marker in human; MS4A family variable in bats (Jebb et al. 2020); moderate confidence
+#
+# TIER 5 — GRANULOCYTES
+# BAT OVERRIDE — CEACAM8 dropped (highly divergent in bats); IDO1 and CEACAM6 added
+Neutrophil,FCGR3B,top-level,M,CD16B; neutrophil-specific Fc receptor in human; FCGR gene family has diverged in bats — not independently validated in bat neutrophils
+Neutrophil,CSF3R,top-level,H,G-CSF receptor; master granulopoiesis receptor; extremely conserved across all mammals; defines neutrophil/granulocyte lineage
+Neutrophil,CXCR2,top-level,H,IL-8 receptor; neutrophil chemoattractant receptor; conserved; validated as neutrophil marker across mammalian species
+Neutrophil,CEACAM6,top-level,M,CEACAM family member; bat CEACAM family is divergent (faster-evolving genes); CEACAM8 dropped from bat annotation; CEACAM6 retained as partial substitute — moderate confidence
+Neutrophil,IDO1,top-level,M,Indoleamine 2,3-dioxygenase 1; bat-specific addition; IDO1 upregulated in bat innate immune cells (Banerjee et al. 2020 iScience) — bat-informed marker
+#
+# NOTE: Eosinophil and Mast cell treated as contamination/rare in bat whole blood
+# (CONTAMINATION_TYPES in config.R) — SingleR-only detection, no scType scoring
+Eosinophil,SIGLEC8,contamination,L,SIGLEC family rapidly evolving in mammals; bat SIGLEC8 ortholog unconfirmed; human marker only
+Eosinophil,CCR3,contamination,M,Eotaxin receptor; conserved; expressed on eosinophils/basophils; moderate specificity
+Eosinophil,EPX,contamination,M,Eosinophil peroxidase; conserved enzymatic marker; present in bat GTF
+#
+Mast cell,TPSAB1,contamination,H,Tryptase alpha/beta 1; mast cell-specific serine protease; highly conserved across mammals
+Mast cell,CPA3,contamination,H,Carboxypeptidase A3; mast cell-specific; conserved; validated cross-species
+Mast cell,MS4A2,contamination,M,FcεRI beta chain; IgE receptor subunit; conserved in bats (IgE present); moderate confidence for bat mast cells
+Mast cell,KIT,contamination,H,c-Kit/CD117; stem cell factor receptor; conserved; marks mast cells and HSPCs
+#
+# Basophil — detected by SingleR (MonacoImmune) only; no scType marker set defined
+Basophil,(SingleR only),SingleR,M,Basophil detection relies entirely on MonacoImmune reference; no explicit marker genes in scType scoring; cross-species reference validity unconfirmed for bat
+#
+# TIER 6 — DC
+DC,FCER1A,top-level,M,High-affinity IgE receptor alpha; IgE biology conserved in bats; expressed on plasmacytoid DC and mast cells; not exclusively cDC in bat — moderate confidence
+DC,CLEC9A,top-level,H,DNGR-1; dead cell sensor; marks cDC1 lineage; highly conserved in all mammals; validated in multiple non-human species
+#
+# TIER 7 — PLATELET
+Platelet,PPBP,top-level,H,CXCL7/beta-thromboglobulin; platelet-specific chemokine; extremely conserved; highest confidence platelet marker
+Platelet,PF4,top-level,H,CXCL4/platelet factor 4; conserved across all mammals; definitive platelet marker
+#
+# TIER 8 — CONTAMINATION MARKERS
+RBC,HBB,contamination,H,Haemoglobin beta; extremely conserved; definitive RBC marker
+RBC,HBA1,contamination,H,Haemoglobin alpha 1; extremely conserved; definitive RBC marker
+RBC,HBA2,contamination,H,Haemoglobin alpha 2; conserved; RBC-specific
+RBC,GYPA,contamination,M,Glycophorin A; red cell surface sialoglycoprotein; bat RBCs are nucleated (unlike human) — GYPA expression may differ; moderate confidence
+#
+HSPC,CD34,contamination,H,Sialomucin; hematopoietic progenitor marker; conserved across all vertebrates
+HSPC,GATA2,contamination,H,Transcription factor; essential for HSC development; extremely conserved; expressed in early haematopoietic progenitors and megakaryocytes
+HSPC,AVP,contamination,L,Arginine vasopressin; primarily a neurohypophyseal hormone; included as megakaryocyte/HSPC marker in some datasets; unusual choice — limited PBMC validation; low confidence

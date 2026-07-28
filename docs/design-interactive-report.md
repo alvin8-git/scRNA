@@ -40,7 +40,7 @@ The honest side-by-side UMAP is **the integrated object split by sample** (`umap
 | QC comparison | per-sample `_filtered.rds` metadata (`nFeature_RNA`, `nCount_RNA`, `percent.mt`) → re-plot interactively |
 | Doublet comparison | `_singlets.rds` metadata (`scDblFinder.class`/`score`) + rates from `cell_fate.csv` |
 | UMAP atlas (hero) | `integrated_annotated.rds` UMAP embedding + `cell_type`, split by `$sample` |
-| Cell proportions + delta | `cell_type` × `sample` counts from `integrated_annotated.rds`; CIs from `proportions/bootstrap_proportions.csv` |
+| Cell proportions + delta | `cell_type` × `sample` counts from `integrated_annotated.rds`; CIs from `bootstrap_summary.csv` (step 09, run directory root) |
 | Differential expression | `differential/de_*.csv` (step 06b) |
 
 No new computation. The report is an **assembly + presentation layer** over existing outputs.

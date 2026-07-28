@@ -84,7 +84,7 @@ bash pipeline/run_pipeline.sh bat /path/to/ES03 /path/to/ES12 05 06 07
 
 ### 5. Verify the correction
 
-Open `Results/<run>/annotation/annotation_umap.pdf`. The corrected cluster should now show the right label. Cross-check with `canonical_markers_dotplot.pdf` again to confirm marker-label alignment.
+Open `Results/<run>/annotation/celltype_umap.pdf`. The corrected cluster should now show the right label. Cross-check with `canonical_markers_dotplot.pdf` again to confirm marker-label alignment.
 
 ---
 
@@ -94,8 +94,8 @@ Open `Results/<run>/annotation/annotation_umap.pdf`. The corrected cluster shoul
 # Count cells per final cell type
 conda run -n scrna_seurat Rscript -e '
   source("pipeline/config.R")
-  seu <- readRDS(file.path(DIRS$annotation, "integrated_annotated.rds"))
-  print(sort(table(seu$final_cell_type), decreasing=TRUE))
+  seu <- readRDS(file.path(DIRS$integrated, "integrated_annotated.rds"))
+  print(sort(table(seu$cell_type), decreasing=TRUE))
 '
 ```
 

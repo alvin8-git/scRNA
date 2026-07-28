@@ -19,12 +19,12 @@ Single-cell RNA-seq analysis involves 10+ sequential stages, each taking minutes
 ```
 run_pipeline.sh
       │
-      ├── 01_load_qc.R      ──writes──► qc/<sample>_seurat.rds
-      ├── 02_doublets.R     ──writes──► doublets/<sample>_seurat.rds
-      ├── 03_individual.R   ──writes──► individual/<sample>_seurat.rds
-      │                                sample_cache/<sample>_seurat.rds  ← shared cache
-      ├── 04_integrate.R    ──reads─── sample_cache/*  ──writes──► integrated_seurat.rds
-      ├── 05_annotate.R     ──writes──► integrated_annotated.rds
+      ├── 01_load_qc.R      ──writes──► individual/<sample>/<sample>_filtered.rds
+      ├── 02_doublets.R     ──writes──► individual/<sample>/<sample>_singlets.rds
+      ├── 03_individual.R   ──writes──► individual/<sample>/<sample>_seurat.rds
+      │                                sample_cache/<sample>/  ← shared cache (all three)
+      ├── 04_integrate.R    ──reads─── sample_cache/*  ──writes──► integrated/integrated_seurat.rds
+      ├── 05_annotate.R     ──writes──► integrated/integrated_annotated.rds
       ├── 06_visualize.R    ──writes──► visualization_report.pdf
       └── 07_finalize.R     ──writes──► Overall_report.pdf
 ```
@@ -35,7 +35,10 @@ Each step writes a `.rds` checkpoint. If you re-run starting at step 05, steps 0
 
 ## The sample cache
 
-Steps 01–03 are per-sample. Their outputs are written to both the run-specific directory and `sample_cache/<sample>/`. When you run a new sample combination, step 04 checks the cache first:
+Steps 01–03 are per-sample. Each writes its checkpoint to both the run-specific directory and
+`sample_cache/<sample>/` — `_filtered.rds` from 01, `_singlets.rds` (plus the doublet plots) from 02,
+`_seurat.rds` from 03. Each of those steps checks its own cache entry on entry and skips the work on a
+hit, so a sample already processed in an earlier run costs nothing in the next:
 
 ```
 Run: ES03 + ES12 → processes both, caches both
@@ -44,7 +47,16 @@ Run: ES03 + ES14 → ES03 loaded from cache; only ES14 processed
 
 This makes adding a new sample to a cohort fast: only the new sample is processed; integration and annotation re-run on the full set.
 
-**Trade-off:** The cache assumes QC parameters did not change between runs. If you lower `min_counts`, delete the sample's cache subfolder to force reprocessing with the new thresholds.
+**Cache key.** `cache_hash(sample, step)` in `config.R` hashes three things: a fingerprint of the
+input matrix files (size + mtime, falling back to the path alone when unreadable), the sample path,
+and the parameters that step actually depends on — `QC` + species for 01, plus `DOUBLET` for 02, plus
+`NORM`/`DIM`/`CLUSTER` for 03. So lowering `min_counts` or changing clustering resolution invalidates
+the affected entries automatically.
+
+**Trade-off:** parameters consumed *after* step 03 are deliberately not part of the key — changing
+`HARMONY`, `MARKERS`, `SINGLER_REF`, or `CLUSTER_CELLTYPE_MAP` does not invalidate anything, because
+those only affect steps 04 onward, which never read from the cache. If you need to force a sample
+through 01–03 again for any other reason, delete its cache subfolder: `rm -rf sample_cache/<sample>/`.
 
 ---
 

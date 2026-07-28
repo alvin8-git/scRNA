@@ -352,6 +352,38 @@ cache_hash <- function(nm, step) {
 #   "12" = "Platelet"         PPBP, PF4, ITGB3, GP9
 CLUSTER_CELLTYPE_MAP <- NULL  # reset for each new analysis
 
+# Bat wing T1+T2+T6, res 0.5, 20 clusters. Cluster ids are only meaningful for this
+# exact sample set + integration, hence the guard — every other run stays auto-annotated.
+# Reason for overriding: HumanPrimaryCellAtlas calls the wing dermal fibroblasts
+# "Smooth_muscle_cells" (DCN 176, COL1A1 26, LUM 37, ACTA2 1.0, MYH11 0.6) and the real
+# smooth muscle "MSC" (ACTA2 60, MYH11 22, TAGLN 42) — i.e. the two are swapped.
+# All 20 clusters are listed because unmapped clusters fall back to *per-cell* SingleR
+# labels (05_annotate.R), which shatters the clusters left out of the map.
+if (length(SAMPLE_NAMES) == 3 && setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
+  CLUSTER_CELLTYPE_MAP <- c(
+    "0"  = "Fibroblast",           # DCN/COL1A1/COL3A1/LUM/PDGFRA, no ACTA2 or MYH11
+    "1"  = "RBC",                  # HBB 2905
+    "2"  = "Keratinocyte (basal)",
+    "3"  = "Fibroblast",
+    "4"  = "Endothelial",
+    "5"  = "Epithelial",           # KRT18/PAX9/PSMB11/PDZRN4 — glandular, 99% T6
+    "6"  = "Keratinocyte (basal)",
+    "7"  = "CD4 T (memory)",
+    "8"  = "CD4 T (memory)",
+    "9"  = "Mast cell",            # TPSAB1/CPA3/HPGDS/MS4A2/HDC/FCER1A
+    "10" = "Endothelial",
+    "11" = "Smooth Muscle",        # ACTA2/MYH11/TAGLN/MYL9/CNN1 — the only true SMC
+    "12" = "CD14+ Mono",
+    "13" = "RBC",                  # HBB 1523
+    "14" = "Fibroblast",           # DCN/COL1A1/LUM/PDGFRA + NEGR1/EBF2/SLIT2 mesenchyme
+    "15" = "Endothelial",
+    "16" = "Keratinocyte (basal)",
+    "17" = "Melanocyte/Schwann",   # MLANA/PMEL/EDNRB + MPZ/PLP1/LGI4, both SOX10+
+    "18" = "Fibroblast",
+    "19" = "RBC"                   # HBB 3918
+  )
+}
+
 # --- Color Palettes ---
 SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
 
@@ -405,6 +437,24 @@ CELLTYPE_COLORS <- c(
   "Epithelial"         = "#969696",
   "Fibroblast"         = "#BDBDBD",
   "Smooth Muscle"      = "#D9D9D9",
+  # Wing tissue (bat_wing)
+  "Fibroblast (resting)"      = "#BDBDBD",
+  "Fibroblast (wound)"        = "#8C8C8C",
+  "Myofibroblast"             = "#6E5B4E",
+  "Keratinocyte"              = "#2E8B57",
+  "Keratinocyte (basal)"      = "#2E8B57",
+  "Keratinocyte (suprabasal)" = "#66C28A",
+  "Keratinocyte (wound)"      = "#1B5E3A",
+  "Wound_keratinocyte"        = "#1B5E3A",
+  "Pericyte"                  = "#7A5195",
+  "Melanocyte"                = "#3D2B1F",
+  "Melanocyte/Schwann"        = "#8C6BB1",   # merged at res 0.5; both neural-crest/SOX10+
+  "Macrophage"                = "#EF7F2A",
+  "Macrophage (M1/inflam)"    = "#D65A1E",
+  "Macrophage (M2/repair)"    = "#F5A96B",
+  "Macrophage (proliferat)"   = "#A34A12",
+  "Chondrocyte"               = "#9EC5AB",
+  "MSC"                       = "#C7A76C",
   "Unknown"            = "#B09C85"
 )
 

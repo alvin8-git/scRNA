@@ -107,7 +107,7 @@ in its `reports/` subfolder.
 
 ## Species and tissue
 
-The same pipeline runs human PBMC, human whole blood, and bat whole blood. The species keyword
+The same pipeline runs human PBMC, human whole blood, bat whole blood, and bat wing tissue. The species keyword
 swaps the SingleR reference, the marker panels, the clustering resolution, and the expected
 contamination list, so the HTML report is annotated correctly for the tissue.
 
@@ -116,7 +116,7 @@ contamination list, so the HTML report is annotated correctly for the tissue.
 | Human PBMC (default) | `run_pipeline.sh /path/A /path/B` | `HumanPrimaryCellAtlas` (broad) | `0.3–0.8`, default 0.5 | Canonical PBMC marker panel |
 | Human whole blood | same, with `SINGLER_REF <- "MonacoImmune"` in `config.R` | `MonacoImmune` (blood-optimised) | `0.3–0.8` | Resolves CD4 / CD8 / γδ T; treat RBC + neutrophils as expected |
 | Bat whole blood | `run_pipeline.sh bat /path/A /path/B` | `MonacoImmune` | `0.3–1.0` | `config_species_bat.R` overrides: γδ T, bat-validated markers, RBC + neutrophil contamination |
-| Bat wing tissue | `run_pipeline.sh bat_wing /path/A /path/B` | broad atlas | `0.3–0.8` | Adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory); no blood-contamination types |
+| Bat wing tissue | `run_pipeline.sh bat_wing /path/A /path/B` | `HumanPrimaryCellAtlas` | `0.3–0.8` | Adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory); no blood-contamination types; raises `QC$max_features`/`max_counts` to 8000/60000 for tissue-sized cells |
 
 The `bat` and `bat_wing` keywords source `pipeline/config_species_bat.R` after the human base
 config, mutating `MARKERS`, `QC`, `SINGLER_REF`, and `CLUSTER` in place. Human whole blood has
@@ -263,7 +263,7 @@ wider or narrower, edit `.future_mem_gb` / `.merge_mem_gb` in that block. `run_p
 pins BLAS/OMP to one thread per process so workers don't oversubscribe cores.
 
 **Environment overrides** (no config edit needed): `SCRNA_BASE_DIR` (relocate the project
-root), `SCRNA_SAMPLE1..N` (sample paths), `SCRNA_SPECIES` (`human` / `bat`), `SCRNA_CONDITION`
+root), `SCRNA_SAMPLE1..N` (sample paths), `SCRNA_SPECIES` (`human` / `bat` / `bat_wing`), `SCRNA_CONDITION`
 (`name=label,...`), `SCRNA_RESULTS_DIR` (point a step at an existing run dir to re-render its
 PDFs/reports without re-listing samples). Frozen-reference knobs: `SCRNA_REFERENCE_MODEL` (path
 to the model bundle; turns on `05r`/`08c`), `SCRNA_ANCHORS` (benchmark control samples, default

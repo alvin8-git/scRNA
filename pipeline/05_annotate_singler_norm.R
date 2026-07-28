@@ -39,6 +39,13 @@ SINGLER_NORM <- c(
   "Epithelial_cells"       = "Epithelial",
   "Fibroblasts"            = "Fibroblast",
   "Smooth_muscle_cells"    = "Smooth Muscle",
+  "Keratinocytes"          = "Keratinocyte",
+  "Chondrocytes"           = "Chondrocyte",
+  "MSC"                    = "MSC",
+  "Tissue_stem_cells"      = "MSC",
+  "Macrophage"             = "Macrophage",
+  "Macrophages"            = "Macrophage",
+  "Osteoblasts"            = "MSC",
   # --- MonacoImmuneData labels ---
   "CD4+ T cells"           = "CD4 T",
   "CD8+ T cells"           = "CD8 T",

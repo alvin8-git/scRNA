@@ -1,8 +1,10 @@
 # =============================================================================
-# config_species_bat.R - bat / bat_wing marker, QC, and reference overrides.
-# Sourced by config.R AFTER the base (human) definitions; mutates MARKERS, QC,
-# CLUSTER, SINGLER_REF, SUBTYPE_MARKERS, CONTAMINATION_TYPES, CELLTYPE_COLORS,
-# WOUND_MODULES, etc. Expects `.species` to be set by config.R. Human = no-op.
+# config_species_bat.R - bat / bat_wing marker and reference overrides.
+# Sourced by config.R AFTER the base (human) definitions; mutates MARKERS,
+# ALL_MARKERS, CLUSTER, SINGLER_REF, SUBTYPE_MARKERS, CONTAMINATION_TYPES, and
+# (bat_wing only) WOUND_MODULES + QC$max_features/max_counts. CELLTYPE_COLORS is
+# NOT touched, and the bat (whole blood) block leaves QC at the base values.
+# Expects `.species` to be set by config.R. Human = no-op.
 # =============================================================================
 if (.species == "bat") {
   message("[Species] bat (Eonycteris spelaea) — applying whole-blood overrides")
@@ -51,7 +53,7 @@ if (.species == "bat") {
   MARKERS$HSPC <- c("CD34", "GATA2")
 
   # ---- γδ T ------------------------------------------------------------------
-  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
+  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1")  # TRGC2 absent from this bat annotation
 
   # ---- Eosinophil: drop SIGLEC8 (bat orthology unconfirmed; Reviewer 3) ------
   MARKERS$Eosinophil <- c("CCR3", "EPX")
@@ -127,10 +129,17 @@ if (.species == "bat") {
   # ---- Reference: broad tissue atlas, not blood-optimised -------------------
   SINGLER_REF <- "HumanPrimaryCellAtlas"
 
+  # ---- QC: tissue cells are bigger than blood cells -------------------------
+  # Blood defaults (5000 / 25000) clip 5-11% of real keratinocytes/fibroblasts.
+  # max_percent_mt stays at 20 - this platform runs a ~0.5-1% mito baseline, so
+  # it is already near-inert; see docs/bat_wing_readiness.md.
+  QC$max_features <- 8000
+  QC$max_counts   <- 60000
+
   # ---- Wing tissue markers --------------------------------------------------
   MARKERS$Fibroblast         <- c("COL1A1", "COL1A2", "COL3A1", "VIM", "PDGFRA", "FAP")
   MARKERS$Myofibroblast      <- c("ACTA2", "TAGLN", "MYL9", "CNN1")
-  MARKERS$Keratinocyte       <- c("KRT5", "KRT14", "KRT1", "KRT10", "EPCAM")
+  MARKERS$Keratinocyte       <- c("KRT14", "KRT1", "KRT10", "EPCAM")  # KRT5 absent from this bat annotation
   MARKERS$Wound_keratinocyte <- c("KRT6A", "KRT16", "KRT17", "MMP1")
   MARKERS$Endothelial        <- c("PECAM1", "CDH5", "VWF", "KDR", "FLT1")
   MARKERS$Pericyte           <- c("PDGFRB", "RGS5", "CSPG4", "NOTCH3")
@@ -149,14 +158,14 @@ if (.species == "bat") {
   CLUSTER$compare_res <- c(0.3, 0.5, 0.8)
 
   # ---- γδ T markers ---------------------------------------------------------
-  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1", "TRGC2")
+  MARKERS$gamma_delta_T <- c("TRDC", "TRGC1")  # TRGC2 absent from this bat annotation
   ALL_MARKERS <- unique(unlist(MARKERS[!sapply(MARKERS, is.null)]))
 
   # ---- Sub-type markers for wing tissue -------------------------------------
   SUBTYPE_MARKERS[["Fibroblast"]] <- list(
     "Fibroblast (resting)" = c("PDGFRA", "DCN", "LUM", "CFD"),
     "Myofibroblast"        = c("ACTA2", "TAGLN", "MYL9", "POSTN"),
-    "Fibroblast (wound)"   = c("COL3A1", "FN1", "SPARC", "CTGF")
+    "Fibroblast (wound)"   = c("COL3A1", "FN1", "SPARC", "CCN2")  # CCN2 = CTGF in this annotation
   )
   SUBTYPE_MARKERS[["Macrophage"]] <- list(
     "Macrophage (M1/inflam)"  = c("IL1B", "TNF", "CXCL8", "CCL3"),
@@ -164,8 +173,8 @@ if (.species == "bat") {
     "Macrophage (proliferat)" = c("MKI67", "TOP2A", "CDK1")
   )
   SUBTYPE_MARKERS[["Keratinocyte"]] <- list(
-    "Keratinocyte (basal)"      = c("KRT5", "KRT14", "TP63", "COL17A1"),
-    "Keratinocyte (suprabasal)" = c("KRT1", "KRT10", "LOR", "FLG"),
+    "Keratinocyte (basal)"      = c("KRT14", "TP63", "COL17A1"),
+    "Keratinocyte (suprabasal)" = c("KRT1", "KRT10", "FLG"),
     "Keratinocyte (wound)"      = c("KRT6A", "KRT16", "MMP1", "LAMC2")
   )
 
@@ -176,6 +185,6 @@ if (.species == "bat") {
     Angiogenesis     = c("VEGFA", "VEGFB", "FGF2", "ANGPT1", "ANGPT2", "KDR", "NRP1"),
     Proliferation    = c("MKI67", "TOP2A", "PCNA", "CDK1", "CCNB1", "CCNA2"),
     Re_epithelialize = c("KRT6A", "KRT16", "MMP1", "MMP3", "LAMC2", "ITGA3", "ITGB4"),
-    Myofibroblast    = c("ACTA2", "MYL9", "TAGLN", "CNN1", "POSTN", "CTGF")
+    Myofibroblast    = c("ACTA2", "MYL9", "TAGLN", "CNN1", "POSTN", "CCN2")
   )
 }
