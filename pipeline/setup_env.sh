@@ -10,10 +10,15 @@ ENV_NAME="scrna_seurat"
 echo "Creating conda environment: ${ENV_NAME}"
 echo "This may take 10–20 minutes..."
 
+# R 4.4 is a hard floor, not a preference: config.R:17 calls `%||%` inside its
+# source() of pdf_helpers.R, 471 lines before config.R defines the operator itself.
+# base R only gained `%||%` in 4.4.0, so on 4.3.x that line errors and nothing in the
+# pipeline loads. Do not lower r-base below 4.4 without first hoisting a `%||%`
+# definition above config.R:17. Pins below match the verified working env.
 mamba create -n ${ENV_NAME} \
     -c conda-forge -c bioconda \
-    r-base=4.3.3 \
-    r-seurat=5.1.0 \
+    r-base=4.4.3 \
+    r-seurat=5.4.0 \
     r-harmony \
     bioconductor-singler \
     bioconductor-celldex \

@@ -41,7 +41,7 @@ git clone <repo-url> scRNA
 cd scRNA
 ```
 
-**2. Build the conda environment** (R 4.3.3, Seurat 5.1.0, Harmony, SingleR, scDblFinder, and
+**2. Build the conda environment** (R 4.4.3, Seurat 5.4.0, Harmony, SingleR, scDblFinder, and
 the rest). Uses `mamba`; takes 10–20 min the first time.
 
 ```bash
@@ -332,7 +332,7 @@ Steps 01–04 come from `sample_cache/`, so this is fast.
 - Linux or macOS, conda or mamba.
 - ~16 GB RAM for two small samples; more for larger or many-sample runs (the RAM governor
   scales workers to fit).
-- The conda environment from `pipeline/setup_env.sh`: R 4.3.3, Seurat 5.1.0, Harmony, SingleR,
+- The conda environment from `pipeline/setup_env.sh`: R 4.4.3, Seurat 5.4.0, Harmony, SingleR,
   celldex, scDblFinder, DESeq2, clusterProfiler, plus CellChat v2 / monocle3 / SeuratWrappers
   for the bat-wing extension.
 

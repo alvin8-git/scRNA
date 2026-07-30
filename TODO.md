@@ -2,7 +2,36 @@
 
 ## Pending
 
-- [ ] **bat_wing species documentation** — `config.R` advertises `bat_wing` as a supported species alongside `human` and `bat`, but none of the docs (howto-bat-whole-blood.md, reference-config.md) cover it. Add a section to `docs/howto-bat-whole-blood.md` or a stub noting "experimental" if the mode is not yet ready for external use.
+- [ ] **bat_wing species documentation** — partly done (2026-07-28): `docs/reference-config.md` now documents the overlay, including the `QC$max_features` 8000 / `QC$max_counts` 60000 widening and its cache-invalidation consequence. Still open: `docs/howto-bat-whole-blood.md` has **zero** `bat_wing` mentions. Add a section there (or a sibling `docs/howto-bat-wing.md`) covering the T1/T2/T6 run as the worked example.
+
+### Open bugs and decisions (2026-07-30)
+
+Surfaced by the 8-sample bat run, the T3/T4/T5 marker check, and the graphify knowledge-graph
+build. The first two need a decision on fix shape before any code changes — both alter labels on
+past runs.
+
+- [ ] **`"T cells" → "CD4 T"` in `05_annotate_singler_norm.R`** — MonacoImmune's generic `"T cells"`
+  catch-all (and HPCA's `"T_cells"`) both map to `CD4 T`. In the T3/T4/T5 run raw `label.main` gave
+  `"T cells"` 10,384 / `CD8+ T cells` 8,654 / `CD4+ T cells` 6,963, so CD4 T inflates to 17,347 vs
+  CD8 T 8,652 (~14,000 cells affected); cluster-majority voting then flips whole CD8 clusters to
+  CD4. **Affects every bat and human run, not just this dataset.** Two options: fix the generic
+  label (needs a new `CELLTYPE_COLORS` entry, changes past results, re-run 05–07) or a
+  run-scoped `CLUSTER_CELLTYPE_MAP`. Decision pending.
+- [ ] **SingleR under-calls bat neutrophils** — T3/T4/T5 cluster 11 (1,511 cells, 92% T5) scores
+  S100A8 1063 / S100A9 381 / LYZ 70 with CSF1R 0.4 / MRC1 0.0 / VCAN 0.1 — a neutrophil labelled
+  `CD14+ Mono`. SingleR called only 164 neutrophils run-wide. Reassignment moves T5 from 32.9%
+  monocyte to ~18% neutrophil + ~15% monocyte, matching the raw signal (S100A8 in 99.9% of
+  barcodes). Same decision as above. Related: [ES17 was the inverse case](docs/bat_neutrophil_literature.md).
+- [ ] **`08b_html_report.R` hard-copies config values** — it re-declares `CELLTYPE_COLORS` and
+  `QC_THRESH` locally instead of sourcing `config.R`. A palette or threshold change in `config.R`
+  silently fails to reach the HTML report. Not covered by the "grep `docs/` for the old name"
+  gotcha, because the drift is code-to-code.
+- [ ] **`.combine_pdfs()` reimplemented four times** — once in `pipeline/pdf_helpers.R` and again,
+  independently, in each of `projects/bat_wing/11`–`14` (magick + pdftools). Collapse to the
+  shared helper.
+- [ ] **`08_comparison_report.R` is effectively single-dataset** — `qc_pairs` hardcodes
+  DemoScRNA/H1/H2/H3 and the narrative captions cite fixed cell counts, unlike 07 and 08b which
+  derive from `SAMPLE_NAMES`. Either generalise it or document it as a demo-only step.
 
 ### Office-hours architecture findings (2026-06-11) — ranked for implementation
 
@@ -16,6 +45,46 @@ Residual (optional, deferred): a deeper split of `05_annotate.R` into annotate-c
 
 ## Done
 
+- [x] **Step 04 unblocked for 8-sample runs + error handler fixed (2026-07-30)** — the first
+  8-sample bat run died in `04_integrate.R`: the merged 92,864-cell object needs 16.77 GiB exported
+  per future worker during `NormalizeData`, over the 16 GiB `future.globals.maxSize` ceiling.
+  `.merge_mem_gb` 16→24 in `config.R`; that value is deliberately dual-purpose (RAM-governor budget
+  *and* export ceiling), so merged workers drop 4→3 (72 of 96 GB). Scales to ~130k cells.
+  Separately, `config.R`'s `options(error=)` called `conditionMessage(.Last.error)`, which is NULL
+  under `Rscript` — the failed dispatch overwrote the error buffer *before* the `geterrmessage()`
+  fallback read it, so **every** real pipeline error was reported as "no applicable method for
+  'conditionMessage' applied to an object of class NULL". The maxSize overflow was only findable by
+  reading the step log directly. Now guarded with `inherits(last, "condition")`; verified a
+  deliberate `stop()` reports its real message and still exits 1. Regression guard `T5`.
+- [x] **`make_banner.R` committed with its silent palette fallback fixed (2026-07-30, `fc24d13`)** —
+  it sourced `config.R` inside `suppressWarnings(suppressMessages(try(..., silent = TRUE)))`. Each
+  wrapper adds a stack frame, so `sys.frame(1)$ofile` is NULL, `config.R:17`'s `%||% "."` fallback
+  looks for a non-existent `./pdf_helpers.R`, and the source fails — silently, under `try()`. The
+  banner therefore drew with the generic 15-colour fallback, never the canonical 52-entry
+  `CELLTYPE_COLORS`. Now sourced bare, with an explicit warning if the palette is still missing.
+  The PNG has not been regenerated (needs a large `.rds` load); run `Rscript pipeline/make_banner.R`.
+- [x] **`%||%` local shadow removed + presto installed + `graphify-out/` gitignored (2026-07-30)** —
+  dropped the function-scoped `%||%` duplicate inside `save_report_pdf()` (the top-level definition
+  covers it); verified by generating a real PDF through `save_report_pdf()`. presto 1.0.0 installed
+  (single package, no upgrades) — note steps 04/06b in runs from 2026-07-30 onward use it for
+  `FindMarkers` while earlier runs did not, so DE tables may differ in floating-point detail.
+  `graphify-out/` added to `.gitignore`.
+- [x] **`setup_env.sh` version pins corrected (2026-07-30)** — pinned `r-base=4.3.3` /
+  `r-seurat=5.1.0`, but the working env is R 4.4.3 / Seurat 5.4.0 and **R 4.4 is a hard floor**:
+  `config.R:17` calls `%||%` inside its `source()` of `pdf_helpers.R`, 471 lines before `config.R`
+  defines the operator, and base R only gained `%||%` in 4.4.0 (verified 2026-07-30 that it resolves
+  from `base`, not ggplot2). A fresh env built from the old pins could not load the pipeline at all.
+  Pins raised to the verified working versions with a comment recording why 4.4 cannot be lowered;
+  stale echoes fixed in `CLAUDE.md`, `README.md` (×2), and `docs/tutorial-first-run.md`. Regression
+  guard `T4` added. Remaining related cleanup is tracked under the `%||%` duplicate-definition item.
+- [x] **Run-dir derivation unified via `SCRNA_RESULTS_DIR` (2026-07-30)** — `run_pipeline.sh` now
+  exports `SCRNA_RESULTS_DIR`, making bash authoritative for the run directory. Previously bash and
+  `config.R` derived it independently and disagreed above 4 samples: bash collapsed to
+  `results_<first>_<N>samples_<tag>` (the MAX_PATH guard) while `config.R:117` kept the full
+  dash-joined name. The R steps wrote to one directory while the `08b`/`08c` paths bash passed them
+  pointed at another, so the HTML report and the drift benchmark silently self-skipped — caught on
+  the first 8-sample run. Regression guard `T3` added to `pipeline/tests/test_regressions.R`
+  (asserts the export exists); suite passes.
 - [x] **Frozen-reference labels + cross-run benchmark + report/PDF wiring (2026-06-26, v0.9.0)** — run-independent `cell_type_ref` labels via a trained SingleR model (`build_reference.R` → `05r_reference_transfer.R`), so the same sample stops getting different proportions in different runs. `08c_benchmark_concordance.R` checks shared anchors (Aksh1/ES332) against the frozen baseline: PASS, ~2.3–2.4 pp drift across the ES03-batch and ES17-batch integrations. Surfaced in the deliverables: HTML report (08b) defaults to `cell_type_ref` with a De-novo toggle + a benchmark section; PDFs (06/09) use `apply_reference_labels()` and print the label source; `run_pipeline.sh` runs 05r after 05 and 08c at the end (both self-skip without `REFERENCE_MODEL`). New `SCRNA_RESULTS_DIR` env re-renders a finished run. Findings: ES17 cohort neutrophils recovered (de-novo 0% was a cross-species mislabel + scRNA granulocyte dropout); both cohorts confirmed unsorted whole blood (presort); Aksh1 is a cardiac-puncture collection outlier (use ES332 as the anchor). Literature validation in `docs/bat_neutrophil_literature.md`. Design: `docs/frozen_reference_scope.md`. Docs synced (README/DOCUMENTATION/ReportGuide/VERSION).
 - [x] **Engineering audit: cache/boundary/execution fixes (2026-06-12)** — 9 findings resolved (commit after `3c5e100`): reverted the `add.cell.ids` barcode double-prefix; replaced hardcoded `config.R` paths in all 11 core steps with a `commandArgs`/`sys.frame` resolver (SCRNA_BASE_DIR + standalone now path-independent); `validate_config.R` SAMPLE_PATHS is a warning by default (`--strict-paths` to fail), resolving the NAS-mounted-late halt; `config.R` warns on H1/H2 + human fallback; `which.max` all-zero guard + consensus left-join in `05_annotate.R`; regression check moved to `pipeline/tests/test_regressions.R`. Full write-up: `docs/eng-audit-2026-06-11.md`.
 - [x] **Annotation-loop automation (office-hours enhancement, 2026-06-11)** — new consensus block in `05_annotate.R` fuses the two per-cluster calls already computed (`cluster_singler$majority_singler` + scType `.cl_sctype$sctype`) into an AUTO/REVIEW decision gated by mean `singler_delta` (≥0.10). Writes `consensus_annotation.csv` and prints a pre-filled `CLUSTER_CELLTYPE_MAP` with `REVIEW` markers on ambiguous clusters — collapses "hand-build the whole map" into "resolve the few flagged clusters." Advisory only (does not change the assignment logic). Decision logic unit-tested.

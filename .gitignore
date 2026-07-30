@@ -23,3 +23,6 @@ Rplots.pdf
 # OS
 .DS_Store
 pipeline/report_template.knit.md
+
+# graphify knowledge-graph build output (regenerate with /graphify)
+graphify-out/

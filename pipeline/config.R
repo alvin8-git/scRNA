@@ -6,8 +6,15 @@
 # --- Suppress noisy but harmless plot warnings ---
 options(Seurat.warn.raster = FALSE)   # rasterizing >100k points is intentional
 options(error = function() {
-  msg <- tryCatch(conditionMessage(.GlobalEnv$.Last.error),
-                  error = function(e) geterrmessage())
+  # Capture geterrmessage() FIRST. Under Rscript, .Last.error is often NULL, and the
+  # old form called conditionMessage(NULL) inside a tryCatch whose fallback was
+  # geterrmessage() — but the failed dispatch had already overwritten the error buffer,
+  # so every real error was reported as "no applicable method for 'conditionMessage'
+  # applied to an object of class NULL". That masked the step-04 future.globals.maxSize
+  # overflow on the 8-sample run. Use inherits() so no dispatch can fail here.
+  fallback <- geterrmessage()
+  last     <- .GlobalEnv$.Last.error
+  msg <- if (inherits(last, "condition")) conditionMessage(last) else fallback
   message("\nERROR: ", msg)
   quit(status = 1, save = "no")
 })
@@ -253,7 +260,13 @@ SUBTYPE_MARKERS <- list(
 #                  workers. Big-merge steps no longer spawn as wide as the
 #                  per-sample steps (office-hours P2).
 .future_mem_gb <- 8L    # per-worker budget, per-sample phase (GB)
-.merge_mem_gb  <- 16L   # per-worker budget, merged-object phase (GB)
+# 24, not 16: this value is ALSO the future.globals.maxSize export ceiling in steps
+# 04/06/06b, and an 8-sample bat merge (92,864 cells) needs 16.77 GiB exported to each
+# worker during NormalizeData — step 04 died on the 16 GiB ceiling. The coupling is
+# deliberate (both answer "how much may one worker hold"), so raising it also drops
+# merge_workers via the RAM governor. Scales to roughly 130k cells; past that, raise
+# again or make the ceiling a function of merged cell count.
+.merge_mem_gb  <- 24L   # per-worker budget, merged-object phase (GB)
 .cpu_workers   <- min(8L, max(1L, parallel::detectCores() - 2L))
 .avail_gb <- tryCatch({
   kb <- as.numeric(sub("[^0-9]*([0-9]+).*", "\\1",
@@ -642,8 +655,6 @@ save_report_pdf <- function(plots, filepath) {
     }
     p
   }
-
-  `%||%` <- function(x, y) if (!is.null(x) && length(x) > 0) x else y
 
   tmp_files <- character(0)
   i <- 1; n <- length(plots)

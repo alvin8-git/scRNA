@@ -41,12 +41,37 @@ if (.species == "bat") {
   MARKERS$FCGR3A_mono <- c("CX3CR1", "FCGR3A", "CDKN1C", "MS4A7")
 
   # ---- Neutrophils -----------------------------------------------------------
-  # IDO1, ALAS1, SLC16A10: >30-fold enriched in E. spelaea neutrophils vs all
-  # other immune cell types; validated by bulk RNA-seq on FACS-sorted cells
-  # (Gamage 2022 Fig 6B/C). Tryptophan-degradation axis is bat-specific.
-  # FCGR3B/CEACAM6 removed: FCGR and CEACAM gene families divergent in Chiroptera
-  # MPO/ELANE: canonical azurophilic granule proteins; conserved across mammals (Reviewer 3)
-  MARKERS$Neutrophil <- c("CSF3R", "CXCR2", "IDO1", "ALAS1", "SLC16A10", "MPO", "ELANE")
+  # IDO1, SLC16A10: >30-fold enriched in E. spelaea neutrophils vs all other immune
+  # cell types; validated by bulk RNA-seq on FACS-sorted cells (Gamage 2022 Fig 6B/C).
+  # Tryptophan-degradation axis is bat-specific.
+  # FCGR3B/CEACAM6 removed: FCGR and CEACAM gene families divergent in Chiroptera.
+  #
+  # Panel re-audited 2026-07-30 against the 8-sample ES49 cohort (92,864 cells). This
+  # batch carries heavy ambient CD14/LYZ/S100A8 soup — those genes appear in ~90% of
+  # T/NK/B cells, which cannot transcribe them — so neutrophils were being called
+  # CD14+ Mono (cluster 0, 15,748 cells, 17% of the run, reported as 0.0% Neutrophil).
+  # Each gene was scored as (mean in the neutrophil cluster − mean in lymphoid cells),
+  # i.e. soup-subtracted, then compared against the monocyte clusters:
+  #
+  #   gene      %expr  neut  mono  ratio   verdict
+  #   IDO1       30.4  0.651 0.050  13.0   keep
+  #   BST1       58.7  1.294 0.165   7.8   ADDED (was absent from the panel)
+  #   CXCR2      34.2  0.711 0.120   5.9   keep
+  #   SLC16A10   45.0  1.009 0.309   3.3   keep
+  #   CSF3R      84.7  1.844 0.644   2.9   keep (broadest coverage)
+  #   ALAS1      22.4  0.360 0.366   1.0   DROPPED - heme biosynthesis, not neutrophil-specific
+  #   MPO         0.0  0.001 0.000    -    DROPPED - not expressed
+  #   ELANE       0.2  0.002 0.004    -    DROPPED - not expressed
+  #
+  # MPO/ELANE were added on Reviewer 3's request as azurophilic granule proteins
+  # conserved across mammals. Conservation holds, but expression does not: they are
+  # promyelocyte/marrow granule genes, absent from MATURE CIRCULATING neutrophils, and
+  # measure 0.0%/0.2% here. Because scType picks a label by absolute score, three inert
+  # genes diluted the mean and suppressed the neutrophil call. Dropping them plus ALAS1
+  # and adding BST1 raises the soup-corrected neutrophil signal 0.654 -> 1.102 (+68%)
+  # and neutrophil:monocyte discrimination 3.06 -> 4.28. If Reviewer 3's point must be
+  # answered, cite the 0.0% detection rate rather than restoring the genes.
+  MARKERS$Neutrophil <- c("CSF3R", "CXCR2", "IDO1", "SLC16A10", "BST1")
 
   # ---- HSPC ------------------------------------------------------------------
   # Remove AVP (arginine vasopressin — neurohypophyseal hormone, wrong context in PBMC)

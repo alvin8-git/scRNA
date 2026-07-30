@@ -23,7 +23,7 @@ cd /path/to/scRNA
 bash pipeline/setup_env.sh
 ```
 
-This installs R 4.3.3 and all required packages into a conda environment named `scrna_seurat`. Takes **10–20 minutes** on first install.
+This installs R 4.4.3 and all required packages into a conda environment named `scrna_seurat`. Takes **10–20 minutes** on first install. R 4.4 or newer is required — `config.R` relies on base R's `%||%`, added in 4.4.0.
 
 When it finishes you will see:
 

@@ -11,7 +11,7 @@ human PBMC, human whole blood, bat (*Eonycteris spelaea*) whole blood, and bat w
 
 ## Commands
 
-Everything runs inside the `scrna_seurat` conda env (R 4.3.3, Seurat 5.1.0). `run_pipeline.sh`
+Everything runs inside the `scrna_seurat` conda env (R 4.4.3, Seurat 5.4.0). `run_pipeline.sh`
 auto-activates it; standalone `Rscript` calls need `conda activate scrna_seurat` first.
 
 ```bash

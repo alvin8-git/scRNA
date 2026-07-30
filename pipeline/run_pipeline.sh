@@ -127,6 +127,12 @@ fi
 LOG_DIR="${RESULTS_DIR}/logs"
 mkdir -p "${LOG_DIR}"
 
+# Bash is authoritative for the run dir — config.R honours SCRNA_RESULTS_DIR, so the
+# two derivations can no longer disagree. They used to for >4 samples: bash collapsed
+# to <first>_<N>samples while config.R kept the full dash-joined name, which sent the
+# R steps to one directory and the 08b/08c paths bash passes them to another.
+export SCRNA_RESULTS_DIR="${RESULTS_DIR}"
+
 # =============================================================================
 # Ensure conda environment is active — auto-activate if needed
 # =============================================================================
