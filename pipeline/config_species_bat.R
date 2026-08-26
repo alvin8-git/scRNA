@@ -91,6 +91,41 @@ if (.species == "bat") {
   # ---- SingleR: Monaco resolves CD4/CD8/γδ T cells in blood ------------------
   SINGLER_REF <- "MonacoImmune"
 
+  # ---- Frozen reference is the DEFAULT label source for bat whole blood -------
+  # MonacoImmune is a HUMAN blood reference with no bat granulocyte signature, so the
+  # de-novo path cannot call bat neutrophils at all: it assigns them to CD14+ Mono,
+  # whose markers they share (CD14/LYZ/S100A8/S100A9). Nothing downstream rescues it —
+  # Neutrophil is deliberately absent from CONTAMINATION_TYPES above (in whole blood
+  # they are expected, not contamination) and Monaco-blind scType propagation covers
+  # only RBC/Platelet/Eosinophil/Mast cell. Measured on two 8-sample cohorts (2026-07-30):
+  #
+  #   cohort            de-novo Neutrophil   frozen-reference Neutrophil
+  #   ES49  (92,864)    0.0%                 15.5%   (per sample 2.2 - 33.2%)
+  #   ES01 (112,417)    absent entirely      12.8%   (per sample 0.6 - 29.6%)
+  #
+  # CD8 T was likewise absent de-novo in both and recovered at 4.4% / 6.3%. So the
+  # de-novo composition is not usable for bat blood; the frozen model is trained on bat
+  # cells and answers the question the human reference cannot. Enabling it here makes
+  # run_pipeline.sh's 05r/08c stages active by default (they self-skip on an empty
+  # REFERENCE_MODEL), which adds a fine-tuned classifySingleR pass: ~35 min at ~100k
+  # cells. SCRNA_REFERENCE_MODEL still overrides, and an absent file degrades to
+  # de-novo with a warning rather than failing the run.
+  if (!nzchar(REFERENCE_MODEL)) {
+    .ref_default <- file.path(
+      BASE_DIR, "Results", "frozen_reference",
+      "frozen_ref_resultsAksh1ES03ES14ES258ES332ES35ES407ES459filtered_bat_2026-06-25_v2.rds")
+    if (file.exists(.ref_default)) {
+      REFERENCE_MODEL <- .ref_default
+      message("[Species] bat: frozen reference ON by default — ", basename(.ref_default))
+    } else {
+      warning("[Species] bat: default frozen reference not found (", .ref_default,
+              ") — falling back to de-novo labels, which under-call neutrophils. ",
+              "Build one with build_reference.R or set SCRNA_REFERENCE_MODEL.",
+              call. = FALSE)
+    }
+    rm(.ref_default)
+  }
+
   # ---- Clustering: higher resolution for whole-blood diversity ----------------
   CLUSTER$resolutions <- c(0.3, 0.5, 0.8, 1.0)
   CLUSTER$default_res <- 1.0
