@@ -4,6 +4,15 @@
 # Sourced by 05_annotate.R. Pure data; no side effects.
 # =============================================================================
 SINGLER_NORM <- c(
+  # --- HPCA labels relevant to iPSC-CM differentiation (SCRNA_SPECIES=cm) ---
+  # HPCA has NO cardiomyocyte label, so nothing here can produce one; cardiomyocyte
+  # identity comes from the marker route. These entries only keep the labels HPCA
+  # CAN emit from splitting into near-duplicate names in the palette.
+  "Embryonic_stem_cells"   = "Pluripotent",
+  "iPS_cells"              = "Pluripotent",
+  "Hepatocytes"            = "Hepatic/Endoderm",
+  "Neuroepithelial_cell"   = "Epithelial",
+
   # --- HumanPrimaryCellAtlas labels ---
   # Platelet / megakaryocyte
   "Platelets"              = "Platelet",

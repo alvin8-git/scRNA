@@ -134,29 +134,53 @@ print(as.data.frame(cluster_singler))
 message("\n--- Running scType (marker-based, bat overrides applied automatically) ---")
 
 # Build positive marker gene sets from config MARKERS (bat overrides already applied)
-.gs_pos <- list(
-  "CD4 T"        = unique(c(MARKERS$T_pan, MARKERS$CD4_T)),
-  "CD8 T"        = unique(c(MARKERS$T_pan, MARKERS$CD8_T)),
-  "Treg"         = unique(c(MARKERS$T_pan, MARKERS$Treg)),
-  "NK"           = MARKERS$NK,
-  "B cell"       = MARKERS$B_cell,
-  "Plasma"       = MARKERS$Plasma,
-  "CD14+ Mono"   = MARKERS$CD14_mono,
-  "FCGR3A+ Mono" = MARKERS$FCGR3A_mono,
-  "Neutrophil"   = MARKERS$Neutrophil,
-  "DC"           = MARKERS$DC,
-  "Platelet"     = MARKERS$Platelet,
-  "RBC"          = MARKERS$RBC,
-  "HSPC"         = MARKERS$HSPC,
-  "Eosinophil"   = MARKERS$Eosinophil,
-  "Mast cell"    = MARKERS$Mast_cell
-)
-if (!is.null(MARKERS$gamma_delta_T))
-  .gs_pos[["γδ T"]] <- MARKERS$gamma_delta_T
+# The blood panel is assembled from named MARKERS slots (T_pan, CD4_T, ...). A non-blood
+# overlay such as SCRNA_SPECIES=cm replaces MARKERS wholesale with entries already named
+# for their cell type (Cardiomyocyte, Epicardial, ...), leaving every slot below NULL —
+# .gs_pos then collapses to an empty list and the score matrix becomes NULL, which
+# surfaces as "attempt to set 'colnames' on an object with less than two dimensions".
+# Detect the layout instead of assuming blood.
+.blood_slots <- c("T_pan", "CD4_T", "CD8_T", "Treg", "NK", "B_cell", "Plasma",
+                  "CD14_mono", "FCGR3A_mono", "Neutrophil", "DC", "Platelet", "RBC",
+                  "HSPC", "Eosinophil", "Mast_cell")
+if (any(.blood_slots %in% names(MARKERS))) {
+  .gs_pos <- list(
+    "CD4 T"        = unique(c(MARKERS$T_pan, MARKERS$CD4_T)),
+    "CD8 T"        = unique(c(MARKERS$T_pan, MARKERS$CD8_T)),
+    "Treg"         = unique(c(MARKERS$T_pan, MARKERS$Treg)),
+    "NK"           = MARKERS$NK,
+    "B cell"       = MARKERS$B_cell,
+    "Plasma"       = MARKERS$Plasma,
+    "CD14+ Mono"   = MARKERS$CD14_mono,
+    "FCGR3A+ Mono" = MARKERS$FCGR3A_mono,
+    "Neutrophil"   = MARKERS$Neutrophil,
+    "DC"           = MARKERS$DC,
+    "Platelet"     = MARKERS$Platelet,
+    "RBC"          = MARKERS$RBC,
+    "HSPC"         = MARKERS$HSPC,
+    "Eosinophil"   = MARKERS$Eosinophil,
+    "Mast cell"    = MARKERS$Mast_cell
+  )
+  if (!is.null(MARKERS$gamma_delta_T))
+    .gs_pos[["γδ T"]] <- MARKERS$gamma_delta_T
+} else {
+  # MARKERS names are already canonical cell-type labels; score them directly. Drop
+  # non-gene entries such as the compute_integrated flag.
+  .gs_pos <- MARKERS[setdiff(names(MARKERS), "compute_integrated")]
+  .gs_pos <- .gs_pos[vapply(.gs_pos, is.character, logical(1))]
+  message("  scType: non-blood MARKERS layout — scoring ", length(.gs_pos),
+          " cell-type panels directly")
+}
 
 # Keep only genes present in the dataset
 .gs_pos <- lapply(.gs_pos, function(g) intersect(g, rownames(merged)))
 .gs_pos <- Filter(function(g) length(g) > 0, .gs_pos)
+# Fail with the actual cause rather than letting an empty score matrix surface later as
+# "attempt to set 'colnames' on an object with less than two dimensions".
+if (length(.gs_pos) == 0)
+  stop("scType has no usable gene sets — none of the MARKERS genes are present in this ",
+       "object. Check that the species overlay's MARKERS match this annotation's gene ",
+       "symbols (SCRNA_SPECIES=", .species, ").")
 
 # Get scaled data (scType requires scaled expression)
 .scale_mat <- tryCatch(
@@ -327,25 +351,43 @@ plot_marker_group <- function(genes, title, filename) {
                                       ph = min(nrows * 4, 9))
 }
 
-plot_marker_group(c(MARKERS$T_pan, MARKERS$CD4_T, MARKERS$CD8_T),
-                  "Feature Plot  -  T Cell Markers (CD3D, CD4, CD8A, CCR7, GZMK…)",
-                  "feature_T_cells.pdf")
-plot_marker_group(MARKERS$NK,
-                  "Feature Plot  -  NK Cell Markers (NKG7, GNLY, KLRD1)",
-                  "feature_NK.pdf")
-plot_marker_group(MARKERS$B_cell,
-                  "Feature Plot  -  B Cell Markers (MS4A1, CD79A, CD19)",
-                  "feature_B_cells.pdf")
-plot_marker_group(c(MARKERS$CD14_mono, MARKERS$FCGR3A_mono),
-                  "Feature Plot  -  Monocyte Markers (CD14, LYZ, FCGR3A, MS4A7…)",
-                  "feature_monocytes.pdf")
-plot_marker_group(c(MARKERS$DC, MARKERS$Platelet),
-                  "Feature Plot  -  DC & Platelet Markers (FCER1A, CLEC9A, PPBP, PF4)",
-                  "feature_DC_platelet.pdf")
-if (!is.null(MARKERS$gamma_delta_T)) {
-  plot_marker_group(MARKERS$gamma_delta_T,
-                    "Feature Plot  -  γδ T Cell Markers (TRDC, TRGC1, TRGC2)",
-                    "feature_gamma_delta_T.pdf")
+# Blood panels are named groupings of MARKERS slots. Under a non-blood layout every one
+# of these is NULL and plot_marker_group() silently no-ops (it returns early on an empty
+# gene vector), so the annotation report would ship with no feature plots at all — drive
+# them off the MARKERS names instead.
+if (any(.blood_slots %in% names(MARKERS))) {
+  plot_marker_group(c(MARKERS$T_pan, MARKERS$CD4_T, MARKERS$CD8_T),
+                    "Feature Plot  -  T Cell Markers (CD3D, CD4, CD8A, CCR7, GZMK…)",
+                    "feature_T_cells.pdf")
+  plot_marker_group(MARKERS$NK,
+                    "Feature Plot  -  NK Cell Markers (NKG7, GNLY, KLRD1)",
+                    "feature_NK.pdf")
+  plot_marker_group(MARKERS$B_cell,
+                    "Feature Plot  -  B Cell Markers (MS4A1, CD79A, CD19)",
+                    "feature_B_cells.pdf")
+  plot_marker_group(c(MARKERS$CD14_mono, MARKERS$FCGR3A_mono),
+                    "Feature Plot  -  Monocyte Markers (CD14, LYZ, FCGR3A, MS4A7…)",
+                    "feature_monocytes.pdf")
+  plot_marker_group(c(MARKERS$DC, MARKERS$Platelet),
+                    "Feature Plot  -  DC & Platelet Markers (FCER1A, CLEC9A, PPBP, PF4)",
+                    "feature_DC_platelet.pdf")
+  if (!is.null(MARKERS$gamma_delta_T)) {
+    plot_marker_group(MARKERS$gamma_delta_T,
+                      "Feature Plot  -  γδ T Cell Markers (TRDC, TRGC1, TRGC2)",
+                      "feature_gamma_delta_T.pdf")
+  }
+} else {
+  for (.mg in setdiff(names(MARKERS), "compute_integrated")) {
+    if (!is.character(MARKERS[[.mg]]) || length(MARKERS[[.mg]]) == 0) next
+    .present <- intersect(MARKERS[[.mg]], rownames(merged))
+    if (length(.present) == 0) next
+    plot_marker_group(
+      .present,
+      sprintf("Feature Plot  -  %s Markers (%s)", .mg,
+              paste(utils::head(.present, 5), collapse = ", ")),
+      sprintf("feature_%s.pdf", gsub("_+", "_", gsub("[^A-Za-z0-9]+", "_", .mg))))
+  }
+  rm(.mg, .present)
 }
 
 # =============================================================================

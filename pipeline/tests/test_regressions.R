@@ -67,6 +67,19 @@ if (file.exists(f)) {
     fails <- c(fails, "bat Neutrophil panel re-introduces MPO/ELANE (0.0% expressed in mature bat blood neutrophils)")
 }
 
+# Regression T7: 05_annotate.R must not assume a blood MARKERS layout when building the
+# scType gene sets. It used to construct .gs_pos unconditionally from named slots
+# (MARKERS$T_pan, MARKERS$CD4_T, ...). A non-blood overlay such as SCRNA_SPECIES=cm
+# replaces MARKERS wholesale with cell-type-named entries, leaving every slot NULL, so
+# .gs_pos collapsed to an empty list and step 05 died with the unhelpful "attempt to set
+# 'colnames' on an object with less than two dimensions".
+f <- file.path(.pipeline, "05_annotate.R")
+if (file.exists(f)) {
+  .l <- paste(readLines(f, warn = FALSE), collapse = "\n")
+  if (grepl("MARKERS\\$T_pan", .l) && !grepl(".blood_slots", .l, fixed = TRUE))
+    fails <- c(fails, "05_annotate.R builds scType gene sets from blood MARKERS slots with no non-blood fallback")
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

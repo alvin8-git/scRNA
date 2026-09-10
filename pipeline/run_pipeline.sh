@@ -52,11 +52,12 @@ step_hdr() { echo -e "\n${CYAN}${BOLD}+$(printf '=%.0s' {1..54})+${NC}"
 # =============================================================================
 SAMPLE_PATHS=()
 STEPS_ARGS=()
-SPECIES="human"   # default; overridden by 'bat' or 'human' keyword in args
+SPECIES="human"   # default; overridden by a species keyword in args:
+                  #   human | bat | bat_wing | cm (human iPSC/ESC -> cardiomyocyte)
 WANT_REPORT=true  # auto-build the interactive HTML report at the end; --no-report to skip
 
 for arg in "$@"; do
-  if [[ "$arg" == "bat" || "$arg" == "human" || "$arg" == "bat_wing" ]]; then
+  if [[ "$arg" == "bat" || "$arg" == "human" || "$arg" == "bat_wing" || "$arg" == "cm" ]]; then
     SPECIES="$arg"
   elif [[ "$arg" == "--no-report" || "$arg" == "no-report" ]]; then
     WANT_REPORT=false

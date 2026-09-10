@@ -273,13 +273,24 @@ SUBTYPE_MARKERS <- list(
                        grep("MemAvailable", readLines("/proc/meminfo"), value = TRUE)))
   if (length(kb) == 1L && is.finite(kb)) kb / 1024^2 else NA_real_
 }, error = function(e) NA_real_)
-.gov <- function(mem_gb) if (is.finite(.avail_gb))
-  max(1L, min(.cpu_workers, as.integer(floor(.avail_gb * 0.8 / mem_gb)))) else .cpu_workers
+# local() so the closure captures avail/cpu BY VALUE — the .avail_gb and .cpu_workers
+# bindings are rm()'d below, and species overlays (sourced later) call this via
+# PARALLEL$regovern after raising a budget.
+.gov <- local({
+  .a <- .avail_gb; .c <- .cpu_workers
+  function(mem_gb) if (is.finite(.a))
+    max(1L, min(.c, as.integer(floor(.a * 0.8 / mem_gb)))) else .c
+})
 PARALLEL <- list(
   workers       = .gov(.future_mem_gb),
   merge_workers = .gov(.merge_mem_gb),
   future_mem_gb = .future_mem_gb,
-  merge_mem_gb  = .merge_mem_gb
+  merge_mem_gb  = .merge_mem_gb,
+  # Species overlays are sourced AFTER this block. A gene-rich annotation exports more
+  # per worker at the same cell count, so an overlay may need a larger merged-phase
+  # budget; re-govern through this so merge_workers stays consistent with the raised
+  # ceiling rather than silently over-subscribing RAM.
+  regovern      = .gov
 )
 if (PARALLEL$workers < .cpu_workers || PARALLEL$merge_workers < PARALLEL$workers)
   message(sprintf("[config] RAM governor: %d workers per-sample / %d workers merged-phase (%.0f GB avail; %d CPU).",
@@ -397,6 +408,59 @@ if (length(SAMPLE_NAMES) == 3 && setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
   )
 }
 
+# --- H1 cardiomyocyte differentiation (SCRNA_SPECIES=cm), res 0.5, 21 clusters -------
+# Guarded on the exact sample set: cluster numbering is not stable across runs, so this
+# must never leak into a different cohort. Curated 2026-09-10 from
+# integrated/integrated_cluster_markers.csv (FindAllMarkers) — the marker-panel scores
+# alone were unusable because ambient collagen (COL1A1/DCN ~2-3 in every cluster) made
+# every cluster look fibroblast-like. EVERY cluster is mapped: a partial map falls back
+# to per-cell SingleR labels for the rest, which would shatter them.
+#
+# SingleR (HumanPrimaryCellAtlas) called clusters 2/6/7/10/11/12/14/15 "Neurons" — that
+# is a reference artefact, not biology. Verified TUBB3 0.00, MAP2 0.00-0.02, ELAVL3 0.01,
+# SOX2 0.00, PAX6 0.00, SOX10 0.00 across all of them: there are no neurons in this
+# culture. HPCA has no cardiomyocyte label, so it files excitable cells under Neurons.
+if (length(SAMPLE_NAMES) == 7 &&
+    setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_2", "H1D20_1",
+                             "H1D20_2", "H1D30_1", "H1D30_2"))) {
+  CLUSTER_CELLTYPE_MAP <- c(
+    # --- cardiac lineage -----------------------------------------------------------
+    "10" = "Cardiomyocyte",      # MYH6/TTN/ACTC1/ACTN2/MYL7/MYOCD/SLC8A1/LDB3/CCDC141;
+                                 # TTN 2.55 vs <=0.84 elsewhere, NKX2-5 0.63, MEF2C 0.57
+    "19" = "Cardiomyocyte",      # PLN/MYL3/HSPB6/CRYAB/SMIM3 — the most mature CM here
+                                 # (98% D30); subtype refinement should call it
+    "12" = "Cardiac progenitor", # GATA4 1.51 (highest), TBX5 0.37, TECRL (cardiac-
+                                 # specific), ITGA8, CCBE1, LIX1; 46% D11
+    # --- epicardium / mesothelium --------------------------------------------------
+    "18" = "Epicardial",         # ITLN1 0.87 (unique), TBX18, ALDH1A2, NPR3, SFRP5, UPK3B
+    "3"  = "Epicardial",         # UPK3B/SFRP2/PTGDS/SLPI/NPY mesothelial signature
+    "14" = "Epicardial",         # same signature as 3 (SPRR2F/UPK3B/SLC7A7) + high MT
+    # --- stromal -------------------------------------------------------------------
+    "4"  = "Fibroblast",         # FMOD/COL6A3/FBN1/DLK1/LOX/SERPINE2 — definitive
+    "2"  = "Fibroblast",         # CNTN5/TENM2/SOX6/PDE3A/ZFPM2; sarcomere-negative
+                                 # (TTN 0.71, TNNT2 0.20) and neural-negative
+    "7"  = "Fibroblast",         # same programme as 2, 49% D20
+    # --- off-target endoderm (the largest single lineage) --------------------------
+    "0"  = "Hepatic/Endoderm",   # RBP4/TTR/FGB/AHSG/APOC3/APOA1/APOA2/AFP — visceral
+                                 # /yolk-sac endoderm; 23,498 cells, 70% D20
+    "13" = "Hepatic/Endoderm",   # ALB/APOB/MTTP/CEBPA/F2/AMN — hepatocyte-like
+    "11" = "Hepatic/Endoderm",   # HNF4A/HNF1A-AS1/ONECUT1/HHEX/FOXA2/NR5A2
+    "20" = "Hepatic/Endoderm",   # FOXA2/HHEX/ONECUT1/FOXA1 + cell cycle; 98% D11, n=64
+    # --- pluripotent ---------------------------------------------------------------
+    "5"  = "Pluripotent",        # UTF1/NANOG/SOX2/ALPL/POU5F1/LNCPRESS1; 91% D0
+    "8"  = "Pluripotent",        # DPPA4/L1TD1/MIR302CHG/ESRG/XACT; 96% D0
+    "9"  = "Pluripotent",        # XACT/CADM2/GRID2/RMST; 94% D0
+    "1"  = "Pluripotent",        # POU5F1/ESRG/DPPA4/MIR302CHG/CRABP1
+    # --- other ---------------------------------------------------------------------
+    "6"  = "Proliferating",      # KIF20A/PBK/MKI67/NEK2/TOP2A/CDCA3/TPX2 — pure cycle,
+                                 # no lineage genes in its top markers
+    "15" = "Epithelial",         # GABRP/CLDN4/CLDN7/GRHL2/PRSS8/RAB25/WFDC2
+    "16" = "Endothelial",        # CDH5/ICAM2/TIE1/ESAM/SOX7/ECSCR/CD34/GJA4; 65% D11
+    "17" = "Unknown"             # top markers are ALL MT- genes — mito-high/dying,
+                                 # 54% D20 (the shallow libraries). Do not interpret.
+  )
+}
+
 # --- Color Palettes ---
 SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
 
@@ -468,6 +532,22 @@ CELLTYPE_COLORS <- c(
   "Macrophage (proliferat)"   = "#A34A12",
   "Chondrocyte"               = "#9EC5AB",
   "MSC"                       = "#C7A76C",
+
+  # --- cardiomyocyte differentiation (SCRNA_SPECIES=cm) ----------------------
+  # CM lineage in reds/oranges (dominant lineage), progenitor + pluripotent in
+  # purples so the D0->D11 hand-off reads as one family, off-target endoderm in
+  # brown so it stands apart from the cardiac compartment at a glance.
+  "Cardiomyocyte"                 = "#C0392B",
+  "Cardiomyocyte (ventricular)"   = "#8E2420",
+  "Cardiomyocyte (atrial)"        = "#E67E22",
+  "Cardiomyocyte (immature)"      = "#F1948A",
+  "Cardiac progenitor"            = "#9B59B6",
+  "Pluripotent"                   = "#5B2C6F",
+  "Fibroblast (activated)"        = "#7D6608",
+  "Epicardial"                    = "#16A085",
+  "Hepatic/Endoderm"              = "#A04000",
+  "Proliferating"                 = "#5D6D7E",
+
   "Unknown"            = "#B09C85"
 )
 
@@ -475,14 +555,21 @@ CELLTYPE_COLORS <- c(
 # =============================================================================
 # Species overrides — read SCRNA_SPECIES env var (set by run_pipeline.sh)
 # Supported: "human" (default) | "bat" (whole blood) | "bat_wing" (wing tissue)
+#          | "cm" (human iPSC/ESC -> cardiomyocyte differentiation)
 # =============================================================================
 .species <- Sys.getenv("SCRNA_SPECIES", unset = "")
 if (!nzchar(.species)) {
   message("[config] SCRNA_SPECIES not set — defaulting to 'human' (set SCRNA_SPECIES=bat for bat data).")
   .species <- "human"
 }
+.known_species <- c("human", "bat", "bat_wing", "cm")
+if (!.species %in% .known_species)
+  warning("[config] SCRNA_SPECIES='", .species, "' is not one of ",
+          paste(.known_species, collapse = "/"), " — no overlay will apply and the ",
+          "human PBMC defaults will be used verbatim.", call. = FALSE)
 
 source(file.path(PIPELINE_DIR, "config_species_bat.R"))  # bat / bat_wing overrides (extracted)
+source(file.path(PIPELINE_DIR, "config_species_cm.R"))   # cm overrides (human iPSC-CM)
 
 if (!exists("WOUND_MODULES")) WOUND_MODULES <- list()
 
