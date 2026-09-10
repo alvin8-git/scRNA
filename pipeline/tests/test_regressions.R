@@ -80,6 +80,36 @@ if (file.exists(f)) {
     fails <- c(fails, "05_annotate.R builds scType gene sets from blood MARKERS slots with no non-blood fallback")
 }
 
+# Regression T8: a curated CLUSTER_CELLTYPE_MAP guarded on a QC value must live in the
+# species overlay, not in config.R. config.R defines the map blocks well before it
+# sources the overlays, so a guard term reading QC$... there sees the BASE value and the
+# map leaks into a run whose QC (and therefore cluster numbering) differs. Observed:
+# the cm map guarded on QC$min_features == 200 still applied to a min_features 1000 run.
+# Two ways to fail this: put a QC-guarded map back in config.R, or drop the QC term from
+# the overlay's guard.
+f <- file.path(.pipeline, "config.R")
+if (file.exists(f)) {
+  .l <- readLines(f, warn = FALSE)
+  .map_start <- grep("^\\s*CLUSTER_CELLTYPE_MAP\\s*<-\\s*c\\(", .l)
+  .src <- grep("source\\(file\\.path\\(PIPELINE_DIR", .l)
+  if (length(.map_start) && length(.src) &&
+      any(.map_start < max(.src)) &&
+      any(grepl("QC\\$", .l[seq_len(max(.src))]) &
+          seq_len(max(.src)) %in% unlist(lapply(.map_start, function(i) max(1, i - 12):i))))
+    fails <- c(fails, "config.R has a QC-guarded CLUSTER_CELLTYPE_MAP before the species overlay is sourced (QC is not final there)")
+}
+f <- file.path(.pipeline, "config_species_cm.R")
+if (file.exists(f)) {
+  # Inspect the `if (...)` CODE line, not the whole file: the explanatory comment above
+  # the map also contains the string "QC$min_features == 200", so a whole-file grep
+  # passes even after the guard term is deleted from the condition.
+  .l <- readLines(f, warn = FALSE)
+  .code <- .l[!grepl("^\\s*#", .l)]
+  if (any(grepl("CLUSTER_CELLTYPE_MAP <- c(", .code, fixed = TRUE)) &&
+      !any(grepl("^\\s*if \\(.*min_features", .code)))
+    fails <- c(fails, "cm CLUSTER_CELLTYPE_MAP guard is missing its QC$min_features term (cluster numbering depends on the QC floor)")
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

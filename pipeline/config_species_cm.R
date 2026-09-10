@@ -24,6 +24,22 @@ if (.species == "cm") {
   # H1D30_2 cell reaches 435,190 UMI).
   QC$max_features <- 9000
   QC$max_counts   <- 70000
+  # min_features 200 -> 1000 (2026-09-10). The 200 floor let a large ambient-dominated
+  # population through: cluster 0 of the first run held 23,498 cells (24.8%) at a median
+  # of 1,141 genes, and its top FindAllMarkers genes were all abundant secreted plasma
+  # proteins (RBP4/TTR/FGB/AHSG/APOC3/APOA1/APOA2/AFP) plus MALAT1 — the ambient
+  # signature, not a lineage. Restricting to >2000-gene cells retained only 4.9% of that
+  # cluster while the genuine ALB+/HNF4A+ hepatic cluster retained 70.1%, and D20
+  # composition changed from 51% "endoderm" to Epicardial 43.4% / Fibroblast 39.1% /
+  # endoderm 2.7%. SoupX would be the principled fix but needs the raw unfiltered
+  # matrices, and Samples/Cardio ships only filter_matrix.
+  #
+  # Cost, stated because it is a real bias: the loss is not uniform across the time
+  # course — 20.6% of D0, 5.6% of D11, 25.7% of D20 and 2.0% of D30. Comparisons across
+  # timepoints are therefore made on differently-filtered populations. 1000 was chosen
+  # over 1500 (which removes 68.7% of D20) and over 800 (too lenient: D20's Q2/Q3 sit at
+  # 1,123-1,337 genes and remain ambient-dominated).
+  QC$min_features <- 1000
   # max_percent_mt deliberately LEFT at the base value. Cardiac tissue is
   # mitochondria-rich and a raised ceiling was expected, but this platform runs a
   # ~0.1-1.0% mito baseline (p99 = 4.6%): only 13 of 107,658 cells exceed 20%, so the
@@ -147,6 +163,65 @@ if (.species == "cm") {
 
   # ---- Wound modules are meaningless here ------------------------------------
   if (exists("WOUND_MODULES")) WOUND_MODULES <- NULL
+
+  # --- H1 cardiomyocyte differentiation (SCRNA_SPECIES=cm), res 0.5, 21 clusters -------
+  # Guarded on the exact sample set: cluster numbering is not stable across runs, so this
+  # must never leak into a different cohort. Curated 2026-09-10 from
+  # integrated/integrated_cluster_markers.csv (FindAllMarkers) — the marker-panel scores
+  # alone were unusable because ambient collagen (COL1A1/DCN ~2-3 in every cluster) made
+  # every cluster look fibroblast-like. EVERY cluster is mapped: a partial map falls back
+  # to per-cell SingleR labels for the rest, which would shatter them.
+  #
+  # SingleR (HumanPrimaryCellAtlas) called clusters 2/6/7/10/11/12/14/15 "Neurons" — that
+  # is a reference artefact, not biology. Verified TUBB3 0.00, MAP2 0.00-0.02, ELAVL3 0.01,
+  # SOX2 0.00, PAX6 0.00, SOX10 0.00 across all of them: there are no neurons in this
+  # culture. HPCA has no cardiomyocyte label, so it files excitable cells under Neurons.
+  # The QC$min_features == 200 term is NOT redundant with the sample-name guard. Cluster
+  # numbering depends on which cells survive QC, so raising min_features renumbers every
+  # cluster while the sample set stays identical — the name guard alone would silently
+  # apply these stale numbers to the new run. Curated under min_features 200; when a run
+  # uses a different QC floor this map correctly withholds itself and step 05 falls back
+  # to auto-annotation, which prints a fresh paste-ready map to re-curate from.
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 200) &&
+        setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_2", "H1D20_1",
+                               "H1D20_2", "H1D30_1", "H1D30_2"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      # --- cardiac lineage -----------------------------------------------------------
+      "10" = "Cardiomyocyte",      # MYH6/TTN/ACTC1/ACTN2/MYL7/MYOCD/SLC8A1/LDB3/CCDC141;
+                                   # TTN 2.55 vs <=0.84 elsewhere, NKX2-5 0.63, MEF2C 0.57
+      "19" = "Cardiomyocyte",      # PLN/MYL3/HSPB6/CRYAB/SMIM3 — the most mature CM here
+                                   # (98% D30); subtype refinement should call it
+      "12" = "Cardiac progenitor", # GATA4 1.51 (highest), TBX5 0.37, TECRL (cardiac-
+                                   # specific), ITGA8, CCBE1, LIX1; 46% D11
+      # --- epicardium / mesothelium --------------------------------------------------
+      "18" = "Epicardial",         # ITLN1 0.87 (unique), TBX18, ALDH1A2, NPR3, SFRP5, UPK3B
+      "3"  = "Epicardial",         # UPK3B/SFRP2/PTGDS/SLPI/NPY mesothelial signature
+      "14" = "Epicardial",         # same signature as 3 (SPRR2F/UPK3B/SLC7A7) + high MT
+      # --- stromal -------------------------------------------------------------------
+      "4"  = "Fibroblast",         # FMOD/COL6A3/FBN1/DLK1/LOX/SERPINE2 — definitive
+      "2"  = "Fibroblast",         # CNTN5/TENM2/SOX6/PDE3A/ZFPM2; sarcomere-negative
+                                   # (TTN 0.71, TNNT2 0.20) and neural-negative
+      "7"  = "Fibroblast",         # same programme as 2, 49% D20
+      # --- off-target endoderm (the largest single lineage) --------------------------
+      "0"  = "Hepatic/Endoderm",   # RBP4/TTR/FGB/AHSG/APOC3/APOA1/APOA2/AFP — visceral
+                                   # /yolk-sac endoderm; 23,498 cells, 70% D20
+      "13" = "Hepatic/Endoderm",   # ALB/APOB/MTTP/CEBPA/F2/AMN — hepatocyte-like
+      "11" = "Hepatic/Endoderm",   # HNF4A/HNF1A-AS1/ONECUT1/HHEX/FOXA2/NR5A2
+      "20" = "Hepatic/Endoderm",   # FOXA2/HHEX/ONECUT1/FOXA1 + cell cycle; 98% D11, n=64
+      # --- pluripotent ---------------------------------------------------------------
+      "5"  = "Pluripotent",        # UTF1/NANOG/SOX2/ALPL/POU5F1/LNCPRESS1; 91% D0
+      "8"  = "Pluripotent",        # DPPA4/L1TD1/MIR302CHG/ESRG/XACT; 96% D0
+      "9"  = "Pluripotent",        # XACT/CADM2/GRID2/RMST; 94% D0
+      "1"  = "Pluripotent",        # POU5F1/ESRG/DPPA4/MIR302CHG/CRABP1
+      # --- other ---------------------------------------------------------------------
+      "6"  = "Proliferating",      # KIF20A/PBK/MKI67/NEK2/TOP2A/CDCA3/TPX2 — pure cycle,
+                                   # no lineage genes in its top markers
+      "15" = "Epithelial",         # GABRP/CLDN4/CLDN7/GRHL2/PRSS8/RAB25/WFDC2
+      "16" = "Endothelial",        # CDH5/ICAM2/TIE1/ESAM/SOX7/ECSCR/CD34/GJA4; 65% D11
+      "17" = "Unknown"             # top markers are ALL MT- genes — mito-high/dying,
+                                   # 54% D20 (the shallow libraries). Do not interpret.
+    )
+  }
 
   # ---- CAVEAT recorded in config so it travels with the analysis -------------
   # COL1A1 (100.0%), COL3A1 (100.0%), LUM (99.8%), DCN (99.1%) and AFP (99.4%) are

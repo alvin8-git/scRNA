@@ -408,58 +408,6 @@ if (length(SAMPLE_NAMES) == 3 && setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
   )
 }
 
-# --- H1 cardiomyocyte differentiation (SCRNA_SPECIES=cm), res 0.5, 21 clusters -------
-# Guarded on the exact sample set: cluster numbering is not stable across runs, so this
-# must never leak into a different cohort. Curated 2026-09-10 from
-# integrated/integrated_cluster_markers.csv (FindAllMarkers) — the marker-panel scores
-# alone were unusable because ambient collagen (COL1A1/DCN ~2-3 in every cluster) made
-# every cluster look fibroblast-like. EVERY cluster is mapped: a partial map falls back
-# to per-cell SingleR labels for the rest, which would shatter them.
-#
-# SingleR (HumanPrimaryCellAtlas) called clusters 2/6/7/10/11/12/14/15 "Neurons" — that
-# is a reference artefact, not biology. Verified TUBB3 0.00, MAP2 0.00-0.02, ELAVL3 0.01,
-# SOX2 0.00, PAX6 0.00, SOX10 0.00 across all of them: there are no neurons in this
-# culture. HPCA has no cardiomyocyte label, so it files excitable cells under Neurons.
-if (length(SAMPLE_NAMES) == 7 &&
-    setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_2", "H1D20_1",
-                             "H1D20_2", "H1D30_1", "H1D30_2"))) {
-  CLUSTER_CELLTYPE_MAP <- c(
-    # --- cardiac lineage -----------------------------------------------------------
-    "10" = "Cardiomyocyte",      # MYH6/TTN/ACTC1/ACTN2/MYL7/MYOCD/SLC8A1/LDB3/CCDC141;
-                                 # TTN 2.55 vs <=0.84 elsewhere, NKX2-5 0.63, MEF2C 0.57
-    "19" = "Cardiomyocyte",      # PLN/MYL3/HSPB6/CRYAB/SMIM3 — the most mature CM here
-                                 # (98% D30); subtype refinement should call it
-    "12" = "Cardiac progenitor", # GATA4 1.51 (highest), TBX5 0.37, TECRL (cardiac-
-                                 # specific), ITGA8, CCBE1, LIX1; 46% D11
-    # --- epicardium / mesothelium --------------------------------------------------
-    "18" = "Epicardial",         # ITLN1 0.87 (unique), TBX18, ALDH1A2, NPR3, SFRP5, UPK3B
-    "3"  = "Epicardial",         # UPK3B/SFRP2/PTGDS/SLPI/NPY mesothelial signature
-    "14" = "Epicardial",         # same signature as 3 (SPRR2F/UPK3B/SLC7A7) + high MT
-    # --- stromal -------------------------------------------------------------------
-    "4"  = "Fibroblast",         # FMOD/COL6A3/FBN1/DLK1/LOX/SERPINE2 — definitive
-    "2"  = "Fibroblast",         # CNTN5/TENM2/SOX6/PDE3A/ZFPM2; sarcomere-negative
-                                 # (TTN 0.71, TNNT2 0.20) and neural-negative
-    "7"  = "Fibroblast",         # same programme as 2, 49% D20
-    # --- off-target endoderm (the largest single lineage) --------------------------
-    "0"  = "Hepatic/Endoderm",   # RBP4/TTR/FGB/AHSG/APOC3/APOA1/APOA2/AFP — visceral
-                                 # /yolk-sac endoderm; 23,498 cells, 70% D20
-    "13" = "Hepatic/Endoderm",   # ALB/APOB/MTTP/CEBPA/F2/AMN — hepatocyte-like
-    "11" = "Hepatic/Endoderm",   # HNF4A/HNF1A-AS1/ONECUT1/HHEX/FOXA2/NR5A2
-    "20" = "Hepatic/Endoderm",   # FOXA2/HHEX/ONECUT1/FOXA1 + cell cycle; 98% D11, n=64
-    # --- pluripotent ---------------------------------------------------------------
-    "5"  = "Pluripotent",        # UTF1/NANOG/SOX2/ALPL/POU5F1/LNCPRESS1; 91% D0
-    "8"  = "Pluripotent",        # DPPA4/L1TD1/MIR302CHG/ESRG/XACT; 96% D0
-    "9"  = "Pluripotent",        # XACT/CADM2/GRID2/RMST; 94% D0
-    "1"  = "Pluripotent",        # POU5F1/ESRG/DPPA4/MIR302CHG/CRABP1
-    # --- other ---------------------------------------------------------------------
-    "6"  = "Proliferating",      # KIF20A/PBK/MKI67/NEK2/TOP2A/CDCA3/TPX2 — pure cycle,
-                                 # no lineage genes in its top markers
-    "15" = "Epithelial",         # GABRP/CLDN4/CLDN7/GRHL2/PRSS8/RAB25/WFDC2
-    "16" = "Endothelial",        # CDH5/ICAM2/TIE1/ESAM/SOX7/ECSCR/CD34/GJA4; 65% D11
-    "17" = "Unknown"             # top markers are ALL MT- genes — mito-high/dying,
-                                 # 54% D20 (the shallow libraries). Do not interpret.
-  )
-}
 
 # --- Color Palettes ---
 SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
