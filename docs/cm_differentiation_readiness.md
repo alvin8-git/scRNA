@@ -190,6 +190,77 @@ one has to be judged by eye.
 
 ---
 
+## 6.3 Steps 09/10 result, and a correction to the endoderm finding (2026-09-10)
+
+Steps 09 (bootstrap proportions) and 10 (rarefaction) were run against
+`Results/results_H1D01_7samples_filtered`. Outputs: `bootstrap_proportions_report.pdf`,
+`bootstrap_summary.csv`, `rarefaction_report.pdf`, `rarefaction_summary.csv`.
+
+**Step 09 says the proportions are statistically precise.** Bootstrapping all samples
+to the smallest (9,168 cells, 1,000 draws) gives CI widths under 1.5 pp throughout, and
+replicates agree closely — D20 cardiomyocyte 1.98% [1.79–2.20] vs 2.12% [1.93–2.31],
+D30 4.49% vs 5.59%. The differences between timepoints are far larger than the CIs, so
+none of the composition shifts are sampling noise.
+
+**But step 09 does NOT settle the D20 depth question, and an earlier note in this file
+implied it would.** Step 09 resamples *cells* to a common count; it corrects for
+differing cell numbers and sampling noise, not for differing library depth. Depth bias
+acts earlier — on which genes are detected and therefore which label a cell receives —
+and resampling cells cannot undo it. The test that does address it is depth
+stratification within a timepoint:
+
+| timepoint | median genes per quartile | CM lineage % | Hepatic/Endoderm % |
+|---|---|---|---|
+| D11 | 1,422 / 2,431 / 3,286 / 4,311 | 25.2 → 19.7 → 16.1 → 11.5 | 25.6 → 35.0 → 30.1 → 23.2 |
+| D20 | 839 / 1,123 / 1,337 / 3,771 | 1.4 → 1.8 → 4.5 → 4.0 | **75.4 → 71.1 → 54.7 → 2.9** |
+| D30 | 1,188 / 2,105 / 3,540 / 5,053 | 9.4 → 14.5 → 5.5 → 2.3 | **65.3 → 18.9 → 5.4 → 2.4** |
+
+The endoderm fraction collapses from ~70% in the lowest-depth quartile to ~3% in the
+highest, at both D20 and D30. A genuine cell type does not vanish that completely in the
+deepest-sequenced cells.
+
+**Per-cluster depth confirms it.** Cluster 0 — 23,498 cells, 24.8% of the run, the
+single largest cluster and the basis of the "Hepatic/Endoderm 29.2%" figure — has a
+median of **1,141 genes / 2,430 UMI**, the lowest of any substantial cluster. The other
+endoderm clusters sit at normal depth: cluster 11 at 2,784 genes, cluster 13 at 2,880
+(11,340 UMI), cluster 20 at 3,104.
+
+Cluster 0's top `FindAllMarkers` genes are RBP4, TTR, FGB, AHSG, APOC3, APOA1, APOA2,
+AFP, CST3 — **all secreted, highly abundant plasma proteins** — plus **MALAT1**, a
+ubiquitous nuclear lncRNA that is a classic signature of ambient-dominated or
+low-quality droplets. In a low-content cell, ambient transcripts make up a larger
+*share* of the transcriptome, so soup genes appear "enriched" relative to high-content
+clusters. Its median %MT is only 0.55, so these are not dying by the mitochondrial
+criterion — they are simply low-content.
+
+**Revised reading of the endoderm result:**
+
+| | cells | % of run | confidence |
+|---|---|---|---|
+| Definitive hepatic endoderm (clusters 11, 13, 20) | 4,193 | **4.4%** | high — normal depth, definitive programmes: ALB, APOB, MTTP, F2, CEBPA, HNF4A, HNF1A, ONECUT1, HHEX, FOXA2 |
+| Cluster 0 | 23,498 | 24.8% | **low — ambiguous.** Low-content cells whose profile matches the ambient plasma-protein soup. Either degraded/ruptured cells that passed the 200-gene floor, or genuinely low-RNA endoderm |
+
+So **"hepatic endoderm is 29.2% and the dominant product" is not supported.** The
+defensible statement is: definitive hepatic endoderm is ~4.4%, and a further ~25% of
+barcodes are low-content and unresolvable without ambient correction. The cardiac
+numbers are less affected — cluster 10 sits at 1,561 genes and cluster 12 at 3,038, and
+its markers (MYH6, TTN, MYOCD, SLC8A1, LDB3, TECRL) are not abundant secreted
+transcripts.
+
+**What would resolve cluster 0**, in increasing order of effort:
+
+1. Raise `QC$min_features` from 200 to ~800–1,000 for this cohort and re-run. Cheap, and
+   would show immediately how much of the composition depends on those barcodes.
+2. Run ambient correction — SoupX or CellBender — on the raw (unfiltered) matrices, which
+   is the principled fix. Neither is currently in the pipeline or `setup_env.sh`.
+3. Ask whether the D20 preparation had a viability or over-loading problem (question 2 in
+   `docs/cm_questions_for_data_owner.md`); 70% of cluster 0 is D20.
+
+Until then, quote the cardiac and pluripotent numbers, and treat the endoderm fraction
+as a range (4.4% definitive, up to ~29% if cluster 0 is real).
+
+---
+
 ## 7. Run
 
 ```bash
