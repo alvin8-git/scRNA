@@ -224,6 +224,8 @@ and tables to `qc/`:
 
 **What it does:** Generates a focused comparison document covering sample quality, doublet rates, cell-type composition, integration quality, and DE results across samples. Independent of step 07.
 
+**Demo-only:** the QC pairs and caption text are hardcoded for DemoScRNA / H1_pre_old / H2_post_old / H3_post_new. The step is not in any default set and exits 0 with a message unless all four samples are in the run.
+
 ---
 
 ## Step 09 — `09_bootstrap_proportions.R`

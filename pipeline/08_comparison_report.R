@@ -8,6 +8,12 @@
 #   4. Integrated UMAP (split by sample, triptych)
 #   5. Key marker expression (violins, dotplot)
 # Output: Comparison_report.pdf in RESULTS_DIR
+#
+# DEMO-ONLY. The narrative is written for one study — the DemoScRNA / H1_pre_old /
+# H2_post_old / H3_post_new pre- vs post-sort kit comparison: qc_pairs hardcodes those
+# pairs and the captions cite their loading counts and viabilities. It is not in any
+# default step set and self-skips on any other sample set. For a general run use the
+# step 07 PDFs and the 08b HTML report instead.
 # =============================================================================
 .pipeline_dir <- local({
   f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
@@ -19,6 +25,13 @@
   }
 })
 source(file.path(.pipeline_dir, "config.R"))   # config.R also sources pdf_helpers.R
+
+.demo_samples <- c("DemoScRNA", "H1_pre_old", "H2_post_old", "H3_post_new")
+if (!all(.demo_samples %in% SAMPLE_NAMES)) {
+  message("08_comparison_report.R is demo-only (needs samples: ", paste(.demo_samples, collapse = ", "),
+          ") — skipping. Use the step 07 PDFs / 08b HTML report for this run.")
+  quit(save = "no", status = 0)
+}
 
 suppressPackageStartupMessages({
   library(ggplot2)

@@ -49,7 +49,7 @@ The pipeline is a sequence of R scripts in `pipeline/`. Core steps (run by defau
 | 06 | `06_visualize.R` | Publication figures |
 | 06b | `06b_differential.R` | Differential expression between samples per cell type (multi-sample) |
 | 07 | `07_finalize_reports.R` | Merge per-step PDFs into 5 category reports + `Overall_report.pdf` |
-| 08 | `08_comparison_report.R` | Standalone cross-sample comparison report |
+| 08 | `08_comparison_report.R` | Demo-only comparison report (DemoScRNA / H1_pre_old / H2_post_old / H3_post_new); self-skips otherwise |
 | 08c | `08c_benchmark_concordance.R` | Cross-run anchor benchmark vs frozen baseline + whole-blood sort readout (optional; gated on `REFERENCE_MODEL`) |
 | 09 | `09_bootstrap_proportions.R` | Bootstrap-normalised proportion CIs + pairwise chi-squared |
 | 10 | `10_rarefaction.R` | Minimum-capture-depth rarefaction analysis |
@@ -314,6 +314,11 @@ Run: `bash pipeline/run_pipeline.sh <samples> 10`
 
 **Input:** existing output files in `RESULTS_DIR` (QC CSVs, doublet PDFs, composition CSVs, integrated PDFs, DE files)  
 **Output:** `Comparison_report.pdf` in `RESULTS_DIR`
+
+**Demo-only.** The pairs it compares and its captions are hardcoded for the DemoScRNA /
+H1_pre_old / H2_post_old / H3_post_new pre- vs post-sort study (loading counts, viabilities). It
+is not in any default step set, and on any other sample set it logs a message and exits 0. For
+other runs use the step 07 PDFs and the 08b HTML report.
 
 Standalone cross-sample summary report with sections:
 

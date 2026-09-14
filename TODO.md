@@ -2,7 +2,8 @@
 
 ## Pending
 
-- [ ] **bat_wing species documentation** — partly done (2026-07-28): `docs/reference-config.md` now documents the overlay, including the `QC$max_features` 8000 / `QC$max_counts` 60000 widening and its cache-invalidation consequence. Still open: `docs/howto-bat-whole-blood.md` has **zero** `bat_wing` mentions. Add a section there (or a sibling `docs/howto-bat-wing.md`) covering the T1/T2/T6 run as the worked example.
+- [x] **bat_wing species documentation** — done 2026-09-14: new `docs/howto-bat-wing.md` (T1/T2/T6
+  worked example) cross-linked from `docs/howto-bat-whole-blood.md`. Earlier (2026-07-28): `docs/reference-config.md` now documents the overlay, including the `QC$max_features` 8000 / `QC$max_counts` 60000 widening and its cache-invalidation consequence. Still open: `docs/howto-bat-whole-blood.md` has **zero** `bat_wing` mentions. Add a section there (or a sibling `docs/howto-bat-wing.md`) covering the T1/T2/T6 run as the worked example.
 
 ### Open bugs and decisions (2026-07-30)
 
@@ -29,9 +30,10 @@ past runs.
 - [x] **`.combine_pdfs()` reimplemented four times** — fixed 2026-09-14: the private copies in
   `projects/bat_wing/11`–`14` (which rasterised pages to 150-dpi images) are deleted; the steps
   use the lossless `pdf_helpers.R` version via `config.R`. Regression guard T10.
-- [ ] **`08_comparison_report.R` is effectively single-dataset** — `qc_pairs` hardcodes
-  DemoScRNA/H1/H2/H3 and the narrative captions cite fixed cell counts, unlike 07 and 08b which
-  derive from `SAMPLE_NAMES`. Either generalise it or document it as a demo-only step.
+- [x] **`08_comparison_report.R` is effectively single-dataset** — resolved 2026-09-14 as
+  demo-only: documented in the script header, `DOCUMENTATION.md` and
+  `docs/reference-pipeline-steps.md`, and it now exits 0 with a message unless all of
+  DemoScRNA/H1_pre_old/H2_post_old/H3_post_new are in the run.
 
 ### Cardiomyocyte (cm) differentiation — H1 D0/D11/D20/D30 (2026-09-14)
 
