@@ -428,6 +428,40 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
   } else {
     message("  Using manual CLUSTER_CELLTYPE_MAP (all clusters mapped)")
   }
+
+  # Optional per-subcluster override for a cluster that mixes populations a single
+  # cluster label cannot describe. Config shape (set alongside the guarded map):
+  #   CLUSTER_SUBCLUSTER_MAP <- list(cluster = "1", resolution = 0.2,
+  #                                  labels = c("0" = "Pluripotent", "1" = "Fibroblast"))
+  # FindSubCluster re-runs Louvain on the saved SNN graph restricted to that cluster
+  # (deterministic: FindClusters' default random.seed). Every subcluster must be
+  # labelled; an unlabelled one stops the step rather than silently keeping the parent
+  # label, for the same reason a partial CLUSTER_CELLTYPE_MAP is dangerous.
+  .scm <- get0("CLUSTER_SUBCLUSTER_MAP", ifnotfound = NULL)
+  if (!is.null(.scm)) {
+    .g <- grep("snn$", names(merged@graphs), value = TRUE)[1]
+    if (is.na(.g)) stop("CLUSTER_SUBCLUSTER_MAP needs an SNN graph on the object; none found")
+    .prev_idents <- Idents(merged)
+    Idents(merged) <- "seurat_clusters"
+    merged <- FindSubCluster(merged, cluster = .scm$cluster, graph.name = .g,
+                             subcluster.name = "annot_subcluster",
+                             resolution = .scm$resolution)
+    Idents(merged) <- .prev_idents
+    .in  <- as.character(merged$seurat_clusters) == .scm$cluster
+    .sub <- sub(paste0("^", .scm$cluster, "_"), "", as.character(merged$annot_subcluster[.in]))
+    .missing <- setdiff(unique(.sub), names(.scm$labels))
+    if (length(.missing))
+      stop("CLUSTER_SUBCLUSTER_MAP: cluster ", .scm$cluster, " split into subclusters ",
+           paste(sort(unique(.sub)), collapse = ","), " but labels are missing for ",
+           paste(.missing, collapse = ","), " — the subclustering changed; re-curate.")
+    merged$cell_type[.in] <- unname(.scm$labels[.sub])
+    message("  CLUSTER_SUBCLUSTER_MAP: cluster ", .scm$cluster, " split at res ",
+            .scm$resolution, " -> ",
+            paste(sprintf("%s=%s (n=%d)", names(table(.sub)), .scm$labels[names(table(.sub))],
+                          as.integer(table(.sub))), collapse = "; "))
+    rm(.g, .prev_idents, .in, .sub, .missing)
+  }
+  rm(.scm)
 } else {
   # Auto-generate cluster-level labels from SingleR majority vote per cluster.
   # This gives coherent, cluster-level annotations without any manual config.

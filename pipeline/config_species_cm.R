@@ -223,6 +223,79 @@ if (.species == "cm") {
     )
   }
 
+  # --- Same cohort at min_features 1000, res 0.5, 20 clusters ------------------
+  # Curated 2026-09-10 from the re-run's integrated_cluster_markers.csv. Guarded on the
+  # QC floor as well as the sample names, so this and the min_features 200 map above are
+  # mutually exclusive and neither can apply to the other's clustering.
+  #
+  # Raising min_features to 1000 did NOT dissolve the ambient population: cluster 0 still
+  # holds 17,581 cells (21.3%) at a median of 1,216 genes, i.e. sitting just above the
+  # new floor. It is labelled Unknown, not Hepatic/Endoderm, on direct evidence — it
+  # carries the secreted CARGO without the lineage IDENTITY:
+  #
+  #            FOXA2 HNF4A ONECUT1 HHEX CEBPA | ALB  AFP  TTR APOA1 | COL1A1 DCN TAGLN
+  #   cl0       0.02  0.02   0.01  0.01  0.03 | 1.06 2.75 1.82 2.18 |  2.60 2.57  1.37
+  #   cl9  real 1.04  0.40   0.48  0.63  0.12 | 0.49 1.06 1.77 1.23 |    -    -     -
+  #   cl12 real 0.82  0.40   0.21  0.29  0.46 | 1.61 2.89 3.19 3.84 |    -    -     -
+  #
+  # Ambient RNA carries abundant secreted transcripts, not transcription factors, and
+  # cl0 is simultaneously collagen-high, plasma-protein-high AND ACTA2/TAGLN-positive —
+  # the average of the whole culture rather than any one lineage. Calling it Unknown
+  # costs 21% of the run but does not invent a population. SoupX on the raw matrices is
+  # the real fix; Samples/Cardio ships only filter_matrix (see docs).
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
+      setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_2", "H1D20_1",
+                               "H1D20_2", "H1D30_1", "H1D30_2"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      # --- cardiac lineage ---------------------------------------------------------
+      "7"  = "Cardiomyocyte",      # NKX2-5 0.64, MEF2C 0.62, GATA4 1.11, TTN 2.72,
+                                   # ACTC1 2.06, TNNT2 1.12 + MYH6/MYOCD/SLC8A1/LDB3/CMYA5
+      "10" = "Cardiac progenitor", # GATA4/TECRL/ITGA8/LIX1/CCDC3/DUSP6; 50% D11
+      # --- epicardium / mesothelium ------------------------------------------------
+      "3"  = "Epicardial",         # UPK3B/SFRP2/PTGDS/SLPI/NPY/SLC34A2
+      "11" = "Epicardial",         # same programme (SPRR2F/SLPI/UPK3B/SLC7A7)
+      "17" = "Myofibroblast",      # TAGLN 2.47 / ACTA2 1.80 with WT1 0.23, TBX18 0.26,
+                                   # ALDH1A2 0.28 — epicardium-derived, plus ANKRD1/CCN2/CCN1
+      # --- stromal -----------------------------------------------------------------
+      "5"  = "Fibroblast",         # FMOD/COL6A3/FBN1/LOX/DLK1; COL1A1 3.74
+      "1"  = "Fibroblast",         # placeholder only — cluster 1 is split by
+                                   # CLUSTER_SUBCLUSTER_MAP below; this label is never
+                                   # the final one for any of its cells
+      "6"  = "Fibroblast",         # COL1A1 2.63/COL3A1 3.23/DCN 2.35/LUM 2.55
+      # --- hepatic endoderm (the genuine fraction) ---------------------------------
+      "9"  = "Hepatic/Endoderm",   # FOXA2 1.04/HHEX 0.63/NR5A2 0.61/ONECUT1 0.48/HNF1A-AS1
+      "12" = "Hepatic/Endoderm",   # APOB/MTTP/ALB/CEBPA 0.46/PLG/AMN/CIDEB
+      "19" = "Hepatic/Endoderm",   # ALB 3.31/A2M/FGA/FGG/FGB/FABP1/SERPINA1; n=58, 100% D30
+      # --- pluripotent -------------------------------------------------------------
+      "2"  = "Pluripotent",        # UTF1/SOX2/GAL/TDGF1/FOXD3-AS1/LNCPRESS1; 88% D0
+      "4"  = "Pluripotent",        # POU5F1/MIR302CHG/ESRG/CRABP1
+      "16" = "Pluripotent",        # POU5F1 1.75/SOX2 0.79/XACT; 96% D0
+      # --- other -------------------------------------------------------------------
+      "8"  = "Proliferating",      # KIF20A/NEK2/MKI67/TOP2A/CDCA8/ASPM — pure cycle
+      "14" = "Epithelial",         # GABRP/CLDN4/CLDN7/GRHL2/PRSS8/RAB25/WFDC2
+      "15" = "Endothelial",        # CDH5/ICAM2/TIE1/ESAM/SOX7/CD34/GJA4; 67% D11
+      # --- not interpretable -------------------------------------------------------
+      "0"  = "Unknown",            # ambient-dominated, see the note above (21.3%)
+      "13" = "Unknown",            # MT-genes dominate the markers, 1,217 genes, MT 2.1
+      "18" = "Unknown"             # MT 6.7% and 1,211 genes — dying
+    )
+    # Cluster 1 (9,555 cells) mixed two populations: labelled wholesale as Fibroblast it
+    # put 22.9% of D0 — undifferentiated hESC — into "Fibroblast". FindSubCluster at
+    # res 0.2 on RNA_snn separates it cleanly (verified 2026-09-14):
+    #   1_0  n=3,530  87% D0  POU5F1 1.14 DNMT3B 1.96 L1TD1 1.41 LIN28A 0.85, COL1A1 0.72
+    #   1_1  n=2,534  D11-D30 COL1A1 2.43 COL3A1 2.79 DCN 1.67 LUM 2.10, POU5F1 0.07
+    #   1_2  n=2,234  D20-D30 COL1A1 2.42 COL3A1 2.99 DCN 1.94 POSTN 0.88, POU5F1 0.05
+    #   1_3  n=  882  63% D30 COL1A1 3.06 COL3A1 3.31 DCN 1.97, POU5F1 0.03
+    #   1_4  n=  375  85% D11 COL1A1 2.03 COL3A1 1.70, DCN 0.34 — early mesenchyme
+    # Res 0.4 gives the same pluripotent/fibroblast split in 7 pieces; 0.2 is preferred.
+    CLUSTER_SUBCLUSTER_MAP <- list(
+      cluster    = "1",
+      resolution = 0.2,
+      labels     = c("0" = "Pluripotent", "1" = "Fibroblast", "2" = "Fibroblast",
+                     "3" = "Fibroblast",  "4" = "Fibroblast")
+    )
+  }
+
   # ---- CAVEAT recorded in config so it travels with the analysis -------------
   # COL1A1 (100.0%), COL3A1 (100.0%), LUM (99.8%), DCN (99.1%) and AFP (99.4%) are
   # detected in essentially EVERY cell at D30. Near-universal detection of secreted /
