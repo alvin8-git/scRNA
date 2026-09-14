@@ -2,6 +2,8 @@
 
 This guide covers running the pipeline on *Eonycteris spelaea* whole-blood samples. The `bat` species keyword activates a set of pre-tuned overrides that address the biology of bat whole blood.
 
+**Dissected wing (skin/dermis) tissue is a different overlay.** If your samples are wing tissue rather than blood or a sorted blood fraction, use the `bat_wing` species keyword instead — see [How to Run on Bat Wing Tissue](howto-bat-wing.md), which covers its own QC/marker/reference overrides and the `T1`/`T2`/`T6` worked example.
+
 ## Prerequisites
 
 - Conda environment active: `conda activate scrna_seurat`
