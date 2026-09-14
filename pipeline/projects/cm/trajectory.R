@@ -128,6 +128,20 @@ gt <- graph_test(cds[expressed, ], neighbor_graph = "principal_graph",
                  cores = max(1L, min(8L, PARALLEL$workers)))
 gt <- gt[order(-gt$morans_I), ]
 gt <- gt[!is.na(gt$q_value) & gt$q_value < 0.05, c("gene_short_name", "morans_I", "morans_test_statistic", "q_value")]
-write.csv(gt, file.path(DIRS$trajectory, paste0("pseudotime_genes", SUFFIX, ".csv")), row.names = FALSE)
-message("Saved pseudotime_genes.csv (", nrow(gt), " genes, q < 0.05)")
+# Moran's I has no sign. Direction = Pearson r of log-normalised expression with pseudotime,
+# computed on the sparse matrix (no densify): r = sum(x * ptc) / (n * sd_x * sd_pt).
+X   <- LayerData(sub, assay = "RNA", layer = "data")[gt$gene_short_name, df$cell]
+ptc <- df$pseudotime - mean(df$pseudotime)
+sdx <- sqrt(pmax(Matrix::rowMeans(X^2) - Matrix::rowMeans(X)^2, 0))
+gt$r_pseudotime <- round(as.numeric(X %*% ptc) / (length(ptc) * sdx * sqrt(mean(ptc^2))), 3)
+# The raw ranking is dominated by genes that say nothing about lineage: ribosomal/mito, MALAT1/NEAT1,
+# translation housekeepers, and accession-named lncRNAs (AC/AL/AP######.#). Named lncRNAs such as
+# ESRG, XACT and MIR302CHG are kept: they are genuine pluripotency markers.
+gt$uninformative <- grepl("^RP[SL][0-9P]|^MT-|^MALAT1$|^NEAT1$|^EEF1A1$|^TPT1$|^A[CLP][0-9]{6}\\.[0-9]+$",
+                          gt$gene_short_name)
+out_csv <- file.path(DIRS$trajectory, paste0("pseudotime_genes", SUFFIX, ".csv"))
+write.csv(gt, out_csv, row.names = FALSE)
+write.csv(gt[!gt$uninformative, ], sub("\\.csv$", "_filtered.csv", out_csv), row.names = FALSE)
+message("Saved ", basename(out_csv), " (", nrow(gt), " genes, q < 0.05; ",
+        sum(!gt$uninformative), " after filtering uninformative genes)")
 message("trajectory.R complete — ", DIRS$trajectory)
