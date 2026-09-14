@@ -117,9 +117,10 @@ contamination list, so the HTML report is annotated correctly for the tissue.
 | Human whole blood | same, with `SINGLER_REF <- "MonacoImmune"` in `config.R` | `MonacoImmune` (blood-optimised) | `0.3–0.8` | Resolves CD4 / CD8 / γδ T; treat RBC + neutrophils as expected |
 | Bat whole blood | `run_pipeline.sh bat /path/A /path/B` | `MonacoImmune` | `0.3–1.0` | `config_species_bat.R` overrides: γδ T, bat-validated markers, RBC + neutrophil contamination |
 | Bat wing tissue | `run_pipeline.sh bat_wing /path/A /path/B` | `HumanPrimaryCellAtlas` | `0.3–0.8` | Adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory); no blood-contamination types; raises `QC$max_features`/`max_counts` to 8000/60000 for tissue-sized cells |
+| hESC/iPSC → cardiomyocyte | `run_pipeline.sh cm /path/A /path/B` | `HumanPrimaryCellAtlas` (no CM label; curate `CLUSTER_CELLTYPE_MAP`) | `0.1–0.8`, default 0.5 | `config_species_cm.R`: lineage marker panels (CM, pluripotent, epicardial, fibroblast, endoderm, …), `QC$min_features` 1000, `max_features`/`max_counts` 9000/70000; trajectory in `pipeline/projects/cm/` |
 
-The `bat` and `bat_wing` keywords source `pipeline/config_species_bat.R` after the human base
-config, mutating `MARKERS`, `QC`, `SINGLER_REF`, and `CLUSTER` in place. Human whole blood has
+The `cm` keyword sources `pipeline/config_species_cm.R` the same way. The `bat` and `bat_wing`
+keywords source `pipeline/config_species_bat.R` after the human base config, mutating `MARKERS`, `QC`, `SINGLER_REF`, and `CLUSTER` in place. Human whole blood has
 no keyword; set `SINGLER_REF <- "MonacoImmune"` in `config.R` if you want blood-optimised
 annotation over the broad PBMC default. Either way the report layout, panels, and interactivity
 are identical; only the labels and palette change.
@@ -186,7 +187,9 @@ bash pipeline/run_pipeline.sh --no-report /path/to/A /path/to/B   # skip the HTM
 ```
 
 The bat-wing project adds steps `11`–`14` (wing DEGs, pathways, CellChat, trajectory) under
-`pipeline/projects/bat_wing/`, triggered by the `bat_wing` species keyword.
+`pipeline/projects/bat_wing/`, triggered by the `bat_wing` species keyword. The cm project's
+monocle3 trajectory, `pipeline/projects/cm/trajectory.R`, runs by hand against a finished run dir
+(see `docs/cm_differentiation_readiness.md` §7).
 
 When a frozen reference is configured (`SCRNA_REFERENCE_MODEL`), `05r` runs right after `05`
 (so the PDFs and HTML pick up run-independent labels) and `08c` runs at the end. Both self-skip
@@ -263,7 +266,7 @@ wider or narrower, edit `.future_mem_gb` / `.merge_mem_gb` in that block. `run_p
 pins BLAS/OMP to one thread per process so workers don't oversubscribe cores.
 
 **Environment overrides** (no config edit needed): `SCRNA_BASE_DIR` (relocate the project
-root), `SCRNA_SAMPLE1..N` (sample paths), `SCRNA_SPECIES` (`human` / `bat` / `bat_wing`), `SCRNA_CONDITION`
+root), `SCRNA_SAMPLE1..N` (sample paths), `SCRNA_SPECIES` (`human` / `bat` / `bat_wing` / `cm`), `SCRNA_CONDITION`
 (`name=label,...`), `SCRNA_RESULTS_DIR` (point a step at an existing run dir to re-render its
 PDFs/reports without re-listing samples). Frozen-reference knobs: `SCRNA_REFERENCE_MODEL` (path
 to the model bundle; turns on `05r`/`08c`), `SCRNA_ANCHORS` (benchmark control samples, default

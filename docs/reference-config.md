@@ -64,7 +64,7 @@ Samples are set via environment variables (injected by `run_pipeline.sh`) or har
 | Env var | Type | Description |
 |---------|------|-------------|
 | `SCRNA_SAMPLE1` … `SCRNA_SAMPLEN` | path | Absolute paths to sample folders in order |
-| `SCRNA_SPECIES` | string | `human` (default) or `bat` or `bat_wing` |
+| `SCRNA_SPECIES` | string | `human` (default), `bat`, `bat_wing`, or `cm` |
 | `SCRNA_CONDITION` | string | Comma-separated `name=label` pairs for DEG grouping |
 | `SCRNA_BASE_DIR` | path | Overrides `BASE_DIR` — point outputs at a different root without editing `config.R` |
 | `SCRNA_RESULTS_DIR` | path | Point a step at an existing run directory instead of deriving one from the sample list. Also suppresses creation of per-sample `individual/` subdirectories |
@@ -319,8 +319,30 @@ if (length(SAMPLE_NAMES) == 3 && setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
 ```
 
 Adding or removing a sample silently disables the map and reverts to auto-annotation, which is the
-safe failure. `config.R` ships exactly one live map (bat wing T1/T2/T6, added because
-`HumanPrimaryCellAtlas` swaps fibroblast and smooth muscle in wing tissue); everything else is `NULL`.
+safe failure. Live maps: bat wing T1/T2/T6 in `config.R` (added because `HumanPrimaryCellAtlas`
+swaps fibroblast and smooth muscle in wing tissue), and the 7-sample H1 cardio cohort in
+`config_species_cm.R`; everything else is `NULL`.
+
+**Guard on `QC` too when the floor varies.** The cardio maps additionally test
+`isTRUE(QC$min_features == 1000)` (and `== 200` for the preserved earlier run), because the same
+samples cluster differently at a different QC floor. A `QC`-guarded map must live in the species
+overlay, not in `config.R`: `config.R` evaluates its map blocks before sourcing the overlays, so it
+would read the base `QC` value (regression guard T8). Use `isTRUE(x == n)`, not
+`identical(x, nL)` — `QC` values are doubles.
+
+### Splitting one mixed cluster (`CLUSTER_SUBCLUSTER_MAP`)
+
+```r
+CLUSTER_SUBCLUSTER_MAP <- list(cluster = "1", resolution = 0.2,
+  labels = c("0" = "Pluripotent", "1" = "Fibroblast", "2" = "Fibroblast", "3" = "Fibroblast", "4" = "Fibroblast"))
+```
+
+Optional; unset by default. Applied in step 05 right after `CLUSTER_CELLTYPE_MAP`: `FindSubCluster`
+re-clusters `cluster` on the SNN graph at `resolution`, stores the result in the
+`annot_subcluster` metadata column, and relabels that cluster's cells per subcluster. The cluster
+still needs an entry in `CLUSTER_CELLTYPE_MAP` (a placeholder is fine). A subcluster missing from
+`labels` stops step 05. Subcluster ids depend on the resolution and the graph, so re-curate after any
+upstream change. Keep it inside the same guard as the map it refines.
 
 Partial maps are supported: listed clusters get your label; any cluster not in the map falls back to SingleR.
 
@@ -392,11 +414,16 @@ Set via the `SCRNA_SPECIES` env var (injected by `run_pipeline.sh`):
 | `"human"` (default) | Standard PBMC settings |
 | `"bat"` | MonacoImmune reference, res=1.0, γδ T markers, bat-specific SUBTYPE_MARKERS, adjusted CONTAMINATION_TYPES |
 | `"bat_wing"` | Wing-tissue markers (fibroblast, keratinocyte, endothelial, pericyte, macrophage, melanocyte), `HumanPrimaryCellAtlas` reference, res=0.5, tissue `SUBTYPE_MARKERS`, `WOUND_MODULES` for step 11, `CONTAMINATION_TYPES` reduced to RBC/HSPC/Platelet |
+| `"cm"` | hESC/iPSC → cardiomyocyte differentiation (`config_species_cm.R`). `MARKERS` replaced by lineage panels (Cardiomyocyte, CM ventricular/atrial, Cardiac progenitor, Pluripotent, Fibroblast, Myofibroblast, Smooth Muscle, Pericyte, Endothelial, Epithelial, Epicardial, Hepatic/Endoderm, Proliferating); `HumanPrimaryCellAtlas` reference, which has **no cardiomyocyte label**, so a curated `CLUSTER_CELLTYPE_MAP` is expected; res 0.1–0.8, default 0.5; `CONTAMINATION_TYPES` Endothelial/Pericyte; `PARALLEL$merge_mem_gb` 40 |
 
 The `bat` overlay does not change `QC`. The `bat_wing` overlay raises `QC$max_features` to 8000 and
-`QC$max_counts` to 60000 (see [QC](#qc)); `max_percent_mt` stays at the base value of 20 for every
-species. Because step 01's cache key hashes `QC`, changing species between `bat` and `bat_wing`
-invalidates the step 01–03 cache for a sample.
+`QC$max_counts` to 60000 (see [QC](#qc)). The `cm` overlay sets `QC$max_features` 9000,
+`QC$max_counts` 70000 and `QC$min_features` 1000. The 1000 floor drops cells unevenly by day
+(D0 20.6%, D11 5.6%, D20 25.7%, D30 2.0%), so compare proportions with that in mind.
+`max_percent_mt` stays at the base value of 20 for every species. Because step 01's cache key hashes
+`QC`, switching species between any two with different `QC` invalidates the step 01–03 cache for a
+sample. cm's downstream trajectory is `pipeline/projects/cm/trajectory.R`; see
+`docs/cm_differentiation_readiness.md`.
 
 ---
 

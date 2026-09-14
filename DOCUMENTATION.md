@@ -54,7 +54,9 @@ The pipeline is a sequence of R scripts in `pipeline/`. Core steps (run by defau
 | 09 | `09_bootstrap_proportions.R` | Bootstrap-normalised proportion CIs + pairwise chi-squared |
 | 10 | `10_rarefaction.R` | Minimum-capture-depth rarefaction analysis |
 
-Bat-wing-specific downstream analysis (steps 11–14: wing DEGs, pathway enrichment, CellChat, trajectory) lives under `pipeline/projects/bat_wing/` and runs only in `bat_wing` species mode.
+Bat-wing-specific downstream analysis (steps 11–14: wing DEGs, pathway enrichment, CellChat, trajectory) lives under `pipeline/projects/bat_wing/` and runs only in `bat_wing` species mode. The `cm`
+(hESC/iPSC → cardiomyocyte) mode has a monocle3 trajectory at `pipeline/projects/cm/trajectory.R`,
+run by hand against a finished run dir; see `docs/cm_differentiation_readiness.md`.
 
 The sections below detail each core step.
 

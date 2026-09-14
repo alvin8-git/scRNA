@@ -26,9 +26,9 @@ past runs.
   `config.R` (pinned to the run dir via `SCRNA_RESULTS_DIR`) and uses `CELLTYPE_COLORS` / `QC`
   directly; regression guard T9. `build_report.sh` on a non-human run needs `SCRNA_SPECIES` set
   so the species QC overlay applies.
-- [ ] **`.combine_pdfs()` reimplemented four times** — once in `pipeline/pdf_helpers.R` and again,
-  independently, in each of `projects/bat_wing/11`–`14` (magick + pdftools). Collapse to the
-  shared helper.
+- [x] **`.combine_pdfs()` reimplemented four times** — fixed 2026-09-14: the private copies in
+  `projects/bat_wing/11`–`14` (which rasterised pages to 150-dpi images) are deleted; the steps
+  use the lossless `pdf_helpers.R` version via `config.R`. Regression guard T10.
 - [ ] **`08_comparison_report.R` is effectively single-dataset** — `qc_pairs` hardcodes
   DemoScRNA/H1/H2/H3 and the narrative captions cite fixed cell counts, unlike 07 and 08b which
   derive from `SAMPLE_NAMES`. Either generalise it or document it as a demo-only step.
@@ -45,14 +45,15 @@ Run: `Results/results_H1D01_7samples_filtered` (min_features 1000, 82,399 cells,
 - [ ] **D20 replicates disagree** on the Unknown fraction (H1D20_1 53% vs H1D20_2 23%); D20
   libraries are also shallow. Ask whether D20_1 was a different prep/viability.
 - [x] **Docs still call cluster 10 "Cardiac progenitor"** — fixed 2026-09-14 in both cm docs.
-- [ ] **Filter the Moran's I gene lists** (`trajectory/pseudotime_genes*.csv`) — ribosomal,
-  MALAT1 and lncRNA genes dominate the top; drop them and rank CM-branch genes by `morans_I`.
+- [x] **Filter the Moran's I gene lists** — fixed 2026-09-14: `trajectory.R` adds `r_pseudotime`
+  (direction) and `uninformative` columns and writes `pseudotime_genes*_filtered.csv`; applied to
+  the existing run's CSVs without re-running graph_test.
 - [ ] **No intermediate timepoints between D0 and D11** — MESP1/early mesoderm is unsampled, so
   early pseudotime rests on a few bridge cells. Note in any trajectory write-up.
 - [ ] **CellChat not installed** in `scrna_seurat` (needed for cell-cell signalling, e.g.
   epicardial → CM).
-- [ ] **Document the cm mode** — `CLAUDE.md` / `docs/reference-config.md` still list species as
-  bat | human | bat_wing; add `cm`, the `CLUSTER_SUBCLUSTER_MAP` hook, and `projects/cm/`.
+- [x] **Document the cm mode** — done 2026-09-14 in `CLAUDE.md`, `README.md`, `DOCUMENTATION.md`,
+  `docs/reference-config.md` (species row + QC, QC-guarded maps, `CLUSTER_SUBCLUSTER_MAP`).
 
 ### Office-hours architecture findings (2026-06-11) — ranked for implementation
 

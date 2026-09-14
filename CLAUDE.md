@@ -19,14 +19,14 @@ bash pipeline/setup_env.sh                       # create the conda env (mamba, 
 
 bash pipeline/run_pipeline.sh Samples/H1 Samples/H2        # full run, bundled human example data
 bash pipeline/run_pipeline.sh /path/A                      # one sample -> no integration
-bash pipeline/run_pipeline.sh bat /path/ES03 /path/ES12    # species keyword: bat | human | bat_wing
+bash pipeline/run_pipeline.sh bat /path/ES03 /path/ES12    # species keyword: bat | human | bat_wing | cm
 bash pipeline/run_pipeline.sh bat /path/A /path/B 05 06 07 # only these steps (resume from checkpoints)
 bash pipeline/run_pipeline.sh 07                           # steps only; samples come from config defaults
 bash pipeline/run_pipeline.sh --help
 ```
 
 Arg parsing is positional-agnostic: anything absolute / a directory / `./…` is a sample path, `bat`
-`human` `bat_wing` set species, `condition=…` exports `SCRNA_CONDITION`, `--no-report` skips the HTML,
+`human` `bat_wing` `cm` set species, `condition=…` exports `SCRNA_CONDITION`, `--no-report` skips the HTML,
 everything else is a step id. Valid steps: `01 02 03 04 05 06 06b 07 08 11 12 13 14`.
 
 Checks (there is no CI, no Makefile, no test framework):
@@ -47,6 +47,8 @@ bash pipeline/build_report.sh Results/results_A-B_filtered [--samples=A,B] [--ma
 SCRNA_RESULTS_DIR=Results/results_A-B_filtered Rscript pipeline/09_bootstrap_proportions.R
 SCRNA_RESULTS_DIR=Results/results_A-B_filtered Rscript pipeline/10_rarefaction.R
 SCRNA_SPECIES=bat Rscript pipeline/build_reference.R <ref_run_dir> --holdout=Aksh1,ES332
+SCRNA_SPECIES=cm SCRNA_RESULTS_DIR=Results/results_H1D01_7samples_filtered \
+  Rscript pipeline/projects/cm/trajectory.R cardiac   # or `cm` (Pluripotent + Cardiomyocyte only)
 ```
 
 ## Architecture
@@ -62,8 +64,11 @@ fallback. Changing pipeline behaviour almost always means editing `config.R`, no
 `config_species_bat.R`, which rewrites `MARKERS`, `ALL_MARKERS`, `CONTAMINATION_TYPES`, `SINGLER_REF`,
 `CLUSTER$resolutions`, `SUBTYPE_MARKERS`, `WOUND_MODULES` under `if (.species == "bat")` /
 `bat_wing`. `bat_wing` additionally raises `QC$max_features` (8000) and `QC$max_counts` (60000) for
-tissue-sized cells — the only overlay that touches `QC`, and it invalidates the 01–03 sample cache.
-`CELLTYPE_COLORS` is never overlaid; wing labels live in the base palette. Human is a no-op. Human *whole blood* has no keyword — set `SINGLER_REF <- "MonacoImmune"`
+tissue-sized cells. `config_species_cm.R` (`cm`, hESC/iPSC → cardiomyocyte) replaces `MARKERS`
+wholesale with lineage-named panels, sets `QC$max_features` 9000 / `max_counts` 70000 /
+`min_features` 1000, `PARALLEL$merge_mem_gb` 40, and holds the curated cardio cluster maps. Any
+`QC` change invalidates the 01–03 sample cache. `CELLTYPE_COLORS` is never overlaid; wing and CM
+labels live in the base palette. Human is a no-op. Human *whole blood* has no keyword — set `SINGLER_REF <- "MonacoImmune"`
 by hand.
 
 **Run directory.** `RESULTS_DIR` = `Results/results_<sample1>-<sample2>-…_<filtered|raw>`, derived
@@ -104,7 +109,9 @@ Design notes: `docs/frozen_reference_scope.md`, `docs/howto-frozen-reference.md`
 **Additive stages never fail a run.** `run_pipeline.sh` runs `05r` (after 05), `08b` (HTML), and
 `08c` outside the step loop, logging a warning instead of exiting on error, and they self-skip when
 `REFERENCE_MODEL` is unset or `integrated_annotated.rds` is absent. Keep that property when editing
-them. Bat-wing-only steps 11–14 live in `pipeline/projects/bat_wing/` and source the core `config.R`.
+them. Bat-wing-only steps 11–14 live in `pipeline/projects/bat_wing/` and source the core `config.R`;
+`pipeline/projects/cm/trajectory.R` (monocle3) is the cm equivalent, run by hand against a finished
+run dir, not wired into `run_pipeline.sh`.
 
 **Parallelism.** `PARALLEL$workers` (steps 01–03, ~8 GB each) vs `PARALLEL$merge_workers` (04–06b,
 ~16 GB each), capped by a `MemAvailable` governor. `run_pipeline.sh` pins BLAS/OMP/MKL to 1 thread to
@@ -121,9 +128,15 @@ of re-deriving one from samples), `SCRNA_REFERENCE_MODEL` (enables 05r/08c), `SC
 
 - With no `SCRNA_SAMPLE*` set, `config.R` silently falls back to hardcoded `H1`/`H2` + human.
 - `CLUSTER_CELLTYPE_MAP` must stay `NULL` for a new dataset — cluster numbers are not stable across
-  runs. The archived maps at the bottom of `config.R` are commented "do NOT activate". The one live
-  map (bat wing T1/T2/T6) is wrapped in a `setequal(SAMPLE_NAMES, ...)` guard so it cannot leak into
-  a run with different cluster numbering; copy that pattern rather than assigning the map at top level.
+  runs. The archived maps at the bottom of `config.R` are commented "do NOT activate". The live maps
+  (bat wing T1/T2/T6 in `config.R`; the H1 cardio cohort in `config_species_cm.R`) are wrapped in a
+  `setequal(SAMPLE_NAMES, ...)` guard so they cannot leak into a run with different cluster numbering;
+  copy that pattern rather than assigning the map at top level. A map guarded on a `QC` value too
+  must live in the species overlay, because `config.R` sources the overlays after its own map
+  blocks, so `QC` isn't final there yet (regression guard T8).
+- `CLUSTER_SUBCLUSTER_MAP` (`list(cluster=, resolution=, labels=)`) splits one mixed cluster in step 05
+  after `CLUSTER_CELLTYPE_MAP` is applied: `FindSubCluster` on the SNN graph, then a label per
+  subcluster. An unlabelled subcluster is a hard `stop()` — re-curate rather than guess.
 - Unmapped clusters in a partial `CLUSTER_CELLTYPE_MAP` fall back to **per-cell** SingleR labels, not
   the cluster majority (`05_annotate.R:379`) — so a map that lists only the clusters you want to fix
   will shatter every cluster you left out. Map all of them or none.
