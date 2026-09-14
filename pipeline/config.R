@@ -490,6 +490,7 @@ CELLTYPE_COLORS <- c(
   "Cardiomyocyte (atrial)"        = "#E67E22",
   "Cardiomyocyte (immature)"      = "#F1948A",
   "Cardiac progenitor"            = "#9B59B6",
+  "Proepicardial"                 = "#8E44AD",
   "Pluripotent"                   = "#5B2C6F",
   "Fibroblast (activated)"        = "#7D6608",
   "Epicardial"                    = "#16A085",

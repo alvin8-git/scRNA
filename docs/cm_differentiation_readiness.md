@@ -120,7 +120,11 @@ Endothelial. On this data also expect:
 
 1. **Pluripotent / residual undifferentiated** — dominates D0; any persistence past D11 is a
    quality signal
-2. **Cardiac progenitor** (NKX2-5⁺/ISL1⁺/TBX5⁺) — a distinct transient D11 state
+2. **Cardiac progenitor** (NKX2-5⁺/ISL1⁺/TBX5⁺) — expected as a transient D11 state, but **no
+   such cluster was found** in the min_features 1000 run. The cluster first called this
+   (cluster 10) is proepicardial — see §6.4
+2b. **Proepicardial** (TBX18⁺/WT1⁺/TCF21⁺/TBX5⁺/LHX2⁺/SFRP5⁺, GATA4-high, NKX2-5 low) — 50% D11,
+   persists to D30; sits at the tip of the stromal branch
 3. **Cardiomyocyte (atrial) vs (ventricular) vs (immature)** — the figures lump these; the
    data says atrial/immature with essentially no ventricular
 4. **Epicardial** (WT1⁺/ALDH1A2⁺) — rising to D30
@@ -261,6 +265,65 @@ as a range (4.4% definitive, up to ~29% if cluster 0 is real).
 
 ---
 
+## 6.4 min_features 1000 re-run, relabels, and trajectory (2026-09-14)
+
+Option 1 above was taken: `QC$min_features` 1000 (in `config_species_cm.R`). The run now has
+82,399 cells in 20 clusters; the 200-floor run is preserved as
+`Results/results_H1D01_7samples_filtered_minfeat200/`. Cluster numbers differ between the two,
+so the §6.3 cluster numbers refer to the old run only.
+
+**Curation changes in the 1000 run**
+
+- **Cluster 0 is still there** (17,581 cells, culture-average soup: cargo genes without identity
+  TFs) and is labelled `Unknown`. Raising the floor did not dissolve it; SoupX on raw matrices
+  remains the fix.
+- **Cluster 1 was mixed** and is split with the new `CLUSTER_SUBCLUSTER_MAP` hook in
+  `05_annotate.R` (FindSubCluster at res 0.2): 3,530 POU5F1-high cells (87% D0) → Pluripotent,
+  the rest → Fibroblast. D0 went from 76.2% to **96.1% pluripotent** (replicates 95.9 / 96.3).
+- **Cluster 10 is Proepicardial, not Cardiac progenitor.** % of cells expressing:
+
+| | TBX18 | WT1 | TCF21 | TBX5 | GATA4 | PDGFRA | NKX2-5 |
+|---|---|---|---|---|---|---|---|
+| cluster 10 | 17 | 25 | 27 | 38 | 88 | 49 | **13** |
+| cardiomyocytes (cl 7) | 3 | 4 | 4 | 35 | 63 | 19 | 38 |
+
+  Top markers are C7, SCN7A, LHX2, SFRP5, TBX18, HGF, COLEC11 — a proepicardial /
+  epicardium-precursor programme. 50% of it is D11 but it persists to D30.
+
+**Trajectory** — `pipeline/projects/cm/trajectory.R` (monocle3), outputs in `trajectory/`.
+
+- `trajectory.R cardiac` (24,435 cells; Pluripotent, Cardiomyocyte, Proepicardial, Epicardial,
+  Fibroblast, Myofibroblast; each type capped at 6,000): rooted on D0 pluripotent cells, it gives
+  **two fates** — a cardiomyocyte branch, and a stromal branch that splits into epicardial and
+  proepicardial. Median scaled pseudotime per sample rises with day and replicates agree
+  (D0 0.15/0.15, D11 0.64, D20 0.64/0.71, D30 0.72/0.72). Pseudotime is distance from the root
+  along the tree, so values on different branches are not comparable.
+- `trajectory.R cm` (Pluripotent + Cardiomyocyte, 9,310 cells): the two populations are separate
+  islands joined by one forced graph edge — **no cells bridge D0 and D11**, because nothing
+  between those days was sampled (MESP1 is flat throughout). Early pseudotime is not meaningful.
+
+**Pseudotime is not a maturation axis here; the MYH7 fraction is.** Within cardiomyocytes, D11
+cells get the *highest* pseudotime (median 36.9 vs 32.6 at D20 and 34.5 at D30). D11
+cardiomyocytes are sequenced ~2× deeper (median 5,752 UMI vs 2,512–3,502), so they show more of
+every gene and the graph orders them by expression amplitude (pseudotime vs genes detected,
+Spearman −0.28). Within-cell isoform ratios cancel depth:
+
+| per sample | D11 | D20_1 | D20_2 | D30_1 | D30_2 |
+|---|---|---|---|---|---|
+| MYH7 / (MYH6 + MYH7) | 0.01 | 0.25 | 0.25 | 0.39 | 0.41 |
+| TNNI3 / (TNNI1 + TNNI3) | 0.06 | 0.04 | 0.04 | 0.04 | 0.03 |
+| MYL2 / (MYL2 + MYL7) | 0.00 | 0.00 | 0.00 | 0.00 | 0.01 |
+
+- **MYH6 → MYH7 switch** is clean, stepwise, and replicate-tight: genuine maturation D11 → D30.
+- **No TNNI1 → TNNI3 switch** — the cardiomyocytes are still fetal-like at D30.
+- **MYL2 absent** — not committed ventricular cardiomyocytes, consistent with §3.
+
+Use the cardiac tree for lineage structure and the MYH7 fraction for maturation. The Moran's I
+gene lists (`pseudotime_genes*.csv`, ~15–16k genes at q < 0.05) are dominated by ribosomal
+genes, MALAT1 and lncRNAs; filter those and rank by `morans_I` before interpreting.
+
+---
+
 ## 7. Run
 
 ```bash
@@ -275,7 +338,10 @@ Output: `Results/results_H1D01_7samples_filtered/` — 6 PDFs plus the interacti
 the same deliverable shape as `results_ES01_8samples_filtered`.
 
 Steps 09 (bootstrap proportions) and 10 (rarefaction) matter more than usual here because of
-§2.1 and should be run against the finished run dir. A trajectory analysis is genuinely
-appropriate for this design, unlike the blood cohorts, but steps 11–14 currently live under
-`pipeline/projects/bat_wing/` with wing-specific labels and would need a `projects/cm/`
-sibling.
+§2.1 and should be run against the finished run dir. Trajectory (§6.4) runs against the
+finished run dir too:
+
+```bash
+SCRNA_SPECIES=cm SCRNA_RESULTS_DIR=Results/results_H1D01_7samples_filtered \
+  Rscript pipeline/projects/cm/trajectory.R cardiac   # or: cm
+```

@@ -152,7 +152,8 @@ So you can diff against yours. Detection rates are from your data (D0 → D11 �
 | Cardiomyocyte | TNNT2, TTN, ACTC1, ACTN2, **MYL7**, MYL4, **TNNI1**, MYH6, DES, MYBPC3 | MYL7 (89.8%) and TNNI1 (72.5%) discriminate better than MYL4 (54.5%) |
 | CM (ventricular) | MYL2, IRX4, MYH7, HEY2 | included so the near-absence is visible |
 | CM (atrial) | NPPA, NR2F2, SLN, GJA5, KCNJ3 | SLN peaks at D20 (34.9%) then falls to 4.7% |
-| Cardiac progenitor | NKX2-5, ISL1, TBX5, GATA4, MESP1, KDR | D11-specific |
+| Cardiac progenitor | NKX2-5, ISL1, TBX5, GATA4, MESP1, KDR | D11-specific detection, but no distinct progenitor cluster in the min_features 1000 run |
+| Proepicardial | TBX18, WT1, TCF21, TBX5, LHX2, SFRP5, GATA4 | NKX2-5 only 13%; 50% D11, persists to D30 (added 2026-09-14) |
 | Pluripotent | POU5F1, SOX2, NANOG, LIN28A, DNMT3B | POU5F1 (89.2% at D0) far more sensitive than NANOG (27.4%) |
 | Fibroblast | COL1A1, COL3A1, DCN, LUM, POSTN, TCF21, CCDC80 | ⚠️ COL1A1/COL3A1/LUM/DCN all at 99–100% detection — soup-compromised; POSTN and TCF21 are the reliable ones |
 | Myofibroblast | ACTA2, TAGLN, FN1, POSTN | |

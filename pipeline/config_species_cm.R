@@ -250,7 +250,10 @@ if (.species == "cm") {
       # --- cardiac lineage ---------------------------------------------------------
       "7"  = "Cardiomyocyte",      # NKX2-5 0.64, MEF2C 0.62, GATA4 1.11, TTN 2.72,
                                    # ACTC1 2.06, TNNT2 1.12 + MYH6/MYOCD/SLC8A1/LDB3/CMYA5
-      "10" = "Cardiac progenitor", # GATA4/TECRL/ITGA8/LIX1/CCDC3/DUSP6; 50% D11
+      "10" = "Proepicardial",      # was "Cardiac progenitor". % cells: TBX18 17, WT1 25, TCF21 27,
+                                   # TBX5 38, GATA4 88, PDGFRA 49 + LHX2/SFRP5/C7/HGF/COLEC11
+                                   # top markers; NKX2-5 only 13 (vs 38 in CM cl7). Trajectory
+                                   # places it at the tip of the stromal branch, not before CMs.
       # --- epicardium / mesothelium ------------------------------------------------
       "3"  = "Epicardial",         # UPK3B/SFRP2/PTGDS/SLPI/NPY/SLC34A2
       "11" = "Epicardial",         # same programme (SPRR2F/SLPI/UPK3B/SLC7A7)

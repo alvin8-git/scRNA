@@ -22,16 +22,37 @@ past runs.
   `CD14+ Mono`. SingleR called only 164 neutrophils run-wide. Reassignment moves T5 from 32.9%
   monocyte to ~18% neutrophil + ~15% monocyte, matching the raw signal (S100A8 in 99.9% of
   barcodes). Same decision as above. Related: [ES17 was the inverse case](docs/bat_neutrophil_literature.md).
-- [ ] **`08b_html_report.R` hard-copies config values** — it re-declares `CELLTYPE_COLORS` and
-  `QC_THRESH` locally instead of sourcing `config.R`. A palette or threshold change in `config.R`
-  silently fails to reach the HTML report. Not covered by the "grep `docs/` for the old name"
-  gotcha, because the drift is code-to-code.
+- [x] **`08b_html_report.R` hard-copies config values** — fixed 2026-09-14: 08b now sources
+  `config.R` (pinned to the run dir via `SCRNA_RESULTS_DIR`) and uses `CELLTYPE_COLORS` / `QC`
+  directly; regression guard T9. `build_report.sh` on a non-human run needs `SCRNA_SPECIES` set
+  so the species QC overlay applies.
 - [ ] **`.combine_pdfs()` reimplemented four times** — once in `pipeline/pdf_helpers.R` and again,
   independently, in each of `projects/bat_wing/11`–`14` (magick + pdftools). Collapse to the
   shared helper.
 - [ ] **`08_comparison_report.R` is effectively single-dataset** — `qc_pairs` hardcodes
   DemoScRNA/H1/H2/H3 and the narrative captions cite fixed cell counts, unlike 07 and 08b which
   derive from `SAMPLE_NAMES`. Either generalise it or document it as a demo-only step.
+
+### Cardiomyocyte (cm) differentiation — H1 D0/D11/D20/D30 (2026-09-14)
+
+Run: `Results/results_H1D01_7samples_filtered` (min_features 1000, 82,399 cells, 20 clusters).
+
+- [x] **Commit the Proepicardial relabel + `projects/cm/trajectory.R`** — done 2026-09-14;
+  findings in `docs/cm_differentiation_readiness.md` §6.4.
+- [ ] **Ambient RNA: 23% of cells are `Unknown`** (cluster 0 = culture-average soup, cargo genes
+  without identity TFs). Real fix is SoupX, which needs the raw (unfiltered) matrices —
+  `Samples/Cardio` ships only `filter_matrix`. Ask the data owner.
+- [ ] **D20 replicates disagree** on the Unknown fraction (H1D20_1 53% vs H1D20_2 23%); D20
+  libraries are also shallow. Ask whether D20_1 was a different prep/viability.
+- [x] **Docs still call cluster 10 "Cardiac progenitor"** — fixed 2026-09-14 in both cm docs.
+- [ ] **Filter the Moran's I gene lists** (`trajectory/pseudotime_genes*.csv`) — ribosomal,
+  MALAT1 and lncRNA genes dominate the top; drop them and rank CM-branch genes by `morans_I`.
+- [ ] **No intermediate timepoints between D0 and D11** — MESP1/early mesoderm is unsampled, so
+  early pseudotime rests on a few bridge cells. Note in any trajectory write-up.
+- [ ] **CellChat not installed** in `scrna_seurat` (needed for cell-cell signalling, e.g.
+  epicardial → CM).
+- [ ] **Document the cm mode** — `CLAUDE.md` / `docs/reference-config.md` still list species as
+  bat | human | bat_wing; add `cm`, the `CLUSTER_SUBCLUSTER_MAP` hook, and `projects/cm/`.
 
 ### Office-hours architecture findings (2026-06-11) — ranked for implementation
 
