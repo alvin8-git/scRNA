@@ -43,6 +43,13 @@ integ_dir <- file.path(run_dir, "integrated")
 run_name  <- sub("^results_", "", basename(run_dir))
 run_name  <- sub("_filtered$", "", run_name)
 
+# CELLTYPE_COLORS and QC come from config.R, never local copies: the copies drifted (new cell
+# types fell back to arbitrary colours; species QC overlays such as cm never reached the QC
+# scatters). Pin config to this run dir so it doesn't derive a default H1/H2 one. Species comes
+# from SCRNA_SPECIES (run_pipeline.sh exports it; set it by hand for build_report.sh on a non-human run).
+Sys.setenv(SCRNA_RESULTS_DIR = run_dir)
+source(file.path(.pipeline_dir, "config.R"))
+
 max_cells   <- as.integer(getflag("max-cells", "6000"))
 want_samples <- getflag("samples", NULL)
 if (!is.null(want_samples)) want_samples <- trimws(strsplit(want_samples, ",")[[1]])
@@ -156,17 +163,8 @@ for (cc in c("nFeature_RNA","nCount_RNA","percent.mt","doublet_score"))
   if (cc %in% names(cells_plot)) cells_plot[[cc]] <- round(cells_plot[[cc]], 3)
 msg("plotting frame: %d cells (cap %d/sample)", nrow(cells_plot), max_cells)
 
-# canonical cell-type colours (copied from pipeline/config.R CELLTYPE_COLORS) so the
-# report matches Overall_Report.pdf exactly; unknown types fall back to a tableau ramp.
-CELLTYPE_COLORS <- c(
-  "CD4 T"="#E64B35","CD4 T (naive)"="#E64B35","CD4 T (memory)"="#FF7043","CD4 T (effector)"="#FF8A65",
-  "CD8 T"="#4DBBD5","CD8 T (naive)"="#6ACDE6","CD8 T (memory)"="#3A8BA5","CD8 T (effector)"="#1D6680",
-  "Treg"="#FF7F0E","γδ T"="#FFC107","NKT"="#17BECF","NK"="#00A087",
-  "B cell"="#3C5488","B cell (naive)"="#3C5488","B cell (memory)"="#5C74A8","Plasma"="#7B4F9E",
-  "Monocyte"="#F39B7F","CD14+ Mono"="#F39B7F","FCGR3A+ Mono"="#8491B4",
-  "Neutrophil"="#E377C2","DC"="#91D1C2","cDC1"="#70BFB0","cDC2"="#A8E6D8","pDC"="#4FA090","Platelet"="#DC0000",
-  "RBC"="#A52A2A","HSPC"="#8C564B","Basophil"="#B5B000","Eosinophil"="#F4A460","Mast cell"="#9400D3",
-  "Endothelial"="#636363","Epithelial"="#969696","Fibroblast"="#BDBDBD","Smooth Muscle"="#D9D9D9","Unknown"="#B09C85")
+# canonical cell-type colours = config.R CELLTYPE_COLORS (sourced above), so the report matches
+# the PDFs; types missing from the palette fall back to a tableau ramp.
 PAL_fallback <- c("#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1",
                   "#ff9da7","#9c755f","#bab0ac","#86bcb6","#d37295","#fabfd2","#8cd17d","#499894")
 ctlev <- sort(unique(c(cells_plot$cell_type, cells_plot$cell_type_denovo)))
@@ -176,9 +174,8 @@ if (any(miss)) PAL[miss] <- rep(PAL_fallback, length.out = sum(miss))
 names(PAL) <- ctlev
 PAL["Unassigned"] <- "#B0B0B0"
 
-# QC acceptance thresholds (pipeline/config.R QC list) — for the per-sample QC scatters
-QC_THRESH <- list(min_features = 200, max_features = 5000,
-                  min_counts = 500, max_counts = 25000, max_percent_mt = 20)
+# QC acceptance thresholds for the per-sample QC scatters — config.R QC, species overlay applied
+QC_THRESH <- QC
 
 # Overview "HVG" count = genes whose vst standardized variance exceeds this (more meaningful
 # than reporting the fixed top-2000 selection). The HVG plot draws a dashed line here.

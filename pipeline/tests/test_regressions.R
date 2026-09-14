@@ -110,6 +110,18 @@ if (file.exists(f)) {
     fails <- c(fails, "cm CLUSTER_CELLTYPE_MAP guard is missing its QC$min_features term (cluster numbering depends on the QC floor)")
 }
 
+# Regression T9: 08b_html_report.R must take CELLTYPE_COLORS and QC thresholds from config.R,
+# not local copies. The copies drifted silently: cm cell types (Pluripotent, Epicardial,
+# Proepicardial, ...) got fallback colours in the HTML while the PDFs used the palette, and the
+# QC scatters drew human thresholds on a cm run (min_features 200 vs the overlay's 1000).
+f <- file.path(.pipeline, "08b_html_report.R")
+if (file.exists(f)) {
+  .code <- grep("^\\s*#", readLines(f, warn = FALSE), value = TRUE, invert = TRUE)
+  if (any(grepl("CELLTYPE_COLORS\\s*<-|QC_THRESH\\s*<-\\s*list\\(", .code)) ||
+      !any(grepl('source\\(.*"config\\.R"', .code)))
+    fails <- c(fails, "08b_html_report.R re-declares CELLTYPE_COLORS/QC_THRESH instead of sourcing config.R")
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)
