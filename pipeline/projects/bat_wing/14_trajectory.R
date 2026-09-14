@@ -8,7 +8,6 @@
 suppressPackageStartupMessages({
   library(monocle3); library(Seurat); library(SeuratWrappers)
   library(dplyr); library(ggplot2); library(patchwork)
-  library(pdftools); library(magick)
 })
 .pipeline_dir <- {
   args <- commandArgs(trailingOnly = FALSE)
@@ -18,16 +17,6 @@ suppressPackageStartupMessages({
 source(file.path(dirname(dirname(.pipeline_dir)), "config.R"))  # core config is two dirs up (pipeline/)
 
 dir.create(DIRS$trajectory, showWarnings = FALSE, recursive = TRUE)
-
-.combine_pdfs <- function(paths, out) {
-  paths <- paths[file.exists(paths)]
-  if (length(paths) == 0) return(invisible(NULL))
-  imgs <- lapply(paths, function(p) {
-    n <- tryCatch(pdftools::pdf_length(p), error = function(e) 1L)
-    lapply(seq_len(n), function(i) magick::image_read_pdf(p, pages = i, density = 150))
-  })
-  magick::image_write(magick::image_join(unlist(imgs, recursive = FALSE)), out, format = "pdf")
-}
 
 rds_path <- file.path(DIRS$integrated, "integrated_annotated.rds")
 if (!file.exists(rds_path))

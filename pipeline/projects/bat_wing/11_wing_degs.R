@@ -7,7 +7,7 @@
 
 suppressPackageStartupMessages({
   library(Seurat); library(dplyr); library(ggplot2); library(patchwork)
-  library(ggrepel); library(pdftools); library(magick)
+  library(ggrepel)
 })
 
 .pipeline_dir <- {
@@ -23,17 +23,6 @@ if (length(CONDITION_LEVELS) < 2) {
 }
 
 dir.create(DIRS$differential, showWarnings = FALSE, recursive = TRUE)
-
-.combine_pdfs <- function(paths, out) {
-  paths <- paths[file.exists(paths)]
-  if (length(paths) == 0) return(invisible(NULL))
-  imgs <- lapply(paths, function(p) {
-    n <- tryCatch(pdftools::pdf_length(p), error = function(e) 1L)
-    lapply(seq_len(n), function(i) magick::image_read_pdf(p, pages = i, density = 150))
-  })
-  all_imgs <- unlist(imgs, recursive = FALSE)
-  magick::image_write(magick::image_join(all_imgs), out, format = "pdf")
-}
 
 # --- Load annotated object ---------------------------------------------------
 rds_path <- file.path(DIRS$integrated, "integrated_annotated.rds")

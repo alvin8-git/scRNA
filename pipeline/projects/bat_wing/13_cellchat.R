@@ -7,7 +7,7 @@
 
 suppressPackageStartupMessages({
   library(CellChat); library(Seurat); library(dplyr)
-  library(ggplot2); library(patchwork); library(pdftools); library(magick)
+  library(ggplot2); library(patchwork)
 })
 .pipeline_dir <- {
   args <- commandArgs(trailingOnly = FALSE)
@@ -21,16 +21,6 @@ if (length(CONDITION_LEVELS) < 2) {
   quit(save = "no", status = 0)
 }
 dir.create(DIRS$cellchat, showWarnings = FALSE, recursive = TRUE)
-
-.combine_pdfs <- function(paths, out) {
-  paths <- paths[file.exists(paths)]
-  if (length(paths) == 0) return(invisible(NULL))
-  imgs <- lapply(paths, function(p) {
-    n <- tryCatch(pdftools::pdf_length(p), error = function(e) 1L)
-    lapply(seq_len(n), function(i) magick::image_read_pdf(p, pages = i, density = 150))
-  })
-  magick::image_write(magick::image_join(unlist(imgs, recursive = FALSE)), out, format = "pdf")
-}
 
 rds_path <- file.path(DIRS$integrated, "integrated_annotated.rds")
 if (!file.exists(rds_path))

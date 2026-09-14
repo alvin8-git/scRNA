@@ -9,7 +9,7 @@
 
 suppressPackageStartupMessages({
   library(clusterProfiler); library(org.Hs.eg.db)
-  library(ggplot2); library(dplyr); library(pdftools); library(magick)
+  library(ggplot2); library(dplyr)
 })
 
 .pipeline_dir <- {
@@ -20,17 +20,6 @@ suppressPackageStartupMessages({
 source(file.path(dirname(dirname(.pipeline_dir)), "config.R"))  # core config is two dirs up (pipeline/)
 
 dir.create(DIRS$pathways, showWarnings = FALSE, recursive = TRUE)
-
-.combine_pdfs <- function(paths, out) {
-  paths <- paths[file.exists(paths)]
-  if (length(paths) == 0) return(invisible(NULL))
-  imgs <- lapply(paths, function(p) {
-    n <- tryCatch(pdftools::pdf_length(p), error = function(e) 1L)
-    lapply(seq_len(n), function(i) magick::image_read_pdf(p, pages = i, density = 150))
-  })
-  magick::image_write(magick::image_join(unlist(imgs, recursive = FALSE)),
-                      out, format = "pdf")
-}
 
 # Bar chart from enrichResult — does not require enrichplot/ggtree
 .enrich_barplot <- function(enrich_obj, title, n = 15) {

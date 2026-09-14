@@ -122,6 +122,15 @@ if (file.exists(f)) {
     fails <- c(fails, "08b_html_report.R re-declares CELLTYPE_COLORS/QC_THRESH instead of sourcing config.R")
 }
 
+# Regression T10: .combine_pdfs() is defined only in pdf_helpers.R (sourced by config.R). The
+# bat_wing project steps 11-14 each carried a private copy that rasterised every page to a
+# 150-dpi image via magick, shadowing the shared helper, which merges PDFs losslessly.
+.def <- Filter(function(f) basename(f) != "pdf_helpers.R" &&
+                 any(grepl("^\\s*\\.combine_pdfs\\s*<-\\s*function", readLines(f, warn = FALSE))),
+               list.files(.pipeline, pattern = "\\.R$", recursive = TRUE, full.names = TRUE))
+if (length(.def))
+  fails <- c(fails, paste0(".combine_pdfs() redefined outside pdf_helpers.R: ", paste(basename(unlist(.def)), collapse = ", ")))
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)
