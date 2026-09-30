@@ -299,6 +299,52 @@ if (.species == "cm") {
     )
   }
 
+  # --- SoupX-corrected cohort (*_sx), curated 2026-09-23 -----------------------
+  # Same 7 libraries after SoupX adjustCounts (rho 0.076-0.673; H1D20_1 lost 67.3% of
+  # counts and 76.9% of its cells, confirming it was ambient-dominated). Correction
+  # re-clusters the data, so the uncorrected map above MUST NOT be reused: different
+  # sample names keep this block and that one mutually exclusive.
+  # Curated from per-cluster detection rates (22 clusters, 61,697 cells).
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
+      setequal(SAMPLE_NAMES, c("H1D0_1_sx", "H1D0_2_sx", "H1D11_2_sx", "H1D20_1_sx",
+                               "H1D20_2_sx", "H1D30_1_sx", "H1D30_2_sx"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      # --- pluripotent: POU5F1/SOX2/LIN28A/L1TD1 high, D0-dominant ---------------
+      "6"  = "Pluripotent",      # POU5F1 82 SOX2 68 L1TD1 77; 94% D0
+      "8"  = "Pluripotent",      # POU5F1 86 SOX2 81 LIN28A 88; 87% D0
+      "7"  = "Pluripotent",      # POU5F1 78 SOX2 54; 79% D0
+      "4"  = "Pluripotent",      # POU5F1 31 SOX2 26; 76% D0, lower content (1,973 genes)
+      # --- cardiomyocyte ----------------------------------------------------------
+      "9"  = "Cardiomyocyte",    # TTN 93 MYL7 83 MYL4 72 MYH6 68 ACTC1 68 TNNT2 61,
+                                 # NKX2-5 41 MEF2C 44 TBX5 37 GATA4 66; 47% D11
+      # --- proepicardial: TBX18/WT1/TBX5/SFRP5/LHX2 with GATA4, low NKX2-5 -------
+      "16" = "Proepicardial",    # GATA4 91 TBX5 45 WT1 27 SFRP5 23 LHX2 20 TBX18 17
+      "14" = "Proepicardial",    # GATA4 69 TBX5 29 TBX18 27 WT1 26 SFRP5 43 UPK3B 30
+      # --- epicardium / mesothelium ----------------------------------------------
+      "0"  = "Epicardial",       # UPK3B 62 with COL1A1 93 DCN 91 POSTN 60 KDR 62
+      # --- stromal ----------------------------------------------------------------
+      "5"  = "Myofibroblast",    # ACTA2 76 TAGLN 78 on COL1A1 99 LUM 97 PDGFRB 54
+      "10" = "Fibroblast",       # PDGFRA 60 PDGFRB 53 TCF21 31 LUM 92 DCN 73
+      "17" = "Fibroblast",       # PDGFRA 47 PDGFRB 50 TCF21 34 GATA4 77 COL1A1 98
+      "3"  = "Fibroblast",       # COL1A1 88 COL3A1 92 LUM 82 DCN 74 POSTN 48
+      "11" = "Fibroblast",       # COL1A1 76 DCN 61 LUM 62 PDGFRB 35
+      # --- hepatic endoderm: definitive TFs, not cargo alone ----------------------
+      "13" = "Hepatic/Endoderm", # FOXA2 75 HNF4A 50 HHEX 35 ONECUT1 25, TTR 96 APOA1 93
+      "12" = "Hepatic/Endoderm", # FOXA2 64 HHEX 47 ONECUT1 42 HNF4A 41, EPCAM 65
+      "21" = "Hepatic/Endoderm", # FOXA2 94 HHEX 69 ONECUT1 50; n=54, cycling, 100% D11
+      # --- other ------------------------------------------------------------------
+      "18" = "Endothelial",      # CDH5 75 KDR 85 PECAM1 58
+      "15" = "Epithelial",       # EPCAM 75 GABRP 54 CLDN4 55 KRT8 90
+      "2"  = "Proliferating",    # TOP2A 90 MKI67 67 (POU5F1 30 — cycling pluripotent)
+      # --- unresolved: low content + secreted cargo, no identity TFs --------------
+      "1"  = "Unknown",          # 1,151 genes / 2,155 UMI (lowest); AFP 88 ALB 69 with
+                                 # COL1A1 95 LUM 96 MYL7 75 — cargo without identity
+      "20" = "Unknown",          # 1,207 genes / 2,393 UMI; AFP 78 ALB 65; n=121
+      "19" = "Unknown"           # n=212, 100% D30; MYL7 99 ACTC1 81 AND AFP 100 ALB 99
+                                 # — CM markers and hepatic cargo together; likely doublets
+    )
+  }
+
   # ---- CAVEAT recorded in config so it travels with the analysis -------------
   # COL1A1 (100.0%), COL3A1 (100.0%), LUM (99.8%), DCN (99.1%) and AFP (99.4%) are
   # detected in essentially EVERY cell at D30. Near-universal detection of secreted /
