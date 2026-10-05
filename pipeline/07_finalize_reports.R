@@ -22,11 +22,30 @@
 source(file.path(.pipeline_dir, "config.R"))
 
 # Re-render safety: SCRNA_RESULTS_DIR points at a finished run, but without SCRNA_SAMPLE* env vars
-# config falls back to the H1/H2 SAMPLE_NAMES default. Recover the real sample list from the run-dir
-# name (results_<s1>-<s2>-..._filtered) so the per-sample Overall_report sections resolve correctly.
-if (nzchar(Sys.getenv("SCRNA_RESULTS_DIR"))) {
-  .bn <- sub("_(filtered|raw)$", "", sub("^results_", "", basename(RESULTS_DIR)))
-  if (nzchar(.bn)) SAMPLE_NAMES <- strsplit(.bn, "-", fixed = TRUE)[[1]]
+# config falls back to the H1/H2 SAMPLE_NAMES default, so the per-sample Overall_report sections
+# would resolve against the wrong names.
+#
+# Do NOT recover the names from the run-dir name: >4 samples collapse to
+# results_<first>_<N>samples_filtered (Windows MAX_PATH), which carries no sample list. Splitting
+# that on "-" yields one bogus token ("PBMC5KAQL_6samples"), every per-sample file.exists() fails,
+# and .add_page() silently drops all QC / doublet / HVG pages. Worse, the old block fired whenever
+# SCRNA_RESULTS_DIR was set — which run_pipeline.sh always exports (regression T3) — so it clobbered
+# a correct SAMPLE_NAMES on every run. Observed: 13-page Overall_report instead of 35.
+#
+# individual/<sample>/ is written by step 03 for every sample, so the run dir itself is the
+# authoritative list when the env vars are absent.
+if (!nzchar(Sys.getenv("SCRNA_SAMPLE1"))) {
+  .ind <- list.dirs(DIRS$individual, full.names = FALSE, recursive = FALSE)
+  .ind <- .ind[nzchar(.ind)]
+  if (length(.ind)) {
+    SAMPLE_NAMES <- .ind
+    message("  SAMPLE_NAMES recovered from ", DIRS$individual, ": ", paste(.ind, collapse = ", "))
+  } else {
+    warning("No SCRNA_SAMPLE* env vars and no individual/<sample>/ dirs — per-sample report ",
+            "pages will be skipped (SAMPLE_NAMES = ", paste(SAMPLE_NAMES, collapse = ", "), ")",
+            call. = FALSE)
+  }
+  rm(.ind)
 }
 
 combine <- function(inputs, output) {
