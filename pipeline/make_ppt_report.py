@@ -168,6 +168,50 @@ def metrics_slide(prs, samples, metrics, title):
     return s
 
 
+def summary_slide(prs, md: Path):
+    """Render a markdown bullets (+ optional pipe table) file onto one slide.
+
+    Conclusions are interpretive and run-specific, so they live in a file rather than in this
+    script — another flowcell supplies its own, or omits --summary entirely.
+    """
+    title, bullets, rows = "Summary", [], []
+    for line in md.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        if t.startswith("#"):
+            if not bullets and not rows:
+                title = t.lstrip("#").strip()
+        elif t.startswith(("-", "*")):
+            bullets.append(re.sub(r"\*\*(.+?)\*\*", r"\1", t[1:].strip()))
+        elif t.startswith("|"):
+            cells = [c.strip() for c in t.strip("|").split("|")]
+            if not all(set(c) <= set("-: ") for c in cells):      # skip the --- separator row
+                rows.append(cells)
+    s = add_slide(prs, title)
+    tb = s.shapes.add_textbox(Inches(0.45), Inches(1.25), Inches(12.4), Inches(3.0))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    for i, b in enumerate(bullets):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.text = "• " + b
+        p.font.size = Pt(11)
+        p.space_after = Pt(3)
+    if rows:
+        tbl = s.shapes.add_table(len(rows), len(rows[0]), Inches(0.45),
+                                 Inches(4.45), Inches(12.4),
+                                 Inches(0.26 * len(rows))).table
+        for r, row in enumerate(rows):
+            for c, val in enumerate(row):
+                tbl.cell(r, c).text = val
+        for row in tbl.rows:
+            row.height = Inches(0.26)
+            for c in row.cells:
+                c.margin_top = c.margin_bottom = Inches(0.01)
+                for p in c.text_frame.paragraphs:
+                    for run in p.runs:
+                        run.font.size = Pt(9)
+    return s
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", required=True, type=Path)
@@ -175,6 +219,8 @@ def main():
     ap.add_argument("--template", required=True, type=Path)
     ap.add_argument("--out", type=Path)
     ap.add_argument("--title", default=None)
+    ap.add_argument("--summary", type=Path,
+                    help="markdown file of findings bullets (+ optional table) for a summary slide")
     a = ap.parse_args()
 
     run = a.run_dir.resolve()
@@ -209,6 +255,12 @@ def main():
             sh.text_frame.text = datetime.date.today().strftime("%d %B %Y")
 
     metrics_slide(prs, samples, metrics, "Sequencing metrics")
+
+    if a.summary:
+        if a.summary.exists():
+            summary_slide(prs, a.summary)
+        else:
+            print(f"  MISSING: summary file not found: {a.summary}")
 
     # UMAPs: one PDF page per sample pair, already in run order once step 06 orders by SAMPLE_NAMES
     upath = run / UMAP_PDF
