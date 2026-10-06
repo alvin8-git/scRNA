@@ -298,6 +298,11 @@ message("\n--- Plot Set 6: Proportion bar charts ---")
 prop_df <- merged@meta.data %>%
   group_by(sample, cell_type) %>% summarise(n = n(), .groups = "drop") %>%
   group_by(sample) %>% mutate(prop = n / sum(n))
+# group_by() returns groups alphabetically, which would re-sort the samples on every composition
+# plot regardless of the order fixed above. Pin the factor to the run's sample order.
+prop_df$sample <- factor(as.character(prop_df$sample),
+                         levels = c(intersect(SAMPLE_NAMES, unique(as.character(prop_df$sample))),
+                                    setdiff(unique(as.character(prop_df$sample)), SAMPLE_NAMES)))
 
 # Stacked 100% bar: one bar per sample, no side legend (legend placed between panels)
 p_bar <- ggplot(prop_df, aes(x = sample, y = prop, fill = cell_type)) +
@@ -327,9 +332,16 @@ p_bar_legend <- cowplot::get_legend(
           legend.box       = "horizontal")
 )
 
-# Paginate: at most 3 samples per page
-.comp_samples  <- unique(prop_df$sample)
-.n_per_page    <- 3L
+# Every sample on one page. This used to paginate 3 samples per page, which meant no single
+# figure (and so no single slide) ever showed the whole cohort for either metric.
+# Take the factor LEVEL order, not unique() over the rows: prop_df rows are still in group_by()'s
+# alphabetical order, so unique() would hand the pages an alphabetical sample list and the
+# downstream factor(levels = .samps) would re-impose it.
+.comp_samples  <- {
+  if (is.factor(prop_df$sample)) levels(droplevels(prop_df$sample))
+  else unique(as.character(prop_df$sample))
+}
+.n_per_page    <- max(1L, length(.comp_samples))
 .page_chunks   <- split(.comp_samples,
                          ceiling(seq_along(.comp_samples) / .n_per_page))
 .n_pages       <- length(.page_chunks)
@@ -339,7 +351,7 @@ for (.pg in seq_along(.page_chunks)) {
   .samps  <- .page_chunks[[.pg]]
   .pg_df  <- prop_df %>% filter(sample %in% .samps) %>%
     mutate(sample = factor(sample, levels = .samps))
-  .pg_w   <- max(6, length(.samps) * 3.5)
+  .pg_w   <- max(10, length(.samps) * 2.4)
   .suffix <- if (.n_pages > 1) paste0(" (", .pg, "/", .n_pages, ")") else ""
 
   .p_pct <- ggplot(.pg_df, aes(x = sample, y = prop, fill = cell_type)) +
@@ -360,21 +372,22 @@ for (.pg in seq_along(.page_chunks)) {
     labs(title = paste0("Cell Type  -  Number of Cells", .suffix), x = NULL, y = "Cell Count") +
     theme_pub + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
 
-  .p_combined <- plot_grid(
-    .p_pct, p_bar_legend, .p_cnt,
-    ncol = 1, rel_heights = c(1, 0.12, 0.85),
-    align = "v", axis = "lr"
-  )
+  # One page per metric, each carrying every sample, instead of both panels stacked on one page.
+  # A reader (and the PPT generator) gets one figure for "% of Sample" and one for "Number of
+  # Cells" rather than a split cohort across pages.
+  .p_pct_pg <- plot_grid(.p_pct, p_bar_legend, ncol = 1, rel_heights = c(1, 0.14))
+  .p_cnt_pg <- plot_grid(.p_cnt, p_bar_legend, ncol = 1, rel_heights = c(1, 0.14))
 
-  .tf <- tempfile(fileext = ".pdf")
-  ggsave(.tf, .p_combined, width = .pg_w, height = 10, dpi = PLOT$dpi)
-  .comp_pdfs <- c(.comp_pdfs, .tf)
+  .tf  <- tempfile(fileext = ".pdf")
+  .tf2 <- tempfile(fileext = ".pdf")
+  ggsave(.tf,  .p_pct_pg, width = .pg_w, height = 7, dpi = PLOT$dpi)
+  ggsave(.tf2, .p_cnt_pg, width = .pg_w, height = 7, dpi = PLOT$dpi)
+  .comp_pdfs <- c(.comp_pdfs, .tf, .tf2)
 
-  .rkey <- if (.n_pages > 1)
-    paste0("Cell Type Composition  -  % and Count (", .pg, "/", .n_pages, ")")
-  else
-    "Cell Type Composition  -  % (top) and Cell Count (bottom)"
-  report_plots[[.rkey]] <- set_page(.p_combined, pw = .pg_w, ph = 10)
+  report_plots[[paste0("Cell Type  -  % of Sample", .suffix)]] <-
+    set_page(.p_pct_pg, pw = .pg_w, ph = 7)
+  report_plots[[paste0("Cell Type  -  Number of Cells", .suffix)]] <-
+    set_page(.p_cnt_pg, pw = .pg_w, ph = 7)
 }
 
 .combine_pdfs(.comp_pdfs, file.path(DIRS$integrated, "celltype_composition_combined.pdf"))
@@ -382,7 +395,7 @@ ggsave(file.path(DIRS$integrated, "celltype_proportions_bar.pdf"),
        p_bar, width = max(7, length(.comp_samples) * 2), height = 6, dpi = PLOT$dpi)
 unlink(.comp_pdfs)
 rm(.comp_samples, .n_per_page, .page_chunks, .n_pages, .comp_pdfs,
-   .pg, .samps, .pg_df, .pg_w, .suffix, .p_pct, .p_cnt, .p_combined, .tf, .rkey)
+   .pg, .samps, .pg_df, .pg_w, .suffix, .p_pct, .p_cnt, .p_pct_pg, .p_cnt_pg, .tf, .tf2)
 
 # =============================================================================
 # PLOT SET 7: Violin plots  -  key lineage markers
