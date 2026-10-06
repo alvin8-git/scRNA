@@ -32,10 +32,20 @@ message("Parallelism: ", PARALLEL$merge_workers, " cores (future multicore, merg
 merged <- readRDS(file.path(DIRS$integrated, "integrated_annotated.rds"))
 merged <- apply_reference_labels(merged)   # frozen-reference labels when 05r has run (additive)
 .lblsrc <- getOption("scrna.label_source", "de-novo")
-# Trust the object's sample list. config SAMPLE_NAMES is the H1/H2 fallback when re-pointing at a
-# finished run via SCRNA_RESULTS_DIR without SCRNA_SAMPLE* env vars — iterating it would subset
-# zero cells. Authoritative source for which samples to plot is the integrated object itself.
-SAMPLE_NAMES <- sort(unique(as.character(merged$sample)))
+# WHICH samples to plot comes from the object (config SAMPLE_NAMES is the H1/H2 fallback when
+# re-pointing at a finished run via SCRNA_RESULTS_DIR without SCRNA_SAMPLE* env vars — iterating it
+# would subset zero cells). But the ORDER must follow the order the samples were given on the
+# command line, not sort(): alphabetical order scrambles any cohort where sequence is meaningful —
+# a loading series (PBMC_5K plotted last, after PBMC_30K_S_K) or a time course (D0 after D11/D20).
+# It propagates into umap_split_by_sample.pdf, the composition panels and the proportion bars.
+.obj_samples <- unique(as.character(merged$sample))
+.want <- {
+  if (nzchar(Sys.getenv("SCRNA_SAMPLE1"))) get0("SAMPLE_NAMES", ifnotfound = character(0))
+  else if (is.factor(merged$sample)) levels(merged$sample)
+  else character(0)
+}
+SAMPLE_NAMES <- c(intersect(.want, .obj_samples), sort(setdiff(.obj_samples, .want)))
+rm(.obj_samples, .want)
 Idents(merged) <- "cell_type"
 message("Loaded: ", ncol(merged), " cells | ",
         length(unique(merged$cell_type)), " cell types | labels: ", .lblsrc)

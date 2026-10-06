@@ -131,6 +131,19 @@ if (file.exists(f)) {
 if (length(.def))
   fails <- c(fails, paste0(".combine_pdfs() redefined outside pdf_helpers.R: ", paste(basename(unlist(.def)), collapse = ", ")))
 
+# Regression T11: 06_visualize.R must not sort() the sample list. It used to do
+#   SAMPLE_NAMES <- sort(unique(as.character(merged$sample)))
+# which orders samples alphabetically and silently scrambles every figure that iterates them:
+# umap_split_by_sample.pdf, the composition panels and the proportion bars. On the PBMC loading
+# series PBMC_5K plotted last (after PBMC_30K_S_K); a D0..D30 time course would run D0 after D11.
+# Order must follow the command-line order (config SAMPLE_NAMES) or the object's factor levels.
+f <- file.path(.pipeline, "06_visualize.R")
+if (file.exists(f)) {
+  .code <- grep("^\\s*#", readLines(f, warn = FALSE), value = TRUE, invert = TRUE)
+  if (any(grepl("SAMPLE_NAMES\\s*<-\\s*sort\\(", .code)))
+    fails <- c(fails, "06_visualize.R sorts SAMPLE_NAMES alphabetically (scrambles per-sample figure order)")
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)
