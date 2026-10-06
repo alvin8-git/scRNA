@@ -29,14 +29,40 @@ TMP = Path("/data/alvin/tmp/ppt_figs")          # project rule: never /tmp
 LAYOUT_TITLE_ONLY = 3                            # 仅标题 — what the reference deck uses
 DPI = 200
 
-# figure -> (relative path, slide title). Missing files become a visible placeholder.
+# figure -> (relative path, slide title(s)). A list of titles names each page of a multi-page PDF.
+# celltype_proportions_bar.pdf is deliberately absent: it is the "Labels: de-novo" variant of the
+# same % chart, and it is not ordered by the sample list.
 FIGURES = [
-    ("annotation/contamination_summary.pdf",        "Contamination"),
-    ("integrated/celltype_composition_combined.pdf", "Cell Proportions"),
-    ("integrated/celltype_proportions_bar.pdf",      "Cell Proportions"),
-    ("annotation/canonical_markers_dotplot.pdf",     "Cell Markers"),
+    ("annotation/contamination_summary.pdf",         "Contamination"),
+    ("integrated/celltype_composition_combined.pdf",
+     ["Cell Type – % of Sample", "Cell Type – Number of Cells"]),
+    ("annotation/canonical_markers_dotplot.pdf",      "Cell Markers"),
 ]
 UMAP_PDF = "integrated/umap_split_by_sample.pdf"
+
+# Metrics rows to drop so the table fits one slide. Everything else in the xlsx is kept, so a
+# flowcell with extra rows still reports them.
+DROP_EXACT = {
+    "reads mapped confidently to genome",
+    "reads mapped confidently to transcriptome",
+    "include introns",
+    "sample name",            # repeats the header row
+}
+# of the cDNA_/oligo_ block keep only these two measures
+KEEP_SEQ_SUFFIX = ("number of reads", "valid barcodes")
+
+
+def keep_metric(label: str, seen_before: bool) -> bool:
+    low = label.strip().lower()
+    if low in DROP_EXACT:
+        return False
+    if low.startswith(("cdna_", "oligo_")):
+        return low.split("_", 1)[1].strip() in KEEP_SEQ_SUFFIX
+    # the sheet repeats "Estimated number of cells" and "Median UMI counts per cell" at the end
+    # (the second one spelled "Estimated number ofcells") — keep only the first occurrence
+    if seen_before:
+        return False
+    return True
 
 
 def sample_order_from_xls(xls: Path):
@@ -50,13 +76,20 @@ def sample_order_from_xls(xls: Path):
     header = [str(c).strip() for c in rows[0] if c is not None and str(c).strip()]
     # some sheets repeat the names in a "Sample name" row; the first row wins
     samples = [h for h in header if h.lower() not in ("metric", "metrics", "sample name")]
-    metrics = []
+    metrics, seen = [], set()
     for r in rows[1:]:
         if not r or r[0] is None:
             continue
         label = str(r[0]).strip()
-        if not label or label.lower() == "sample name":
+        if not label:
             continue
+        # "Estimated number of cells" reappears as "Estimated number ofcells" — compare with all
+        # whitespace removed so the duplicate is caught despite the typo.
+        norm = "".join(label.lower().split())
+        if not keep_metric(label, norm in seen):
+            seen.add(norm)
+            continue
+        seen.add(norm)
         metrics.append((label, list(r[1:1 + len(samples)])))
     return samples, metrics
 
@@ -102,8 +135,16 @@ def placeholder(slide, msg):
 def metrics_slide(prs, samples, metrics, title):
     s = add_slide(prs, title)
     rows, cols = len(metrics) + 1, len(samples) + 1
-    tbl = s.shapes.add_table(rows, cols, Inches(0.35), Inches(1.3),
-                             Inches(12.6), Inches(0.32 * rows)).table
+    # LibreOffice/PowerPoint grow a row when its label wraps, so the table must be sized to keep
+    # every label on one line: wide first column, small type, and a row height that leaves the
+    # whole table inside the 7.5in slide.
+    top, avail_h = 1.12, 6.1
+    row_h = min(0.26, avail_h / rows)
+    tbl = s.shapes.add_table(rows, cols, Inches(0.3), Inches(top),
+                             Inches(12.7), Inches(row_h * rows)).table
+    tbl.columns[0].width = Inches(3.0)
+    for c in range(1, cols):
+        tbl.columns[c].width = Inches(9.7 / (cols - 1))
     tbl.cell(0, 0).text = "Metric"
     for j, nm in enumerate(samples, start=1):
         tbl.cell(0, j).text = str(nm)
@@ -118,11 +159,12 @@ def metrics_slide(prs, samples, metrics, title):
                 txt = "" if v is None else str(v)
             tbl.cell(i, j).text = txt
     for row in tbl.rows:
-        row.height = Inches(0.26)
+        row.height = Inches(row_h)
         for c in row.cells:
+            c.margin_top = c.margin_bottom = Inches(0.01)
             for p in c.text_frame.paragraphs:
                 for r in p.runs:
-                    r.font.size = Pt(9)
+                    r.font.size = Pt(7.5)
     return s
 
 
@@ -180,12 +222,14 @@ def main():
         placeholder(add_slide(prs, "Cell Types – Split by Sample"), f"figure not found: {upath}")
 
     for rel, title in FIGURES:
+        titles = title if isinstance(title, list) else None
         p = run / rel
         if not p.exists():
-            placeholder(add_slide(prs, title), f"figure not found: {p}")
+            placeholder(add_slide(prs, titles[0] if titles else title), f"figure not found: {p}")
             continue
-        for pg in pdf_to_pngs(p, re.sub(r"\W+", "_", rel)):
-            place_image(prs, add_slide(prs, title), pg)
+        for i, pg in enumerate(pdf_to_pngs(p, re.sub(r"\W+", "_", rel))):
+            t = titles[i] if titles and i < len(titles) else (titles[-1] if titles else title)
+            place_image(prs, add_slide(prs, t), pg)
 
     # closing slide, on the template's blank layout
     closing = prs.slides.add_slide(prs.slide_layouts[4])
