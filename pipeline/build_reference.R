@@ -78,6 +78,16 @@ message("  label col: ", LABEL_COL, "   sample col: ", SAMPLE_COL, "   total cel
 # ---- defining markers per label (from bat-overridden MARKERS) ----------------
 present  <- function(gs) intersect(gs, rownames(d))
 label_markers <- function(L) {
+  # Direct name match first. The cm (and bat_wing) overlays name their MARKERS
+  # panels after the cell-type labels themselves — "Cardiomyocyte", "Epicardial",
+  # "Pluripotent" — so a lookup resolves them exactly. The regex chain below only
+  # works for blood panels, whose names (T_pan, CD8_T, CD14_mono) deliberately do
+  # not match their labels. Without this, every cardiac label fell through to
+  # character(0) and was dropped at validation, leaving trainSingleR 0 cells.
+  if (exists("MARKERS") && is.list(MARKERS) && !is.null(MARKERS[[L]]) &&
+      is.character(MARKERS[[L]])) {
+    return(present(MARKERS[[L]]))
+  }
   g <- if (grepl("^CD8", L))               c(MARKERS$T_pan, MARKERS$CD8_T)
        else if (grepl("^CD4|Treg", L))     c(MARKERS$T_pan, MARKERS$CD4_T)
        else if (grepl("γδ|gamma", L)) c(MARKERS$T_pan, MARKERS$gamma_delta_T)
