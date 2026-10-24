@@ -52,8 +52,25 @@ load_sample <- function(sample_name, data_path) {
 }
 
 add_qc_metrics <- function(seu) {
-  seu[["percent.mt"]]   <- PercentageFeatureSet(seu, pattern = "^MT-")
-  seu[["percent.ribo"]] <- PercentageFeatureSet(seu, pattern = "^RP[SL]")
+  # Patterns come from QC so a species overlay can set them; the defaults are the
+  # uppercase human/bat form. A pattern that matches NOTHING yields percent.mt
+  # of 0 for every cell, which makes QC$max_percent_mt a silent no-op and the QC
+  # violin a flat line that looks like a clean dataset — so warn loudly instead
+  # of letting it pass. Mouse (mt-Nd1, Rps2) is the case that needs an override.
+  mt_pat   <- if (!is.null(QC$mt_pattern))   QC$mt_pattern   else "^MT-"
+  ribo_pat <- if (!is.null(QC$ribo_pattern)) QC$ribo_pattern else "^RP[SL]"
+  for (p in list(c(mt_pat, "mitochondrial"), c(ribo_pat, "ribosomal"))) {
+    if (!length(grep(p[1], rownames(seu)))) {
+      warning(sprintf(
+        "QC pattern '%s' matches no genes — %s fraction will be 0 for every cell ",
+        p[1], p[2]),
+        "and any filter on it does nothing. Set QC$mt_pattern / QC$ribo_pattern ",
+        "in the species overlay (mouse uses '^mt-' and '^Rp[sl]').",
+        call. = FALSE, immediate. = TRUE)
+    }
+  }
+  seu[["percent.mt"]]   <- PercentageFeatureSet(seu, pattern = mt_pat)
+  seu[["percent.ribo"]] <- PercentageFeatureSet(seu, pattern = ribo_pat)
   seu
 }
 

@@ -130,7 +130,17 @@ QC <- list(
   max_features   = 5000,
   min_counts     = 500,
   max_counts     = 25000,
-  max_percent_mt = 20
+  max_percent_mt = 20,
+  # Gene-name patterns for the mitochondrial and ribosomal fractions. Human and
+  # bat annotations both use uppercase symbols (MT-ND1, RPS2), so one default
+  # serves both — verified: ^MT- matches 13 genes and ^RP[SL] 97 in the bat
+  # features files, with median percent.mt of 0.4-1.2%.
+  # Mouse is lowercase/title-case (mt-Nd1, Rps2) and MUST override these in its
+  # species overlay, or percent.mt is 0 for every cell and the max_percent_mt
+  # filter silently does nothing. 01_load_qc.R warns when a pattern matches no
+  # genes, so a future species mismatch announces itself instead of passing.
+  mt_pattern     = "^MT-",
+  ribo_pattern   = "^RP[SL]"
 )
 
 # --- Doublet Detection ---
@@ -511,7 +521,7 @@ if (!nzchar(.species)) {
   message("[config] SCRNA_SPECIES not set — defaulting to 'human' (set SCRNA_SPECIES=bat for bat data).")
   .species <- "human"
 }
-.known_species <- c("human", "bat", "bat_wing", "cm")
+.known_species <- c("human", "bat", "bat_wing", "cm", "mouse")
 if (!.species %in% .known_species)
   warning("[config] SCRNA_SPECIES='", .species, "' is not one of ",
           paste(.known_species, collapse = "/"), " — no overlay will apply and the ",
@@ -519,6 +529,7 @@ if (!.species %in% .known_species)
 
 source(file.path(PIPELINE_DIR, "config_species_bat.R"))  # bat / bat_wing overrides (extracted)
 source(file.path(PIPELINE_DIR, "config_species_cm.R"))   # cm overrides (human iPSC-CM)
+source(file.path(PIPELINE_DIR, "config_species_mouse.R")) # mouse cardiomyocyte overrides
 
 if (!exists("WOUND_MODULES")) WOUND_MODULES <- list()
 

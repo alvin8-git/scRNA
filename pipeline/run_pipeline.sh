@@ -57,7 +57,7 @@ SPECIES="human"   # default; overridden by a species keyword in args:
 WANT_REPORT=true  # auto-build the interactive HTML report at the end; --no-report to skip
 
 for arg in "$@"; do
-  if [[ "$arg" == "bat" || "$arg" == "human" || "$arg" == "bat_wing" || "$arg" == "cm" ]]; then
+  if [[ "$arg" == "bat" || "$arg" == "human" || "$arg" == "bat_wing" || "$arg" == "cm" || "$arg" == "mouse" ]]; then
     SPECIES="$arg"
   elif [[ "$arg" == "--no-report" || "$arg" == "no-report" ]]; then
     WANT_REPORT=false
