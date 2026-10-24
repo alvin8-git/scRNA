@@ -299,13 +299,21 @@ if (.species == "cm") {
     )
   }
 
-  # --- SoupX-corrected cohort (*_sx), curated 2026-09-23 -----------------------
+  # --- RETIRED 2026-10-24: SoupX-corrected cohort (*_sx), curated 2026-09-23 ---
+  # Kept for the curation record only; the `FALSE &&` below makes it unreachable.
+  # Retired because the cohort it describes can no longer be reproduced:
+  #   * H1D30_1's source matrix was replaced by the 2026-10-22 re-run (rho 0.250 ->
+  #     0.187), so H1D30_1_sx cannot be regenerated identically.
+  #   * H1D0_2's rho here was a manual fallback (0.156) after autoEstCont failed;
+  #     it estimates 0.266 automatically, so this cohort was under-corrected.
+  # Superseded by the 2026-10-24 block below. Original note follows.
+  #
   # Same 7 libraries after SoupX adjustCounts (rho 0.076-0.673; H1D20_1 lost 67.3% of
   # counts and 76.9% of its cells, confirming it was ambient-dominated). Correction
   # re-clusters the data, so the uncorrected map above MUST NOT be reused: different
   # sample names keep this block and that one mutually exclusive.
   # Curated from per-cluster detection rates (22 clusters, 61,697 cells).
-  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
+  if (FALSE && length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
       setequal(SAMPLE_NAMES, c("H1D0_1_sx", "H1D0_2_sx", "H1D11_2_sx", "H1D20_1_sx",
                                "H1D20_2_sx", "H1D30_1_sx", "H1D30_2_sx"))) {
     CLUSTER_CELLTYPE_MAP <- c(
@@ -342,6 +350,59 @@ if (.species == "cm") {
       "20" = "Unknown",          # 1,207 genes / 2,393 UMI; AFP 78 ALB 65; n=121
       "19" = "Unknown"           # n=212, 100% D30; MYL7 99 ACTC1 81 AND AFP 100 ALB 99
                                  # — CM markers and hepatic cargo together; likely doublets
+    )
+  }
+
+  # --- SoupX-corrected cohort with H1D11_1, H1D20_1 dropped, curated 2026-10-24 -
+  # 7 libraries: H1D11_1 added (2026-10-22 re-run), H1D30_1 re-run matrix, and
+  # H1D20_1 EXCLUDED (rho 0.795; lost 88.8% of cells to QC after correction, so
+  # D20 is represented by its clean replicate H1D20_2_sx, rho 0.086, alone).
+  # Curated from per-cluster detection rates (22 clusters, 76,314 cells, res 0.5).
+  # Identity TFs decide each call; secreted cargo (AFP/ALB/TTR/APOA1, collagens)
+  # does NOT, since it survives correction where real endoderm exists.
+  # Unassignable fell from 26% (raw cohort) to 9.1% here.
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
+      setequal(SAMPLE_NAMES, c("H1D0_1_sx", "H1D0_2_sx", "H1D11_1_sx", "H1D11_2_sx",
+                               "H1D20_2_sx", "H1D30_1_sx", "H1D30_2_sx"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      # --- pluripotent: POU5F1/SOX2/L1TD1, D0-dominant -------------------------
+      "3"  = "Pluripotent",       # POU5F1 92 SOX2 83 LIN28A 87 L1TD1 86 NANOG 35; 98% D0
+      "9"  = "Pluripotent",       # POU5F1 90 SOX2 63 L1TD1 67 LIN28A 81; 91% D0
+      "11" = "Pluripotent",       # POU5F1 36 SOX2 32 L1TD1 71; 97% D0, low content (1,928 genes)
+      # --- cardiomyocyte: the only cluster with sarcomere + NKX2-5 -------------
+      "12" = "Cardiomyocyte",     # TTN 96 MYL7 93 MYL4 86 MYH6 81 ACTC1 84 TNNT2 69,
+                                  # NKX2-5 56 MEF2C 49 TBX5 38 GATA4 66; 75% D11 20% D30
+      # --- cardiac progenitor: GATA4 + MYL7/ACTC1, sarcomere and NKX2-5 absent,
+      # --- cargo LOW (AFP 6 ALB 3) so not an ambient artefact; D11-dominant ----
+      "0"  = "Cardiac progenitor", # GATA4 43 MYL7 68 ACTC1 44, NKX2-5 3 MYH6 1 TTN 8; 91% D11
+      "4"  = "Cardiac progenitor", # GATA4 25 MYL7 75 ACTC1 55, NKX2-5 3 TTN 6; 91% D11
+      "14" = "Cardiac progenitor", # GATA4 56 MYL7 49 ACTC1 29, NKX2-5 2; 64% D11
+      # --- proepicardial: TBX18/WT1/SFRP5/LHX2 with GATA4, NKX2-5 low ---------
+      "18" = "Proepicardial",     # TBX18 71 WT1 60 SFRP5 76 UPK3B 73 GATA4 84, NKX2-5 0;
+                                  # 99% D30, 3,495 genes, n=215
+      "10" = "Proepicardial",     # GATA4 83 TBX5 37 SFRP5 28 WT1 16 LHX2 14 TBX18 11; 90% D11
+      # --- epicardium / mesothelium -------------------------------------------
+      "1"  = "Epicardial",        # UPK3B 69 WT1 14 with DCN 99 LUM 97 POSTN 73; 68% D30
+      "7"  = "Epicardial",        # UPK3B 41 WT1 24 with DCN 94 LUM 88 POSTN 68; 68% D30
+      # --- stromal -------------------------------------------------------------
+      "17" = "Myofibroblast",     # ACTA2 89 TAGLN 91 PDGFRB 41 PDGFRA 30 TCF21 15
+      "5"  = "Myofibroblast",     # ACTA2 70 TAGLN 72 PDGFRB 65 PDGFRA 59 TCF21 31; 86% D30
+      # --- hepatic endoderm: definitive TFs, not cargo alone -------------------
+      "6"  = "Hepatic/Endoderm",  # FOXA2 75 HHEX 55 ONECUT1 34 HNF4A 25 EPCAM 67; 93% D11
+      "13" = "Hepatic/Endoderm",  # FOXA2 65 HNF4A 54 ONECUT1 16, TTR 93 APOA1 98 EPCAM 80
+      "19" = "Hepatic/Endoderm",  # FOXA2 90 HHEX 64 ONECUT1 44; TOP2A 95 (cycling); 100% D11
+      # --- other ---------------------------------------------------------------
+      "15" = "Endothelial",       # CDH5 65 PECAM1 45 KDR 79 MEF2C 42; 89% D11
+      "16" = "Epithelial",        # EPCAM 74 GABRP 54 CLDN4 51 KRT8 96
+      "8"  = "Proliferating",     # TOP2A 93 MKI67 70; 59% D11
+      # --- unresolved: low content + cargo that survived correction, no TF -----
+      "2"  = "Unknown",           # 1,117 genes (LOWEST); AFP 97 ALB 79 APOA1 72 with
+                                  # DCN 93 LUM 96 but FOXA2 1 TBX18 1 NKX2-5 4 POU5F1 0;
+                                  # 81% D30. n=6,668
+      "20" = "Unknown",           # n=184, 99% D30; MYL7 97 ACTC1 82 AND AFP 100 ALB 99
+                                  # APOA1 99 DCN 99 — sarcomere and hepatic cargo together,
+                                  # likely doublets
+      "21" = "Unknown"            # n=83, 1,209 genes; AFP 83 ALB 73, no identity TF
     )
   }
 
