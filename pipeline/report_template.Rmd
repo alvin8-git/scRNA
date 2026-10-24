@@ -615,7 +615,136 @@ if (is.null(md_) || !nrow(md_)) {
 }
 ```
 
-```{r benchmark, results='asis', eval=!is.null(B$benchmark)}
+```{r cust_evidence_head, results='asis', eval=!is.null(B$cust$evidence)}
+cat("## Why each cluster got its label\n\n",
+    "<p class='plot-desc'>One row per cluster, showing which label it was given and the markers ",
+    "that decided it, as the percentage of that cluster's cells in which each was detected. ",
+    "Several clusters often share one label — that is expected, and visible here. The dot plot ",
+    "above shows marker <em>expression</em> per cell type; this table shows the ",
+    "<em>cluster-level evidence</em> behind each call, including where the reference ",
+    "classifier disagreed. Sort any column.</p>\n", sep = "")
+```
+
+```{r cust_evidence, eval=!is.null(B$cust$evidence)}
+datatable(B$cust$evidence, rownames = FALSE,
+          class = "compact stripe hover", selection = "none",
+          callback = DT::JS("return table;"),
+          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
+                         order = list(list(1, "desc")),
+                         columnDefs = list(list(className = "dt-right", targets = 1))))
+```
+
+```{r cust_cor, results='asis', eval=!is.null(B$cust$cor_pb)}
+cat("# Sample concordance\n\n",
+    "<p class='plot-desc'>Each sample's counts summed into a single expression profile, then ",
+    "compared with every other sample (Spearman correlation on log-CPM). Replicates of the same ",
+    "condition should be each other's closest match; a sample whose closest match is in the ",
+    "<em>wrong</em> group is the signature of a swapped or mislabelled library, which nothing ",
+    "downstream detects on its own. Hover any cell for the pair and its correlation.</p>\n",
+    "<p class='plot-desc' style='font-size:.9em;color:#666'><strong>Note on notation.</strong> ",
+    "This is Spearman's <em>r</em>, a similarity between samples running to 1.00. It is unrelated ",
+    "to the <em>rho</em> in the Ambient RNA section below, which is a contamination fraction. ",
+    "Both are conventionally written with the same Greek letter, so this report uses ",
+    "<em>r</em> here and <em>rho</em> there.</p>\n", sep = "")
+```
+
+```{r cust_cor_plot, eval=!is.null(B$cust$cor_pb)}
+C <- B$cust$cor_pb
+# viridis "mako", matching the report's existing viridis family; the range is
+# stretched from the observed minimum because all correlations sit near 1 and a
+# 0-1 scale would render the whole matrix one flat colour.
+stops <- scales::viridis_pal(option = "G", direction = -1)(9)
+plot_ly(x = colnames(C), y = rownames(C), z = C, type = "heatmap",
+        colorscale = Map(function(p, c) list(p, c), seq(0, 1, length.out = 9), stops),
+        zmin = min(C), zmax = 1,
+        hovertemplate = "<b>%{y}</b> vs <b>%{x}</b><br>Spearman r = %{z:.3f}<extra></extra>",
+        colorbar = list(title = list(text = "r", side = "top"), len = 0.5, thickness = 11,
+                        tickfont = list(size = 9)),
+        width = min(640, 74 * ncol(C) + 190),
+        height = 26 * nrow(C) + 120) |>
+  layout(xaxis = list(title = "", tickangle = -90, automargin = TRUE,
+                      tickfont = list(size = 10)),
+         yaxis = list(title = "", automargin = TRUE, tickfont = list(size = 10)),
+         margin = list(l = 4, r = 4, t = 6, b = 4))
+```
+
+```{r cust_rho_head, results='asis', eval=!is.null(B$cust$rho)}
+cat("# Ambient RNA\n\n",
+    "<p class='plot-desc'>Some RNA floats free in the cell suspension and is captured alongside ",
+    "real cells, so highly expressed genes can appear in cells that never transcribed them. ",
+    "<strong>rho</strong> is the estimated fraction of each library's counts coming from that ",
+    "free-floating pool, measured with SoupX. Below about 0.05 it is negligible; from roughly ",
+    "0.3 upward a library's apparent composition should be treated with caution, because the ",
+    "contamination is shared across every cell type. Sort any column.</p>\n", sep = "")
+```
+
+```{r cust_rho, eval=!is.null(B$cust$rho)}
+rh <- B$cust$rho
+band <- function(x) if (x < 0.05) "negligible" else if (x < 0.15) "low" else
+                    if (x < 0.30) "moderate" else "high — interpret with caution"
+tb <- data.frame(Sample = rh$sample,
+                 rho = round(rh$rho, 3),
+                 `% of counts ambient` = round(100 * rh$rho, 1),
+                 Assessment = vapply(rh$rho, band, character(1)),
+                 check.names = FALSE, stringsAsFactors = FALSE)
+datatable(tb, rownames = FALSE, class = "compact stripe hover", selection = "none",
+          callback = DT::JS("return table;"),
+          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
+                         order = list(list(1, "asc")),
+                         columnDefs = list(list(className = "dt-right", targets = 1:2)))) |>
+  formatStyle("rho", backgroundColor = styleInterval(c(0.05, 0.15, 0.30),
+              c("#f1f8f3", "#fdf6e3", "#fdeee3", "#fbe3e3")))
+```
+
+```{r cust_qc_detail, results='asis', eval=!is.null(B$cust$qc_png)}
+cat("# Per-sample quality detail\n\n",
+    "<p class='plot-desc'>Every cell plotted as total UMIs against genes detected, coloured by ",
+    "mitochondrial percentage, one panel per sample on shared axes so panels compare directly. ",
+    "Healthy cells form one dense diagonal cloud. A separate cloud low on both axes is debris or ",
+    "empty droplets; bright points are stressed or dying cells. Rendered from the cell data — ",
+    "all ", format(B$n_cells_total, big.mark = ","), " cells are drawn, none sampled away. ",
+    "Use the chips to show or hide samples.</p>\n", sep = "")
+qp <- B$cust$qc_png
+sg <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
+if (!is.null(B$cust$qc_scale)) {
+  st <- paste(B$cust$qc_scale$stops, collapse = ",")
+  cat(sprintf(paste0("<div class='qcscale'><span>%% mitochondrial reads</span>",
+      "<i style='background:linear-gradient(to right,%s)'></i>",
+      "<span>0</span><span class='qcmax'>&ge;%s</span></div>\n"),
+      st, B$cust$qc_scale$max))
+}
+cat("<div class='selrow qcselrow'>",
+    paste0("<button class='selctl' data-act='all'>Select all</button>",
+           "<button class='selctl' data-act='none'>Unselect all</button>"),
+    paste(sprintf("<button class='selchip qcchip on' data-qc='%s' aria-pressed='true'>%s</button>",
+                  sg(names(qp)), htmltools::htmlEscape(names(qp))), collapse = ""),
+    "</div>\n", sep = "")
+cat("<div class='umapgrid qcgrid'>",
+    paste(sprintf(paste0("<div class='umapcell' id='qcwrap-%s'><div class='umaptitle'>%s</div>",
+                         "<img src='%s' alt='QC scatter for %s' ",
+                         "style='width:100%%;display:block;border-radius:6px'></div>"),
+                  sg(names(qp)), htmltools::htmlEscape(names(qp)), unlist(qp),
+                  htmltools::htmlEscape(names(qp))), collapse = ""),
+    "</div>\n", sep = "")
+cat("<style>.qcscale{display:flex;align-items:center;gap:7px;font-size:.82em;color:#555;",
+    "margin:.2em 0 .7em}.qcscale i{display:inline-block;width:120px;height:9px;",
+    "border-radius:2px}.qcgrid .umapcell{padding:0}</style>\n", sep = "")
+cat("<script>document.querySelectorAll('.selchip.qcchip').forEach(function(b){",
+    "b.addEventListener('click',function(){var on=b.classList.toggle('on');",
+    "b.setAttribute('aria-pressed',on);var w=document.getElementById('qcwrap-'+",
+    "b.getAttribute('data-qc'));if(w)w.style.display=on?'':'none';});});",
+    # scope to the QC control row: an unscoped .selrow lookup would grab the
+    # UMAP section's row and make its Select all drive the QC panels
+    "(function(){var row=document.querySelector('.qcselrow');if(!row)return;",
+    "row.querySelectorAll('.selctl').forEach(function(c){c.addEventListener('click',function(){",
+    "var on=c.getAttribute('data-act')==='all';",
+    "document.querySelectorAll('.selchip.qcchip').forEach(function(ch){",
+    "ch.classList.toggle('on',on);ch.setAttribute('aria-pressed',on);",
+    "var w=document.getElementById('qcwrap-'+ch.getAttribute('data-qc'));",
+    "if(w)w.style.display=on?'':'none';});});});})();</script>\n", sep = "")
+```
+
+```{r benchmark, results='asis', eval=!is.null(B$benchmark) && !isTRUE(B$customer)}
 BM  <- B$benchmark
 esc <- htmltools::htmlEscape
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0 || (length(a) == 1 && is.na(a))) b else a

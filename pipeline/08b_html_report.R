@@ -54,6 +54,11 @@ max_cells   <- as.integer(getflag("max-cells", "6000"))
 want_samples <- getflag("samples", NULL)
 if (!is.null(want_samples)) want_samples <- trimws(strsplit(want_samples, ",")[[1]])
 lite <- "--lite" %in% flags
+# --customer: the customer-facing deliverable. Implies --lite (no screenshot
+# galleries) and adds the value sections computed below. Default off, so the
+# internal report is unaffected.
+customer <- "--customer" %in% flags
+if (customer) lite <- TRUE
 
 # Long run names (every sample dash-joined) make a >300-char path that Windows
 # cannot open over a share (MAX_PATH = 260). Shorten the default report filename to
@@ -535,7 +540,11 @@ tool_roles <- c(
   scDblFinder          = "Doublet detection",
   SingleR              = "Reference-based cell-type annotation",
   celldex              = "Reference expression datasets for SingleR",
-  SingleCellExperiment = "Bioconductor single-cell data container")
+  SingleCellExperiment = "Bioconductor single-cell data container",
+  # listed because the customer report's Ambient RNA section reports its rho;
+  # the row self-omits when the package is not installed
+  SoupX                = "Ambient (free-floating) RNA estimation and correction",
+  scattermore          = "Fast rasterised scatter rendering for large cell counts")
 tool_urls <- c(
   R                    = "https://www.r-project.org",
   Seurat               = "https://satijalab.org/seurat",
@@ -544,7 +553,9 @@ tool_urls <- c(
   scDblFinder          = "https://bioconductor.org/packages/scDblFinder",
   SingleR              = "https://bioconductor.org/packages/SingleR",
   celldex              = "https://bioconductor.org/packages/celldex",
-  SingleCellExperiment = "https://bioconductor.org/packages/SingleCellExperiment")
+  SingleCellExperiment = "https://bioconductor.org/packages/SingleCellExperiment",
+  SoupX                = "https://github.com/constantAmateur/SoupX",
+  scattermore          = "https://github.com/exaexa/scattermore")
 tv_rows <- lapply(names(tool_roles), function(p) {
   v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
   if (is.na(v)) NULL else data.frame(Tool = p, Version = v, Role = unname(tool_roles[p]),
@@ -557,8 +568,122 @@ tool_versions <- do.call(rbind, c(
   tv_rows))
 msg("tool versions: %s", paste(tool_versions$Tool, tool_versions$Version, collapse = ", "))
 
+# ---- customer-report extras (--customer; implies --lite) -------------------
+# Additions that carry real value for a customer with no bioinformatics staff,
+# all rendered from data — never a rasterised PDF page. Each is NULL unless
+# --customer is set, and every template chunk is guarded on non-NULL, so the
+# internal report is byte-identical when this flag is absent.
+cust <- NULL
+if (customer) {
+  msg("building customer extras ...")
+  md <- obj@meta.data
+  ct <- as.character(md[[if ("cell_type_ref" %in% colnames(md) &&
+                            !all(is.na(md$cell_type_ref))) "cell_type_ref" else "cell_type"]])
+  smp <- as.character(md$sample)
+  cmat <- SeuratObject::LayerData(obj, assay = "RNA", layer = "counts")
+
+  # (1) per-sample QC detail: ONE raster per sample, so the report can drive them
+  # with the same sample-chip controls the UMAP section already uses. Rasterised
+  # (scattermore) so every cell is drawn for ~40 KB each rather than ~350 KB of
+  # widget JSON per sample.
+  qc_df <- data.frame(sample = smp, nCount = md$nCount_RNA, nFeature = md$nFeature_RNA,
+                      mt = if ("percent.mt" %in% colnames(md)) md$percent.mt else NA_real_)
+  mt_cap <- if (all(is.na(qc_df$mt))) NA_real_ else
+    max(1, as.numeric(quantile(qc_df$mt, 0.99, na.rm = TRUE)))
+  qc_png <- setNames(vector("list", length(samples_all)), samples_all)
+  for (s in samples_all) {
+    d <- qc_df[qc_df$sample == s, , drop = FALSE]
+    if (!nrow(d)) next
+    g <- ggplot2::ggplot(d, ggplot2::aes(nCount, nFeature, colour = mt)) +
+      scattermore::geom_scattermore(pointsize = 2.4) +
+      ggplot2::scale_x_log10() + ggplot2::scale_y_log10() +
+      # shared limits across samples so panels are directly comparable
+      ggplot2::coord_cartesian(xlim = range(qc_df$nCount), ylim = range(qc_df$nFeature)) +
+      ggplot2::labs(x = "UMIs per cell", y = "Genes per cell") +
+      ggplot2::theme_minimal(base_size = 10) +
+      ggplot2::theme(legend.position = "none",
+                     panel.grid.minor = ggplot2::element_blank())
+    g <- if (is.na(mt_cap)) g + ggplot2::scale_colour_continuous(guide = "none") else
+      g + ggplot2::scale_colour_viridis_c(option = "magma", direction = -1,
+                                          limits = c(0, mt_cap), oob = scales::squish)
+    tf <- file.path(tempdir(), paste0("cust_qc_", gsub("[^A-Za-z0-9]", "_", s), ".png"))
+    ok <- tryCatch({ ggplot2::ggsave(tf, g, width = 4.6, height = 3.5, dpi = 140,
+                                     bg = "white"); TRUE }, error = function(e) FALSE)
+    if (ok) qc_png[[s]] <- knitr::image_uri(tf)
+  }
+  qc_png <- qc_png[!vapply(qc_png, is.null, logical(1))]
+  if (!length(qc_png)) qc_png <- NULL
+  # the colour scale is described to the template as a range plus the viridis
+  # stops, so it renders as a CSS gradient — no extra image, no new dependency
+  qc_scale <- if (is.na(mt_cap)) NULL else
+    list(max = round(mt_cap, 1),
+         stops = scales::viridis_pal(option = "magma", direction = -1)(5))
+
+  # (2) pseudobulk sample-sample correlation. Catches a swapped or mislabelled
+  # library, and shows whether replicates actually agree.
+  pb <- sapply(split(seq_len(ncol(cmat)), smp), function(i)
+          Matrix::rowSums(cmat[, i, drop = FALSE]))
+  cpm  <- t(t(pb) / colSums(pb)) * 1e6
+  keep <- rowMeans(cpm) > 1
+  cor_pb <- round(cor(log1p(cpm[keep, , drop = FALSE]), method = "spearman"), 4)
+
+  # (3) per-CLUSTER curation evidence. Deliberately NOT a cell-type x marker
+  # detection matrix: the existing dot plot already encodes % expressing as dot
+  # size, so that would be duplicate. What is missing from the report is which
+  # clusters were merged into each label and the markers that decided it.
+  panel <- unique(unlist(if (exists("ALL_MARKERS") && length(ALL_MARKERS)) ALL_MARKERS
+                         else if (exists("MARKERS")) MARKERS else list()))
+  panel <- intersect(panel, rownames(cmat))
+  evidence <- NULL
+  if (length(panel) && "seurat_clusters" %in% colnames(md)) {
+    clus <- as.character(md$seurat_clusters)
+    sub  <- cmat[panel, , drop = FALSE]
+    ord  <- order(suppressWarnings(as.integer(unique(clus))), unique(clus))
+    evidence <- do.call(rbind, lapply(unique(clus)[ord], function(k) {
+      i   <- which(clus == k)
+      pc  <- round(100 * Matrix::rowSums(sub[, i, drop = FALSE] > 0) / length(i), 0)
+      top <- head(sort(pc, decreasing = TRUE), 5L)
+      lab <- names(sort(table(ct[i]), decreasing = TRUE))[1]
+      sl  <- if ("singler_label_clean" %in% colnames(md))
+               names(sort(table(as.character(md$singler_label_clean[i])), decreasing = TRUE))[1]
+             else NA_character_
+      data.frame(Cluster = k, Cells = length(i), `Cell type` = lab,
+                 `Deciding markers (% of cluster's cells)` =
+                   paste(sprintf("%s %d%%", names(top), as.integer(top)), collapse = ", "),
+                 `Reference call` = if (is.null(sl)) NA_character_ else sl,
+                 check.names = FALSE, stringsAsFactors = FALSE)
+    }))
+  }
+
+  # (4) ambient RNA per sample. Read ONLY from the run directory — never from a
+  # scratch path, so a report can never silently carry another cohort's numbers.
+  # The SoupX step is expected to write qc/soupx_rho.csv with sample + rho columns.
+  rho <- NULL
+  rho_csv <- file.path(run_dir, "qc", "soupx_rho.csv")
+  if (file.exists(rho_csv)) {
+    r <- tryCatch(read.csv(rho_csv, stringsAsFactors = FALSE), error = function(e) NULL)
+    if (!is.null(r) && all(c("sample", "rho") %in% names(r))) {
+      # keep only rows that belong to THIS cohort, matching with and without _sx
+      key <- sub("_sx$", "", samples_all)
+      r <- r[sub("_sx$", "", r$sample) %in% key, , drop = FALSE]
+      if (nrow(r)) rho <- r
+    }
+    if (is.null(rho)) msg("  ambient: %s present but no rows match this cohort — section omitted",
+                          basename(rho_csv))
+  }
+
+  cust <- list(qc_png = qc_png, qc_scale = qc_scale, cor_pb = cor_pb,
+               evidence = evidence, rho = rho, n_panel = length(panel))
+  msg("customer extras: qc panels=%d cor=%dx%d evidence=%s rho=%s",
+      if (is.null(qc_png)) 0L else length(qc_png), nrow(cor_pb), ncol(cor_pb),
+      if (is.null(evidence)) "none" else paste0(nrow(evidence), " clusters"),
+      if (is.null(rho)) "none" else paste0(nrow(rho), " samples"))
+  rm(cmat); gc(verbose = FALSE)
+}
+
 # ---- bundle + render ----
 bundle <- list(
+  customer = customer, cust = cust,
   run_name = run_name, generated = as.character(Sys.time()),
   samples = samples_all, n_cells_total = nrow(cells),
   cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide, counts_long = counts_long,
