@@ -106,7 +106,17 @@ if (.species == "cm") {
     Epithelial = c("EPCAM", "KRT8", "KRT18", "KRT19"),
     # Epicardial — absent from the source figures but rising here (WT1 0.1 -> 18.4,
     # ALDH1A2 0.9 -> 9.7). A genuine expected population in cardiac differentiation.
-    Epicardial = c("WT1", "TBX18", "ALDH1A2", "UPK3B"),
+    # Epicardium vs proepicardium split 2026-10-24. These were one panel
+    # (WT1/TBX18/ALDH1A2/UPK3B), which is really the PROEPICARDIAL transcription
+    # factor set — so "Epicardial" was defined by progenitor markers and the two
+    # states could not be separated. build_reference.R dropped Proepicardial
+    # entirely for want of a panel, and the resulting frozen reference forced
+    # those cells into Myofibroblast (28 pp drift on the held-out anchor).
+    # Split on the biology: proepicardium is the TF-defined progenitor,
+    # epicardium the differentiated mesothelial sheet. All genes verified present
+    # in the cardiac features files.
+    Epicardial    = c("UPK3B", "MSLN", "KRT19", "BNC1", "CCDC80"),
+    Proepicardial = c("TBX18", "WT1", "SFRP5", "LHX2", "SEMA3D", "ALDH1A2"),
     # Hepatic / yolk-sac endoderm off-target. AFP goes 6.4 -> 12.8 -> 95.6 -> 99.4 and
     # FOXA2 peaks at D11 (23.4%). Detection that high is either a large endoderm
     # population or heavy ambient RNA from one — see the caveat at the foot of this file.
