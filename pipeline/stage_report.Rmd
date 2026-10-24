@@ -1,0 +1,268 @@
+---
+params:
+  bundle: ""
+  title: ""
+title: "`r params$title`"
+output:
+  html_document:
+    self_contained: true
+    theme: null
+    highlight: null
+    mathjax: null
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, error = TRUE)
+B <- readRDS(params$bundle)
+library(DT); library(plotly); library(htmltools)
+# One table style for the whole stage set, matching the run report's QC table:
+# compact, striped, sortable, no paging. DT >= 0.34 rejects callback = NULL, so a
+# no-op JS keeps the argument type valid (this broke the run report under --lite).
+tbl <- function(d, order_col = NULL, digits = NULL) {
+  if (is.null(d) || !nrow(d)) return(HTML("<p class='none'>Not available for this run.</p>"))
+  o <- list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE)
+  if (!is.null(order_col)) o$order <- list(list(order_col, "asc"))
+  x <- datatable(d, rownames = FALSE, class = "compact stripe hover", selection = "none",
+                 callback = DT::JS("return table;"), options = o)
+  if (!is.null(digits)) for (cc in intersect(digits, names(d))) x <- formatRound(x, cc, 2)
+  x
+}
+img <- function(u, alt = "") if (is.null(u)) HTML("<p class='none'>Figure unavailable.</p>") else
+  HTML(sprintf("<img src='%s' alt='%s' style='width:100%%;height:auto;border-radius:6px'>",
+               u, htmlEscape(alt)))
+grid <- function(lst, nm = names(lst), cap = NULL) {
+  keep <- !vapply(lst, is.null, logical(1))
+  if (!any(keep)) return(HTML("<p class='none'>No panels available.</p>"))
+  HTML(paste0("<div class='pgrid'>", paste0(
+    "<figure><img src='", unlist(lst[keep]), "' alt='", htmlEscape(nm[keep]),
+    "'><figcaption>", htmlEscape(nm[keep]), "</figcaption></figure>",
+    collapse = ""), "</div>"))
+}
+```
+
+```{css echo=FALSE}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+     color:#222;max-width:1080px;margin:0 auto;padding:0 20px 60px;line-height:1.55}
+h1{font-size:1.75em;margin:1.1em 0 .15em;border-bottom:2px solid #eee;padding-bottom:.3em}
+h2{font-size:1.2em;margin:1.7em 0 .35em;color:#1a4f7a}
+.meta{font-size:.85em;color:#666;margin:0 0 1.4em}
+.lead{background:#f4f8fb;border-left:4px solid #1a4f7a;padding:11px 15px;margin:1em 0;
+      border-radius:0 4px 4px 0}
+.lead p{margin:.25em 0}
+.note{font-size:.9em;color:#555;background:#fcfcfa;border:1px solid #ededed;
+      padding:10px 14px;border-radius:4px;margin:.9em 0}
+.none{color:#888;font-style:italic;font-size:.92em}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin:1em 0}
+.pgrid figure{margin:0}
+.pgrid img{width:100%;height:auto;border:1px solid #eee;border-radius:6px;display:block}
+.pgrid figcaption{font-size:.84em;color:#555;text-align:center;margin-top:4px;font-weight:600}
+table.dataTable{font-size:.88em}
+table.dataTable thead th{background:#1a4f7a;color:#fff}
+#TOC{font-size:.9em;background:#fafbfc;border:1px solid #eee;border-radius:4px;
+     padding:9px 18px;margin:1em 0}
+#TOC ul{margin:.2em 0;padding-left:1.2em}
+```
+
+```{r head, results="asis"}
+cat(sprintf("<p class='meta'>%s · stage %s · generated %s</p>",
+            htmlEscape(B$.run), B$.id, B$.generated))
+cat(sprintf("<div class='lead'><p>%s</p></div>", htmlEscape(B$.blurb)))
+```
+
+```{r stage01, eval=(B$.id=="01"), results="asis"}
+cat("## Distribution of cell quality metrics\n\n")
+cat("<div class='note'>One violin per sample. Genes and UMIs per cell in the low thousands",
+    "indicate healthy, well-captured cells. A sample whose mitochondrial fraction sits",
+    "visibly higher than the others had more stressed or dying cells.</div>\n")
+print(img(B$violin, "QC violins per sample"))
+cat("\n\n## Every cell, UMIs against genes\n\n")
+cat("<div class='note'>Shared axes across samples so panels compare directly; colour is",
+    "mitochondrial percentage. Healthy cells form one dense diagonal cloud. A separate",
+    "cloud low on both axes is debris or empty droplets.</div>\n")
+print(grid(B$qc_panels))
+cat("\n\n## What each filter removed\n\n")
+t <- B$thresholds
+cat(sprintf("<div class='note'>Cells were kept with at least %s genes%s%s.</div>\n",
+  format(t$min_features, big.mark = ","),
+  if (!is.na(t$max_features)) sprintf(" and at most %s", format(t$max_features, big.mark = ",")) else "",
+  if (!is.na(t$max_mt)) sprintf(", and below %s%% mitochondrial reads", t$max_mt) else ""))
+```
+
+```{r stage01_fate, eval=(B$.id=="01")}
+tagList(tbl(B$fate))
+```
+
+```{r stage01_sum, eval=(B$.id=="01"), results="asis"}
+if (!is.null(B$summary) && nrow(B$summary)) cat("\n\n## Per-sample summary\n\n")
+```
+
+```{r stage01_sum_t, eval=(B$.id=="01")}
+tagList(tbl(B$summary))
+```
+
+```{r stage01_rho, eval=(B$.id=="01" && !is.null(B$rho)), results="asis"}
+cat("\n\n## Ambient RNA\n\n")
+cat("<div class='note'><strong>rho</strong> is the fraction of each library's counts",
+    "estimated to come from free-floating RNA rather than from inside cells, measured with",
+    "SoupX. Below about 0.05 it is negligible; from roughly 0.3 upward the library's",
+    "apparent composition should be treated with caution.</div>\n")
+```
+
+```{r stage01_rho_t, eval=(B$.id=="01" && !is.null(B$rho))}
+tagList(tbl(B$rho, digits = "rho"))
+```
+
+```{r stage02, eval=(B$.id=="02"), results="asis"}
+cat("## Cells removed as doublets\n\n")
+cat("<div class='note'>A doublet is one droplet that captured two cells; left in, it looks",
+    "like a hybrid cell type that does not exist. Rates rise with how densely the sample was",
+    "loaded, so a high rate usually reflects loading rather than sample quality.</div>\n")
+```
+
+```{r stage02_t, eval=(B$.id=="02")}
+tagList(tbl(B$fate))
+```
+
+```{r stage02_hist, eval=(B$.id=="02"), results="asis"}
+cat("\n\n## Doublet score distribution\n\n")
+print(img(B$score_hist, "doublet score histogram per sample"))
+cat(sprintf("\n\n<div class='note'><strong>Scope of this figure.</strong> %s</div>\n",
+            htmlEscape(B$limitation)))
+```
+
+```{r stage03, eval=(B$.id=="03"), results="asis"}
+P <- B$per_sample
+cat("## Per-sample clustering\n\n")
+cat("<div class='note'>Each sample clustered independently, coloured by its own cluster",
+    "numbering. Cluster numbers are not comparable between samples — only the integrated",
+    "analysis gives labels that mean the same thing across samples.</div>\n")
+print(grid(lapply(P, `[[`, "panel"), names(P)))
+cat("\n\n## Clusters and top markers per sample\n\n")
+rows <- do.call(rbind, lapply(names(P), function(s) {
+  x <- P[[s]]
+  if (is.null(x$top) || !nrow(x$top)) return(NULL)
+  data.frame(Sample = s, Cluster = x$top$Cluster,
+             `Top markers` = x$top$`Top markers`, check.names = FALSE)
+}))
+```
+
+```{r stage03_t, eval=(B$.id=="03")}
+tagList(tbl(rows))
+```
+
+```{r stage04, eval=(B$.id=="04"), results="asis"}
+cat(sprintf("<div class='note'>Labels in this run come from the <strong>%s</strong> assignment.</div>\n",
+            htmlEscape(B$label_src)))
+cat("\n## Final cluster assignments\n\n")
+cat("<div class='note'>One row per cluster with the label it was given and the",
+    "reference classifier's majority call. Sort any column.</div>\n")
+```
+
+```{r stage04_t1, eval=(B$.id=="04")}
+tagList(tbl(B$clusters))
+```
+
+```{r stage04_h2, eval=(B$.id=="04" && !is.null(B$vs)), results="asis"}
+cat("\n\n## Reference call versus marker-based call\n\n")
+cat("<div class='note'>Two independent methods per cluster: reference-based (SingleR) and",
+    "marker-based (scType). Agreement is a good sign; disagreement marks the clusters whose",
+    "identity rests on judgement rather than on both methods converging.</div>\n")
+```
+
+```{r stage04_t2, eval=(B$.id=="04" && !is.null(B$vs))}
+tagList(tbl(B$vs))
+```
+
+```{r stage04_h3, eval=(B$.id=="04" && !is.null(B$consensus)), results="asis"}
+cat("\n\n## Consensus detail\n\n")
+```
+
+```{r stage04_t3, eval=(B$.id=="04" && !is.null(B$consensus))}
+tagList(tbl(B$consensus))
+```
+
+```{r stage05, eval=(B$.id=="05"), results="asis"}
+cat("## Cell map, coloured by cell type\n\n")
+cat("<div class='note'>Each dot is one cell; cells near each other have similar expression.",
+    "Labels mark the centre of each cell type. Distances between separate islands are not",
+    "meaningful — only the grouping is.</div>\n")
+```
+
+```{r stage05_umap, eval=(B$.id=="05")}
+rx <- B$range$x; ry <- B$range$y
+cen <- B$centroids
+plot_ly() |>
+  add_trace(data = cen, x = ~u1, y = ~u2, type = "scatter", mode = "markers+text",
+            text = ~ct, textposition = "top center",
+            textfont = list(size = 11, color = "#111"),
+            marker = list(size = 9, color = "rgba(255,255,255,.85)",
+                          line = list(width = 1.5, color = "#333")),
+            hoverinfo = "text",
+            hovertext = ~sprintf("%s<br>%s cells", ct, format(n, big.mark = ",")),
+            showlegend = FALSE, name = "") |>
+  layout(images = list(list(source = B$umap_ct, xref = "x", yref = "y",
+                            x = rx[1], y = ry[2], sizex = diff(rx), sizey = diff(ry),
+                            sizing = "stretch", layer = "below")),
+         xaxis = list(range = rx, showgrid = FALSE, zeroline = FALSE,
+                      showticklabels = FALSE, title = ""),
+         yaxis = list(range = ry, showgrid = FALSE, zeroline = FALSE,
+                      showticklabels = FALSE, title = "", scaleanchor = "x"),
+         margin = list(l = 0, r = 0, t = 8, b = 0), plot_bgcolor = "white",
+         height = 520) |>
+  config(displaylogo = FALSE)
+```
+
+```{r stage05_legend, eval=(B$.id=="05"), results="asis"}
+cat("<div style='font-size:.85em;margin:.4em 0 1.4em'>",
+    paste0("<span style='display:inline-block;margin:0 14px 6px 0;white-space:nowrap'>",
+           "<i style='display:inline-block;width:11px;height:11px;border-radius:2px;",
+           "margin-right:5px;vertical-align:middle;background:", unname(B$pal), "'></i>",
+           htmlEscape(names(B$pal)), "</span>", collapse = ""), "</div>\n", sep = "")
+cat("\n\n## The same cells, coloured by sample\n\n")
+cat("<div class='note'>If one sample forms its own island rather than mixing, that is a",
+    "batch effect rather than biology. Well-integrated samples overlap, with each cell type",
+    "containing cells from every sample.</div>\n")
+print(img(B$umap_sample, "UMAP coloured by sample"))
+cat("\n\n## Composition\n\n")
+```
+
+```{r stage05_prop, eval=(B$.id=="05")}
+d <- B$counts
+plot_ly(d, x = ~sample, y = ~pct, color = ~cell_type, colors = B$pal, type = "bar",
+        hoverinfo = "text",
+        hovertext = ~sprintf("%s<br>%s: %.1f%%<br>%s cells", sample, cell_type, pct,
+                             format(n, big.mark = ","))) |>
+  layout(barmode = "stack", xaxis = list(title = ""),
+         yaxis = list(title = "% of sample", range = c(0, 100)),
+         legend = list(orientation = "h", y = -0.2), margin = list(t = 8)) |>
+  config(displaylogo = FALSE)
+```
+
+```{r stage05_mk, eval=(B$.id=="05" && !is.null(B$markers)), results="asis"}
+cat("\n\n## Cluster markers\n\n")
+cat("<div class='note'>Genes most enriched in each integrated cluster relative to all other",
+    "cells. Sort any column; the full table is in the run's CSV outputs.</div>\n")
+```
+
+```{r stage05_mk_t, eval=(B$.id=="05" && !is.null(B$markers))}
+m <- B$markers
+sc <- intersect(c("avg_log2FC", "avg_logFC"), names(m))
+cl <- intersect(c("cluster"), names(m))
+if (length(sc) && length(cl)) {
+  m <- m[order(m[[cl]], -m[[sc[1]]]), ]
+  m <- do.call(rbind, lapply(split(m, m[[cl]]), head, 10))
+  rownames(m) <- NULL
+}
+tagList(tbl(utils::head(m, 400)))
+```
+
+```{r foot, results="asis"}
+cat("<div class='note' style='margin-top:2.4em'>Rendered from this run's data and CSV",
+    "outputs — no figure here is a screenshot of a PDF. The matching",
+    sprintf("<code>%s</code>", htmlEscape(switch(B$.id, "01" = "01-QC_report.pdf",
+      "02" = "02-Doublet_report.pdf", "03" = "03-Individual_report.pdf",
+      "04" = "04-Annotation_report.pdf", "05" = "05-Integrated_report.pdf", "report"))),
+    "remains in the run root for printing.</div>\n")
+```
