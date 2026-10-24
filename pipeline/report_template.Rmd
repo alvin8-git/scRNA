@@ -344,7 +344,11 @@ datatable(S2, rownames = FALSE,
           class = if (gal_ok) "compact stripe hover clickrows" else "compact stripe hover",
           caption = if (gal_ok) "Click a row to open that sample's detailed plots below." else NULL,
           selection = "single",
-          callback = if (gal_ok) cb else NULL,
+          # DT >= 0.34 rejects callback = NULL ("only accept a value returned from
+          # JS()"), which broke this whole table under --lite where gal_ok is FALSE.
+          # A no-op JS keeps the argument type valid when there are no galleries
+          # to jump to.
+          callback = if (gal_ok) cb else DT::JS("return table;"),
           options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE)) |>
   formatRound(roundable, 1)
 ```
