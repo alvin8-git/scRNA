@@ -7,6 +7,25 @@ Status: discussion document, nothing implemented. Written 2026-10-24.
 
 ## 0. Decisions taken
 
+### Scope of "sample-agnostic"
+
+"Agnostic" means these four validated sample types, and no more:
+
+| sample type | species keyword | status |
+|---|---|---|
+| human PBMC | `human` | validated |
+| human whole blood | `human` + `SINGLER_REF <- "MonacoImmune"` by hand | validated |
+| cardiac differentiation (hESC/iPSC → CM) | `cm` | validated |
+| bat whole blood (*Eonycteris spelaea*) | `bat` | validated |
+| bat wing tissue | `bat_wing` | validated |
+
+**Anything else — mouse included — is out of scope until analysed in detail.**
+The report machinery will run on other species because the marker panel, palette
+and grouping all come from config rather than being hardcoded, but running is
+not the same as validated: there is no curated marker panel, no reference
+suitable for `SINGLER_REF`, and no one has checked whether the cell-type calls
+mean anything. Treat output from an unvalidated sample type as unreviewed.
+
 - **Format: a single self-contained HTML.** No zip, no linked `figures/` folder.
   The base64 ~33% penalty and the one-off JS library cost are both accepted.
 - **Core content, always present** — these four earn their bytes first:
