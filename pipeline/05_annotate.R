@@ -439,27 +439,38 @@ if (!is.null(CLUSTER_CELLTYPE_MAP)) {
   # label, for the same reason a partial CLUSTER_CELLTYPE_MAP is dangerous.
   .scm <- get0("CLUSTER_SUBCLUSTER_MAP", ifnotfound = NULL)
   if (!is.null(.scm)) {
+    # Accept EITHER one spec, list(cluster=, resolution=, labels=), or a list of
+    # such specs so several mixed clusters can be split in one pass. A cohort
+    # often needs more than one: the cm _sx cohort splits the cardiomyocyte
+    # cluster and two stromal clusters, which collapsed smooth muscle and a
+    # cycling population into "Myofibroblast".
+    .specs <- if (!is.null(.scm$cluster)) list(.scm) else .scm
     .g <- grep("snn$", names(merged@graphs), value = TRUE)[1]
     if (is.na(.g)) stop("CLUSTER_SUBCLUSTER_MAP needs an SNN graph on the object; none found")
-    .prev_idents <- Idents(merged)
-    Idents(merged) <- "seurat_clusters"
-    merged <- FindSubCluster(merged, cluster = .scm$cluster, graph.name = .g,
-                             subcluster.name = "annot_subcluster",
-                             resolution = .scm$resolution)
-    Idents(merged) <- .prev_idents
-    .in  <- as.character(merged$seurat_clusters) == .scm$cluster
-    .sub <- sub(paste0("^", .scm$cluster, "_"), "", as.character(merged$annot_subcluster[.in]))
-    .missing <- setdiff(unique(.sub), names(.scm$labels))
-    if (length(.missing))
-      stop("CLUSTER_SUBCLUSTER_MAP: cluster ", .scm$cluster, " split into subclusters ",
-           paste(sort(unique(.sub)), collapse = ","), " but labels are missing for ",
-           paste(.missing, collapse = ","), " — the subclustering changed; re-curate.")
-    merged$cell_type[.in] <- unname(.scm$labels[.sub])
-    message("  CLUSTER_SUBCLUSTER_MAP: cluster ", .scm$cluster, " split at res ",
-            .scm$resolution, " -> ",
-            paste(sprintf("%s=%s (n=%d)", names(table(.sub)), .scm$labels[names(table(.sub))],
-                          as.integer(table(.sub))), collapse = "; "))
-    rm(.g, .prev_idents, .in, .sub, .missing)
+    for (.s in .specs) {
+      if (is.null(.s$cluster) || is.null(.s$resolution) || is.null(.s$labels))
+        stop("CLUSTER_SUBCLUSTER_MAP: each spec needs cluster, resolution and labels")
+      .prev_idents <- Idents(merged)
+      Idents(merged) <- "seurat_clusters"
+      merged <- FindSubCluster(merged, cluster = .s$cluster, graph.name = .g,
+                               subcluster.name = "annot_subcluster",
+                               resolution = .s$resolution)
+      Idents(merged) <- .prev_idents
+      .in  <- as.character(merged$seurat_clusters) == .s$cluster
+      .sub <- sub(paste0("^", .s$cluster, "_"), "", as.character(merged$annot_subcluster[.in]))
+      .missing <- setdiff(unique(.sub), names(.s$labels))
+      if (length(.missing))
+        stop("CLUSTER_SUBCLUSTER_MAP: cluster ", .s$cluster, " split into subclusters ",
+             paste(sort(unique(.sub)), collapse = ","), " but labels are missing for ",
+             paste(.missing, collapse = ","), " — the subclustering changed; re-curate.")
+      merged$cell_type[.in] <- unname(.s$labels[.sub])
+      message("  CLUSTER_SUBCLUSTER_MAP: cluster ", .s$cluster, " split at res ",
+              .s$resolution, " -> ",
+              paste(sprintf("%s=%s (n=%d)", names(table(.sub)), .s$labels[names(table(.sub))],
+                            as.integer(table(.sub))), collapse = "; "))
+      rm(.prev_idents, .in, .sub, .missing)
+    }
+    rm(.g, .specs, .s)
   }
   rm(.scm)
 } else {

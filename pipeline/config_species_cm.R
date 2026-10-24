@@ -414,6 +414,49 @@ if (.species == "cm") {
                                   # likely doublets
       "21" = "Unknown"            # n=83, 1,209 genes; AFP 83 ALB 73, no identity TF
     )
+
+    # --- subtype curation, 2026-10-24 -------------------------------------
+    # Three clusters hid substructure the lab needs: the cardiomyocytes, and two
+    # clusters both labelled Myofibroblast. Curated from per-subcluster marker
+    # ENRICHMENT against the run-wide baseline at res 0.4 on the saved RNA_snn
+    # graph (raw detection is useless here — ACTA2 and COL1A1 are near-universal
+    # in this cohort).
+    #
+    # NO ventricular/atrial split is made, deliberately. All six characterisable
+    # subclusters of cluster 12 score CM immature 38-65% on MYH6 (+53 to +88
+    # enrichment); ventricular appears in one subcluster on FHL2 alone. The
+    # apparent "atrial 16-28%" is driven entirely by MYL4, which is an atrial
+    # marker in adult heart but also a fetal/immature CM marker — at D11-D30 it
+    # reports immaturity, not chamber identity. Chamber specification needs
+    # retinoic acid patterning this protocol does not apply, and the source
+    # paper (npj Regen Med s41536-023-00302-6) treats day-11 output as committed
+    # progenitors that mature only after transplantation.
+    CLUSTER_SUBCLUSTER_MAP <- list(
+      # cardiomyocytes: immature throughout, with one cycling population
+      list(cluster = "12", resolution = 0.4, labels = c(
+        "0" = "Cardiomyocyte (immature)",   # n=935  CM pan 57 MYH6 +53; 67% D11
+        "1" = "Cardiomyocyte (immature)",   # n=838  CM pan 59 MYH6 +61
+        "2" = "Cardiomyocyte (immature)",   # n=657  CM pan 83 MYH6 +88; 92% D11
+        "3" = "Cardiomyocyte (immature)",   # n=620  CM pan 71 MYH6 +82
+        "4" = "Cardiomyocyte (immature)",   # n=515  CM pan 83 MYH6 +88
+        "5" = "Proliferating",              # n=116  TOP2A +56, Proliferating 61
+        "6" = "Cardiomyocyte (immature)")), # n=22   too small to characterise
+      # cluster 5: a genuine fibroblast<->myofibroblast continuum, 82-90% D30
+      list(cluster = "5", resolution = 0.4, labels = c(
+        "0" = "Myofibroblast",              # Fibroblast 81 / Myofib 55, DCN +52
+        "1" = "Myofibroblast",              # Fibroblast 75 / Myofib 61, TAGLN +31
+        "2" = "Myofibroblast",              # Fibroblast 82 / Myofib 71, PDGFRA +52
+        "3" = "Myofibroblast",              # Fibroblast 82 / Myofib 77, TAGLN +50
+        "4" = "Fibroblast (resting)",       # n=676 TCF21 +37, Myofib only 43 — least activated
+        "5" = "Fibroblast (activated)")),   # n=398 Myofib 86, TAGLN +58 — most activated
+      # cluster 17: NOT one population. Smooth muscle and a cycling stromal
+      # population were both collapsed into Myofibroblast at cluster resolution.
+      list(cluster = "17", resolution = 0.4, labels = c(
+        "0" = "Myofibroblast",              # n=414 Myofib 88 TAGLN +58; 85% D11
+        "1" = "Proliferating",              # n=380 MKI67 +74, Proliferating 87; 88% D30
+        "2" = "Smooth Muscle",              # n=281 SMC 64 on CNN1 +67; 81% D11
+        "3" = "Smooth Muscle"))             # n=31  CNN1 +78; small, same identity as 17_2
+    )
   }
 
   # ---- CAVEAT recorded in config so it travels with the analysis -------------
