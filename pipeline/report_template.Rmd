@@ -680,8 +680,14 @@ cat("# Ambient RNA\n\n",
 
 ```{r cust_rho, eval=!is.null(B$cust$rho)}
 rh <- B$cust$rho
+# Bands are deliberately blunt at the top end. A library at rho 0.5+ is mostly
+# ambient signal: correcting it does not recover the sample, it reconstructs a
+# minority of it, biased toward whatever dominated the soup. Saying "interpret
+# with caution" there would understate a result that should stop the analysis.
 band <- function(x) if (x < 0.05) "negligible" else if (x < 0.15) "low" else
-                    if (x < 0.30) "moderate" else "high — interpret with caution"
+                    if (x < 0.30) "moderate" else
+                    if (x < 0.50) "high — interpret with caution" else
+                    "UNSUITABLE — recommend excluding this sample"
 tb <- data.frame(Sample = rh$sample,
                  rho = round(rh$rho, 3),
                  `% of counts ambient` = round(100 * rh$rho, 1),
@@ -690,10 +696,14 @@ tb <- data.frame(Sample = rh$sample,
 datatable(tb, rownames = FALSE, class = "compact stripe hover", selection = "none",
           callback = DT::JS("return table;"),
           options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
-                         order = list(list(1, "asc")),
+                         order = list(list(1, "desc")),   # worst sample first
                          columnDefs = list(list(className = "dt-right", targets = 1:2)))) |>
-  formatStyle("rho", backgroundColor = styleInterval(c(0.05, 0.15, 0.30),
-              c("#f1f8f3", "#fdf6e3", "#fdeee3", "#fbe3e3")))
+  formatStyle("rho", backgroundColor = styleInterval(c(0.05, 0.15, 0.30, 0.50),
+              c("#f1f8f3", "#fdf6e3", "#fdeee3", "#fbe3e3", "#f5c6c6")),
+              fontWeight = styleInterval(0.50, c("normal", "bold"))) |>
+  formatStyle("Assessment", fontWeight = styleEqual(
+              "UNSUITABLE — recommend excluding this sample", "bold"),
+              color = styleEqual("UNSUITABLE — recommend excluding this sample", "#8a1c1c"))
 ```
 
 ```{r cust_qc_detail, results='asis', eval=!is.null(B$cust$qc_png)}
