@@ -55,6 +55,20 @@ SINGLER_NORM <- c(
   "Macrophage"             = "Macrophage",
   "Macrophages"            = "Macrophage",
   "Osteoblasts"            = "MSC",
+  # --- MouseRNAseqData labels (SCRNA_SPECIES=mouse) ---
+  # Space-separated, unlike HPCA's underscores. "Cardiomyocytes" is the one that
+  # matters: without it the raw plural passes through and never meets the
+  # "Cardiomyocyte" marker panel or palette entry. Neurons / Astrocytes /
+  # Oligodendrocytes / Adipocytes are left raw so an off-target call stays visible.
+  "Cardiomyocytes"         = "Cardiomyocyte",
+  "Endothelial cells"      = "Endothelial",
+  "Epithelial cells"       = "Epithelial",
+  "Erythrocytes"           = "RBC",
+  "Granulocytes"           = "Neutrophil",
+  "Monocytes"              = "CD14+ Mono",
+  "Dendritic cells"        = "DC",
+  "T cells"                = "CD4 T",
+  "Microglia"              = "Macrophage",
   # --- MonacoImmuneData labels ---
   "CD4+ T cells"           = "CD4 T",
   "CD8+ T cells"           = "CD8 T",
