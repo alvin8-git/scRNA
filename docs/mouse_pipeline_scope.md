@@ -23,6 +23,21 @@ identical to the cardiac samples, so copying and SoupX both work unchanged.
 Design, as far as the names reveal it: a timecourse (0h, 6h, 24h, 72h) with two
 arms (`Cell` and `Med`) in duplicate, plus two `MS_Sham` samples on PosA only.
 
+**Design as clarified by Alvin, 2026-10-25:** `Med` is medium, the vehicle /
+negative control for its timepoint; `Cell` is the treated arm. `MS_Sham` is most
+likely a control set from an earlier experiment sharing the flowcell, and is
+excluded from the timecourse runs. The analysis is therefore two-factor
+(arm × time), and the primary contrast is Cell − Med *within* a timepoint, which
+is unconfounded by flowcell because both arms of a timepoint were sequenced
+together. Time alone remains confounded with flowcell (§1 item 1).
+
+**Step 01 on all 18 (2026-10-25, `Results/results_0hCell1_18samples_filtered`):**
+median mito 0.4–1.6 % in every sample, 95th percentile under 10 %, so
+`max_percent_mt` 30 is inert and can stay. `72hMed_a` is a failed capture (1 cell
+passes QC of 1,434 called barcodes); `72hMed_b` has 60 cells; `72hCell_2` 241. The
+72 h timepoint has one usable library (`72hCell_1`, 426 cells) and no Med control.
+First end-to-end run: PosA, 0 h + 6 h, both arms, without the shams.
+
 ### Three things about the design that need answers before analysis
 
 1. **Flowcell is confounded with timepoint.** 0h and 6h are on PosA, 24h and 72h
