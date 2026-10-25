@@ -304,7 +304,10 @@ fmt <- function(x, d=0) ifelse(is.na(x), "—", formatC(round(as.numeric(x), d),
 row <- function(l, v) sprintf('<div class="stat"><span>%s</span><b>%s</b></div>', l, v)
 cards <- vapply(seq_len(nrow(S)), function(i) {
   r <- S[i, ]
-  low <- (!is.na(r$Pct_retained) && r$Pct_retained < 70) ||
+  # Judge retention after the load gate when available: barcodes under the gene
+  # floor are a caller's empty droplets, not lost cells (see 08b Pct_retained_loaded).
+  ret <- if (!is.null(r$Pct_retained_loaded) && !is.na(r$Pct_retained_loaded)) r$Pct_retained_loaded else r$Pct_retained
+  low <- (!is.na(ret) && ret < 70) ||
          (!is.na(r$Median_genes) && r$Median_genes < 500)
   tag <- if (low) ' <span class="tag">low QC</span>' else ''
   stats <- paste0(
@@ -326,6 +329,7 @@ cat('<div class="cardgrid">', paste(cards, collapse=""), '</div>')
 
 ```{r summary_table}
 S2 <- B$summary
+S2$Pct_retained_loaded <- NULL   # drives the low-QC tag only; the table shows raw-barcode retention
 nm  <- c(Sample="Sample", Cells="Cells", Median_genes="Median genes", Median_UMI="Median UMI",
          Median_pct_MT="Median %MT", Median_pct_ribo="Median %ribo", Pct_retained="% retained",
          Doublet_pct="Doublet %", HVG="HVG", N_cell_types="Cell types", Top_type="Top type")
@@ -357,7 +361,7 @@ datatable(S2, rownames = FALSE,
 thr <- if (is.null(B$hvg_var_threshold)) 1.3 else B$hvg_var_threshold
 defs <- c(
   "Cells"                = "Cells passing QC filtering and doublet removal.",
-  "% retained"           = "Percentage of input GEM barcodes kept after QC and doublet removal.",
+  "% retained"           = "Percentage of input GEM barcodes kept after QC and doublet removal. The low-QC tag on a sample card instead counts from barcodes that cleared the minimum-genes floor, so a permissive barcode caller does not flag a healthy sample.",
   "Median genes"         = "Median number of genes detected per cell (nFeature_RNA).",
   "Median UMI"           = "Median transcript (UMI) count per cell (nCount_RNA).",
   "% MT (Median %MT)"    = "Median fraction of reads from mitochondrial genes per cell; high values flag stressed or dying cells.",

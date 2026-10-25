@@ -506,6 +506,11 @@ CELLTYPE_COLORS <- c(
   "Epicardial"                    = "#16A085",
   "Hepatic/Endoderm"              = "#A04000",
   "Proliferating"                 = "#5D6D7E",
+  # Added 2026-10-24 after the fresh look against Yap et al. 2023 (docs/cm_fresh_look_2026-10-24.md)
+  "Mesenchyme (lateral plate)"    = "#AF7AC5",
+  "Epicardial-like"               = "#48C9B0",
+  "Amnion-like epithelium"        = "#7F8C8D",
+  "Fibroblast (low-depth)"        = "#D7CCC8",
 
   "Unknown"            = "#B09C85"
 )

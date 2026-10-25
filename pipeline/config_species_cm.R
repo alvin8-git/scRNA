@@ -382,18 +382,23 @@ if (.species == "cm") {
       # --- cardiomyocyte: the only cluster with sarcomere + NKX2-5 -------------
       "12" = "Cardiomyocyte",     # TTN 96 MYL7 93 MYL4 86 MYH6 81 ACTC1 84 TNNT2 69,
                                   # NKX2-5 56 MEF2C 49 TBX5 38 GATA4 66; 75% D11 20% D30
-      # --- cardiac progenitor: GATA4 + MYL7/ACTC1, sarcomere and NKX2-5 absent,
-      # --- cargo LOW (AFP 6 ALB 3) so not an ambient artefact; D11-dominant ----
-      "0"  = "Cardiac progenitor", # GATA4 43 MYL7 68 ACTC1 44, NKX2-5 3 MYH6 1 TTN 8; 91% D11
-      "4"  = "Cardiac progenitor", # GATA4 25 MYL7 75 ACTC1 55, NKX2-5 3 TTN 6; 91% D11
-      "14" = "Cardiac progenitor", # GATA4 56 MYL7 49 ACTC1 29, NKX2-5 2; 64% D11
-      # --- proepicardial: TBX18/WT1/SFRP5/LHX2 with GATA4, NKX2-5 low ---------
-      "18" = "Proepicardial",     # TBX18 71 WT1 60 SFRP5 76 UPK3B 73 GATA4 84, NKX2-5 0;
+      # --- lateral-plate mesenchyme (renamed 2026-10-24, was "Cardiac progenitor"):
+      # --- HAND1 89-92 MSX1 65 TMEM88 89 BMP4 70 with NKX2-5 3 ISL1 6 TBX5 5 — the
+      # --- paper's "mesenchymal" population, precursor of the D20/D30 stroma -----
+      "0"  = "Mesenchyme (lateral plate)", # HAND1 89 MSX1 65 TMEM88 89 LUM 85; NKX2-5 3; 91% D11
+      "4"  = "Mesenchyme (lateral plate)", # HAND1 92 MSX1 67 TMEM88 93; NKX2-5 3; 91% D11
+      "14" = "Mesenchyme (lateral plate)", # HAND1 46 GATA4 56 CDH11 58; low depth; 64% D11
+      # --- cardiac progenitor (renamed 2026-10-24, was "Proepicardial"): TBX5+ GATA4+
+      # --- first-heart-field progenitor = the lab's day-11 CCP. WT1 16 TBX18 11
+      # --- ALDH1A2 2 rule out proepicardium; nearest clusters 0 (0.963) and 12 (0.941)
+      "10" = "Cardiac progenitor", # GATA4 83 TBX5 37 NKX2-5 13 MYL7 82 SLC8A1 41 CCDC80 79; 90% D11
+      # --- proepicardial: TBX18/WT1/ALDH1A2 — the only genuine epicardium --------
+      "18" = "Proepicardial",     # TBX18 71 WT1 60 ALDH1A2 82 UPK3B 73 GATA4 84, NKX2-5 0;
                                   # 99% D30, 3,495 genes, n=215
-      "10" = "Proepicardial",     # GATA4 83 TBX5 37 SFRP5 28 WT1 16 LHX2 14 TBX18 11; 90% D11
-      # --- epicardium / mesothelium -------------------------------------------
-      "1"  = "Epicardial",        # UPK3B 69 WT1 14 with DCN 99 LUM 97 POSTN 73; 68% D30
-      "7"  = "Epicardial",        # UPK3B 41 WT1 24 with DCN 94 LUM 88 POSTN 68; 68% D30
+      # --- epicardial-like mesothelium (renamed 2026-10-24): UPK3B/BNC1/KRT19/CDH1
+      # --- but WT1 14-24 TBX18 1-2, HAND1+ TMEM88+ — epicardium-derived, not epicardium
+      "1"  = "Epicardial-like",   # UPK3B 69 BNC1 63 KRT19 95 CDH1 64 WT1 14 TBX18 1; 68% D30
+      "7"  = "Epicardial-like",   # UPK3B 41 BNC1 66 KRT19 80 WT1 24 TBX18 2; 68% D30
       # --- stromal -------------------------------------------------------------
       "17" = "Myofibroblast",     # ACTA2 89 TAGLN 91 PDGFRB 41 PDGFRA 30 TCF21 15
       "5"  = "Myofibroblast",     # ACTA2 70 TAGLN 72 PDGFRB 65 PDGFRA 59 TCF21 31; 86% D30
@@ -403,12 +408,15 @@ if (.species == "cm") {
       "19" = "Hepatic/Endoderm",  # FOXA2 90 HHEX 64 ONECUT1 44; TOP2A 95 (cycling); 100% D11
       # --- other ---------------------------------------------------------------
       "15" = "Endothelial",       # CDH5 65 PECAM1 45 KDR 79 MEF2C 42; 89% D11
-      "16" = "Epithelial",        # EPCAM 74 GABRP 54 CLDN4 51 KRT8 96
+      # --- amnion-like epithelium (renamed 2026-10-24, was "Epithelial"): the
+      # --- BMP4-driven off-target — GABRP/VTCN1/TFAP2A/GATA3/ISL1 ----------------
+      "16" = "Amnion-like epithelium", # GABRP 54 VTCN1 29 TFAP2A 40 GATA3 35 ISL1 37 EPCAM 74
       "8"  = "Proliferating",     # TOP2A 93 MKI67 70; 59% D11
-      # --- unresolved: low content + cargo that survived correction, no TF -----
-      "2"  = "Unknown",           # 1,117 genes (LOWEST); AFP 97 ALB 79 APOA1 72 with
-                                  # DCN 93 LUM 96 but FOXA2 1 TBX18 1 NKX2-5 4 POU5F1 0;
-                                  # 81% D30. n=6,668
+      # --- low-depth fibroblast lineage (renamed 2026-10-24, was "Unknown"):
+      # --- DCN 93 LUM 96 COL3A1 99, nearest cluster 5 (Spearman 0.94). The hepatic
+      # --- genes detected in 70-97% of cells carry a uniform 1.1% of UMIs per cell
+      # --- (real endoderm, cluster 13: 3.4%) — ambient reads, not identity ------
+      "2"  = "Fibroblast (low-depth)", # 1,117 genes (LOWEST); 81% D30. n=6,668
       "20" = "Unknown",           # n=184, 99% D30; MYL7 97 ACTC1 82 AND AFP 100 ALB 99
                                   # APOA1 99 DCN 99 — sarcomere and hepatic cargo together,
                                   # likely doublets
@@ -456,6 +464,41 @@ if (.species == "cm") {
         "1" = "Proliferating",              # n=380 MKI67 +74, Proliferating 87; 88% D30
         "2" = "Smooth Muscle",              # n=281 SMC 64 on CNN1 +67; 81% D11
         "3" = "Smooth Muscle"))             # n=31  CNN1 +78; small, same identity as 17_2
+    )
+  }
+
+  # --- Raw (uncorrected) 8-library cohort, curated 2026-10-24 -------------------
+  # 20 clusters, res 0.5, min_features 1000. Until this date the run carried raw
+  # SingleR labels (Neurons 72-93% of every differentiated sample) because every
+  # earlier map was guarded on a 7-name set. Same evidence base as the _sx map
+  # above (docs/cm_fresh_look_2026-10-24.md); cluster numbers differ, identities
+  # correspond one-to-one. Cluster 0 (19,340 cells, 32% of the cohort) is where
+  # uncorrected ambient RNA and H1D20_1 (rho 0.795) collect.
+  if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) &&
+      setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_1", "H1D11_2",
+                               "H1D20_1", "H1D20_2", "H1D30_1", "H1D30_2"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      "4"  = "Pluripotent",                # POU5F1 97 SOX2 93 ESRG 97; 97% D0
+      "8"  = "Pluripotent",                # POU5F1 74 XACT 90; low depth; 97% D0
+      "11" = "Pluripotent",                # POU5F1 95 SOX2 74; 97% D0
+      "1"  = "Mesenchyme (lateral plate)", # HAND1 87 MSX1 62 TMEM88 86; NKX2-5 5; 86% D11
+      "3"  = "Mesenchyme (lateral plate)", # HAND1 74 MSX1 39 TMEM88 78; NKX2-5 6; low depth
+      "10" = "Cardiac progenitor",         # GATA4 79 TBX5 31 NKX2-5 11 ZFPM2 69; WT1 17 TBX18 9; 81% D11
+      "9"  = "Cardiomyocyte",              # MYH6 73 SLC8A1 76 TTN 92 TNNT2 64 NKX2-5 48 MYOCD 54
+      "12" = "Proliferating",              # TOP2A 95 MKI67 74 with HAND1 87 BMP4 84
+      "7"  = "Hepatic/Endoderm",           # FOXA2 75 HHEX 55 TBX3 55 HNF4A 25; 91% D11
+      "13" = "Hepatic/Endoderm",           # APOB 85 MTTP 79 RBP4 88 FGB 88 HNF4A 53 FOXA2 63
+      "14" = "Endothelial",                # CDH5 64 PECAM1 44 CD34 51 KDR 77; 85% D11
+      "15" = "Amnion-like epithelium",     # GABRP 55 VTCN1 30 TFAP2A 40 GATA3 36 ISL1 38 EPCAM 74
+      "2"  = "Epicardial-like",            # UPK3B 71 BNC1 66 CDH1 69 WT1 15 TBX18 2; D20/D30
+      "5"  = "Epicardial-like",            # UPK3B 41 BNC1 61 WT1 20 TBX18 2; D20/D30
+      "18" = "Proepicardial",              # WT1 59 TBX18 66 ALDH1A2 75 UPK3B 77 NPR3 69; 94% D30
+      "6"  = "Myofibroblast",              # CDH11 88 FBN1 71 PDGFRB 67 ACTA2 85 TGFBI 92; 76% D30
+      "16" = "Myofibroblast",              # ACTA2 95 TAGLN 97 CNN1 67 NPPB 43 — SMC-like/stressed
+      "0"  = "Fibroblast (low-depth)",     # 1,220 genes; DCN 91 LUM 99; hepatic 0.9% of UMIs
+                                           # per cell (ambient); 56% D20 incl. H1D20_1
+      "17" = "Unknown",                    # n=372, percent.mt 6.6 (10x the cohort) — dying
+      "19" = "Unknown"                     # n=207, 96% D30; ALB 97 AHSG 93 with ACTA2 97 — doublets
     )
   }
 

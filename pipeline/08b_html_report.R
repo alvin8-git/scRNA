@@ -291,6 +291,14 @@ summary$Median_genes    <- g(qc_sum, "Sample", "Median_nFeature")
 summary$Median_UMI      <- g(qc_sum, "Sample", "Median_nCount")
 summary$Median_pct_MT   <- g(qc_sum, "Sample", "Median_pct_mt")
 summary$Pct_retained    <- g(fate, "Sample", "Pct_retained")
+# Retention among barcodes that passed the load gate (>= QC$min_features genes).
+# The load gate is where a permissive caller's empty droplets go, so judging a
+# sample on raw-barcode retention penalises the caller, not the cells (raw
+# H1D20_2: 17.8k called, 8.7k empty, 45.7% "retained"). The low-QC tag uses this.
+if (!is.null(fate) && all(c("After_doublet_removal", "After_load") %in% names(fate))) {
+  pl <- round(fate$After_doublet_removal / pmax(fate$After_load, 1) * 100, 1)
+  summary$Pct_retained_loaded <- pl[match(summary$Sample, fate$Sample)]
+}
 if (!is.null(fate) && all(c("Removed_doublets", "After_QC") %in% names(fate))) {
   dr <- round(fate$Removed_doublets / pmax(fate$After_QC, 1) * 100, 1)
   summary$Doublet_pct <- dr[match(summary$Sample, fate$Sample)]
