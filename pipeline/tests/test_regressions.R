@@ -164,6 +164,14 @@ f <- file.path(.pipeline, "soupx_adjust.R")
 if (file.exists(f) && any(grepl("forceAccept\\s*=\\s*TRUE", .code_of(f))))
   fails <- c(fails, "soupx_adjust.R forces acceptance of a rho SoupX rejected")
 
+# Regression T13: the report's low-QC tag must not use retention. Retention falls when
+# a permissive caller over-calls barcodes that then fail the gene floor (raw H1D20_2:
+# 45.7% retained, 2,863 median genes, rho 0.09) — a caller artefact, not cell quality.
+# Two attempts (raw-barcode and after-load denominators) both mis-tagged that sample.
+f <- file.path(.pipeline, "report_template.Rmd")
+if (file.exists(f) && any(grepl("Pct_retained(_loaded)?\\s*<\\s*70|ret\\s*<\\s*70", .code_of(f))))
+  fails <- c(fails, "report_template.Rmd tags low QC on retention (use median genes and ambient rho)")
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

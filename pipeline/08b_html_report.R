@@ -293,12 +293,15 @@ summary$Median_UMI      <- g(qc_sum, "Sample", "Median_nCount")
 summary$Median_pct_MT   <- g(qc_sum, "Sample", "Median_pct_mt")
 summary$Pct_retained    <- g(fate, "Sample", "Pct_retained")
 # Retention among barcodes that passed the load gate (>= QC$min_features genes).
-# The load gate is where a permissive caller's empty droplets go, so judging a
-# sample on raw-barcode retention penalises the caller, not the cells (raw
-# H1D20_2: 17.8k called, 8.7k empty, 45.7% "retained"). The low-QC tag uses this.
-if (!is.null(fate) && all(c("After_doublet_removal", "After_load") %in% names(fate))) {
-  pl <- round(fate$After_doublet_removal / pmax(fate$After_load, 1) * 100, 1)
-  summary$Pct_retained_loaded <- pl[match(summary$Sample, fate$Sample)]
+# Retention is NOT a quality criterion. A permissive caller's empty droplets fail the
+# gene floor and drag retention down while the surviving cells are fine (raw H1D20_2:
+# 17.8k called, 8.7k under the 1,000-gene cm floor, 45.7% retained, yet 2,863 median
+# genes and rho 0.09 after QC). The low-QC tag uses median genes and the SoupX ambient
+# fraction instead; rho is a per-sample quantity read from qc/soupx_rho.csv when present.
+.rho_tab <- read_csv_safe(file.path(run_dir, "qc", "soupx_rho.csv"))
+if (!is.null(.rho_tab) && all(c("sample", "rho") %in% names(.rho_tab))) {
+  .key <- sub("_sx$", "", .rho_tab$sample)
+  summary$Ambient_rho <- as.numeric(.rho_tab$rho)[match(sub("_sx$", "", summary$Sample), .key)]
 }
 if (!is.null(fate) && all(c("Removed_doublets", "After_QC") %in% names(fate))) {
   dr <- round(fate$Removed_doublets / pmax(fate$After_QC, 1) * 100, 1)

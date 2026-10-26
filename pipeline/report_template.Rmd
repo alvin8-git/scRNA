@@ -304,12 +304,13 @@ fmt <- function(x, d=0) ifelse(is.na(x), "—", formatC(round(as.numeric(x), d),
 row <- function(l, v) sprintf('<div class="stat"><span>%s</span><b>%s</b></div>', l, v)
 cards <- vapply(seq_len(nrow(S)), function(i) {
   r <- S[i, ]
-  # Judge retention after the load gate when available: barcodes under the gene
-  # floor are a caller's empty droplets, not lost cells (see 08b Pct_retained_loaded).
-  ret <- if (!is.null(r$Pct_retained_loaded) && !is.na(r$Pct_retained_loaded)) r$Pct_retained_loaded else r$Pct_retained
-  low <- (!is.na(ret) && ret < 70) ||
-         (!is.na(r$Median_genes) && r$Median_genes < 500)
-  tag <- if (low) ' <span class="tag">low QC</span>' else ''
+  # Low QC = the cells that passed are poor (median genes < 500) or the library is
+  # mostly ambient (SoupX rho > 0.3). Retention is deliberately not a criterion: it
+  # measures how many barcodes the caller over-called, not cell quality (see 08b).
+  rho <- if (!is.null(r$Ambient_rho)) r$Ambient_rho else NA
+  low <- (!is.na(r$Median_genes) && r$Median_genes < 500) || (!is.na(rho) && rho > 0.3)
+  why <- if (!is.na(rho) && rho > 0.3) sprintf(" (ambient %.0f%%)", 100 * rho) else ""
+  tag <- if (low) sprintf(' <span class="tag">low QC%s</span>', why) else ''
   stats <- paste0(
     row("Cells", fmt(r$Cells)),
     row("% retained", paste0(fmt(r$Pct_retained,1), "%")),
@@ -329,7 +330,7 @@ cat('<div class="cardgrid">', paste(cards, collapse=""), '</div>')
 
 ```{r summary_table}
 S2 <- B$summary
-S2$Pct_retained_loaded <- NULL   # drives the low-QC tag only; the table shows raw-barcode retention
+S2$Ambient_rho <- NULL   # drives the low-QC tag only; rho has its own section in the customer report
 nm  <- c(Sample="Sample", Cells="Cells", Median_genes="Median genes", Median_UMI="Median UMI",
          Median_pct_MT="Median %MT", Median_pct_ribo="Median %ribo", Pct_retained="% retained",
          Doublet_pct="Doublet %", HVG="HVG", N_cell_types="Cell types", Top_type="Top type")
