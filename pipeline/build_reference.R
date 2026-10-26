@@ -183,6 +183,39 @@ if (any(is_anchor)) {
                           proportions = prop)
     message("  ", s, " (n=", sum(sel), ", unassigned ", baseline[[s]]$pct_unassigned, "%):")
     print(prop)
+
+    # ---- per-cell confidence (delta) and what thresholding on it would do ----
+    # SingleR's own pruning rejects score outliers WITHIN an assigned label, not
+    # cells that are implausible against every label. On this cohort it rejected
+    # 0.02% while 28% of cells had no suitable class at all. delta — the gap
+    # between the best and second-best label score — measures that directly, and
+    # 05r_reference_transfer.R already records it per cell. Report its
+    # distribution and the composition it would yield at candidate cutoffs, so a
+    # threshold can be chosen from evidence rather than picked.
+    gapv <- apply(p$scores, 1, function(x) {
+      sv <- sort(x, decreasing = TRUE); if (length(sv) >= 2) sv[1] - sv[2] else NA_real_
+    })
+    message("    delta (top1-top2 score gap) quantiles:")
+    print(round(quantile(gapv, c(0.05, 0.1, 0.25, 0.5, 0.75, 0.9), na.rm = TRUE), 4))
+    # against the curated label of the same cells, so the cutoff can be judged on
+    # whether it rejects the cells the curation itself declined to label
+    cur <- as.character(lab[sel])
+    if (length(unique(cur)) > 1) {
+      message("    median delta by CURATED label (low = reference has no good class):")
+      md_by <- sort(tapply(gapv, cur, median, na.rm = TRUE))
+      print(round(md_by, 4))
+    }
+    thr_tab <- do.call(rbind, lapply(c(0, 0.02, 0.05, 0.08, 0.10, 0.15), function(t) {
+      k <- !is.na(p$pruned.labels) & !is.na(gapv) & gapv >= t
+      data.frame(delta_min = t, pct_assigned = round(100 * mean(k), 1),
+                 top_label = if (any(k)) names(sort(table(p$pruned.labels[k]),
+                                                    decreasing = TRUE))[1] else NA,
+                 top_pct = if (any(k)) round(100 * max(table(p$pruned.labels[k])) / sum(k), 1) else NA)
+    }))
+    message("    composition at candidate delta cutoffs:")
+    print(thr_tab, row.names = FALSE)
+    baseline[[s]]$delta_quantiles <- round(quantile(gapv, c(0.05, 0.25, 0.5, 0.75), na.rm = TRUE), 4)
+    baseline[[s]]$delta_thresholds <- thr_tab
   }
 }
 
