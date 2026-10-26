@@ -362,9 +362,14 @@ if (file.exists(de_path)) {
     # cap per cell type (top 300 by |log2FC|) so the linked widget stays light
     de <- do.call(rbind, lapply(split(de, de$cell_type),
                   function(d) utils::head(d[order(-abs(d$avg_log2FC)), ], 300)))
-    de$uid <- paste(de$cell_type, de$gene, seq_len(nrow(de)))  # unique crosstalk key
-    rownames(de) <- NULL
-    msg("DE: %d rows across %d cell types", nrow(de), length(unique(de$cell_type)))
+    if (is.null(de) || !nrow(de)) {
+      # every contrast descriptive (NA p-values): nothing to plot, section omitted
+      msg("DE: table has no tested contrasts — section omitted"); de <- NULL
+    } else {
+      de$uid <- paste(de$cell_type, de$gene, seq_len(nrow(de)))  # unique crosstalk key
+      rownames(de) <- NULL
+      msg("DE: %d rows across %d cell types", nrow(de), length(unique(de$cell_type)))
+    }
   } else de <- NULL
 }
 

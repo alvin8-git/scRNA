@@ -124,7 +124,14 @@ cond <- SAMPLE_CONDITIONS[samples]
 if (any(is.na(cond))) cond[is.na(cond)] <- "condition1"
 n_per_cond <- table(cond)
 comp_test  <- NULL
-if (length(n_per_cond) >= 2 && all(n_per_cond >= 2)) {
+# Conditions with a single sample cannot be tested; they are dropped from the design
+# and named in the log, the rest are still tested (mirrors 06b's per-contrast rule).
+.testable <- names(n_per_cond)[n_per_cond >= 2]
+if (length(.testable) < length(n_per_cond))
+  message("Composition test: dropping single-sample condition(s) ",
+          paste(setdiff(names(n_per_cond), .testable), collapse = ", "), " (descriptive only)")
+if (length(.testable) >= 2) {
+  samples  <- samples[cond[samples] %in% .testable]; cond <- cond[samples]
   prop_mat <- obs %>% select(sample, cell_type, prop) %>%
     pivot_wider(names_from = sample, values_from = prop, values_fill = 0) %>%
     as.data.frame()

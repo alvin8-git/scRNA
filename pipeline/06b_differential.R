@@ -66,10 +66,11 @@ if (length(unique(na.omit(cond))) < 2) {
 cond[is.na(cond)] <- "unlabelled"
 cond_levels <- unique(unname(cond))
 n_per_cond  <- table(factor(cond, levels = cond_levels))
-INFERENTIAL <- all(n_per_cond >= 2)
 message("Loaded: ", ncol(merged), " cells | ", length(unique(merged$cell_type)), " cell types | ",
         "conditions: ", paste(names(n_per_cond), n_per_cond, sep = "=", collapse = ", "),
-        if (INFERENTIAL) " | edgeR QL" else " | DESCRIPTIVE ONLY (a condition has < 2 samples)")
+        if (all(n_per_cond >= 2)) " | edgeR QL, all contrasts tested"
+        else paste0(" | contrasts involving ", paste(names(n_per_cond)[n_per_cond < 2], collapse = "/"),
+                    " are DESCRIPTIVE (single sample)"))
 
 theme_pub <- theme_classic(base_size = 11) +
   theme(plot.title       = element_text(size = 12, face = "bold"),
@@ -139,7 +140,10 @@ for (ct in sort(unique(key$cell_type))) {
             " samples with >= ", MIN_CELLS, " cells")
     next
   }
-  ct_inferential <- INFERENTIAL && all(have[have > 0] >= 2)
+  # Dispersion can be estimated whenever the design leaves residual df (samples >
+  # conditions present). Each CONTRAST then gets p-values only if both of its arms
+  # have >= 2 samples; a 1-vs-n contrast stays descriptive while the rest are tested.
+  ct_inferential <- (nrow(k) - sum(have > 0)) > 0
   y <- DGEList(pb[, k$col, drop = FALSE], group = factor(k$condition, levels = cond_levels))
   keep <- filterByExpr(y, group = y$samples$group)
   y <- y[keep, , keep.lib.sizes = FALSE]
@@ -163,15 +167,16 @@ for (ct in sort(unique(key$cell_type))) {
     }
     bind_rows(lapply(seq_along(pairs), function(i) {
       ref <- pairs[[i]][1]; alt <- pairs[[i]][2]
+      inf_i <- ct_inferential && have[ref] >= 2 && have[alt] >= 2
       tt <- if (ct_inferential) topTags(glmQLFTest(fit, contrast = contr[[i]]), n = Inf)$table
             else topTags(glmLRT(fit, contrast = contr[[i]]), n = Inf)$table   # rows sorted best-first
       data.frame(gene = rownames(tt), cell_type = ct,
                  comparison = paste0(alt, "_vs_", ref),
                  avg_log2FC = tt$logFC, logCPM = tt$logCPM,
-                 p_val = if (ct_inferential) tt$PValue else NA_real_,
-                 p_val_adj = if (ct_inferential) tt$FDR else NA_real_,
+                 p_val = if (inf_i) tt$PValue else NA_real_,
+                 p_val_adj = if (inf_i) tt$FDR else NA_real_,
                  n_samples_ref = unname(have[ref]), n_samples_alt = unname(have[alt]),
-                 inferential = ct_inferential, stringsAsFactors = FALSE)
+                 inferential = inf_i, stringsAsFactors = FALSE)
     }))
   }, error = function(e) { message("  WARNING: DE failed for '", ct, "': ", e$message); NULL })
   if (is.null(res_ct) || !nrow(res_ct)) next
@@ -184,7 +189,7 @@ for (ct in sort(unique(key$cell_type))) {
   for (cmp in unique(res_ct$comparison)) {
     d <- res_ct[res_ct$comparison == cmp, ]
     alt <- sub("_vs_.*", "", cmp); ref <- sub(".*_vs_", "", cmp)
-    if (ct_inferential) {
+    if (d$inferential[1]) {
       d$direction <- ifelse(d$p_val_adj < 0.05 & d$avg_log2FC >  1, alt,
                      ifelse(d$p_val_adj < 0.05 & d$avg_log2FC < -1, ref, "NS"))
       top <- d %>% filter(direction != "NS") %>% arrange(p_val_adj) %>% slice_head(n = 12) %>% pull(gene)
