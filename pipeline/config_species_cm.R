@@ -195,7 +195,7 @@ if (.species == "cm") {
   # apply these stale numbers to the new run. Curated under min_features 200; when a run
   # uses a different QC floor this map correctly withholds itself and step 05 falls back
   # to auto-annotation, which prints a fresh paste-ready map to re-curate from.
-  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 200) &&
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 200) && isTRUE(CLUSTER$algorithm == 1) &&
         setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_2", "H1D20_1",
                                "H1D20_2", "H1D30_1", "H1D30_2"))) {
     CLUSTER_CELLTYPE_MAP <- c(
@@ -256,7 +256,7 @@ if (.species == "cm") {
   # the average of the whole culture rather than any one lineage. Calling it Unknown
   # costs 21% of the run but does not invent a population. SoupX on the raw matrices is
   # the real fix; Samples/Cardio ships only filter_matrix (see docs).
-  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 1) &&
       setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_2", "H1D20_1",
                                "H1D20_2", "H1D30_1", "H1D30_2"))) {
     CLUSTER_CELLTYPE_MAP <- c(
@@ -477,7 +477,7 @@ if (.species == "cm") {
   # above (docs/cm_fresh_look_2026-10-24.md); cluster numbers differ, identities
   # correspond one-to-one. Cluster 0 (19,340 cells, 32% of the cohort) is where
   # uncorrected ambient RNA and H1D20_1 (rho 0.795) collect.
-  if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) &&
+  if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 1) &&
       setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_1", "H1D11_2",
                                "H1D20_1", "H1D20_2", "H1D30_1", "H1D30_2"))) {
     CLUSTER_CELLTYPE_MAP <- c(
@@ -502,6 +502,145 @@ if (.species == "cm") {
                                            # per cell (ambient); 56% D20 incl. H1D20_1
       "17" = "Unknown",                    # n=372, percent.mt 6.6 (10x the cohort) — dying
       "19" = "Unknown"                     # n=207, 96% D30; ALB 97 AHSG 93 with ACTA2 97 — doublets
+    )
+  }
+
+  # =============================================================================
+  # Leiden maps (CLUSTER$algorithm == 4, pipeline of 2026-10-26: Leiden on the
+  # igraph path, per-sample HVGs, no %mt regression). Cluster ids are 1-based.
+  # Same Yap et al. 2023 vocabulary and the same marker rules as the Louvain maps
+  # above (docs/cm_fresh_look_2026-10-24.md); evidence per cluster in
+  # docs/cm_rerun_leiden_2026-10-26.md and /data/alvin/tmp/look_{7sx,8}.txt.
+  # Numbers in comments are detection % in the cluster; "D11 88" = % of cells
+  # from that timepoint.
+  # Note: the old Louvain maps above are now also guarded on algorithm == 1.
+  # =============================================================================
+
+  # ---- 7-sample SoupX cohort, Leiden (results_H1D01sx_7samples_leiden) ----------
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 4) &&
+      setequal(SAMPLE_NAMES, c("H1D0_1_sx", "H1D0_2_sx", "H1D11_1_sx", "H1D11_2_sx",
+                               "H1D20_2_sx", "H1D30_1_sx", "H1D30_2_sx"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      "10" = "Pluripotent",                # ESRG 64 XACT 87 POU5F1 31; low depth (2,029 genes); D0 90
+      "11" = "Pluripotent",                # POU5F1 88 ESRG 87 SOX2 61; D0 89
+      "18" = "Pluripotent",                # POU5F1 91 SOX2 78 NANOG 35; D0 94
+      "19" = "Pluripotent",                # POU5F1 97 ESRG 96 + CDC20/CCNB1 (cycling); D0 98
+      "2"  = "Mesenchyme (lateral plate)", # mixed with CCP — split by CLUSTER_SUBCLUSTER_MAP below
+      "12" = "Cardiomyocyte (immature)",   # MYH6 67 SLC8A1 82 TTN 91 TNNT2 56 MYOCD 59 NKX2-5 40 TBX5 39
+      "3"  = "Proliferating",              # cycling cells of several lineages — split by lineage below
+      "5"  = "Proliferating",              # cycling cells of several lineages — split by lineage below
+      "17" = "Proliferating",              # TOP2A 73 MKI67 40 with HAND1 76 MSX1 50 (proliferating mesenchyme)
+      "9"  = "Hepatic/Endoderm",           # FOXA2 59 HHEX 41 TBX3 47 HNF4A 27 TTR 59; D11 76
+      "13" = "Hepatic/Endoderm",           # APOB 79 MTTP 79 RBP4 83 FGB 81 HNF4A 49 (yolk-sac-like); hepatic UMI 6%
+      "14" = "Hepatic/Endoderm",           # FOXA2 58 HHEX 44 TTR 65 EPCAM 71; D11 69
+      "15" = "Endothelial",                # CDH5 65 PECAM1 45 CD34 52 KDR 79; D11 89
+      "16" = "Amnion-like epithelium",     # GABRP 52 VTCN1 28 TFAP2A 40 GATA3 34 ISL1 32 EPCAM 65
+      "1"  = "Epicardial-like",            # UPK3B 45 BNC1 44 WT1 11 TBX18 1; D11 part split off below
+      "8"  = "Epicardial-like",            # BNC1 55 UPK3B 34 CDH1 47 WT1 19 TBX18 1; D30 69
+      "20" = "Proepicardial",              # WT1 50 TBX18 60 ALDH1A2 72 UPK3B 67 NPR3 71; D30 99 (true epicardium)
+      "22" = "Proepicardial",              # WT1 72 TBX18 81 ALDH1A2 92 UPK3B 75 NPR3 69; D30 97
+      "6"  = "Myofibroblast",              # TGFBI 71 CDH11 68 FBN1 49 PDGFRB 45 ACTA2 69 SNAI2/LOX/MMP2
+      "7"  = "Myofibroblast",              # CDH11 75 PDGFRB 47 FBN1 48 ACTA2 55 TCF21 25; culture-activated fibroblast
+      "4"  = "Fibroblast (low-depth)",     # 1,123 genes; DCN 81 LUM 85 with AFP 85 ALB 74 (ambient); D30 77
+      "21" = "Unknown"                     # n=146; ALB 99 AHSG 91 AFP 100 with ACTA2 96 TAGLN 95 — doublets
+    )
+    # Cluster 2 (7,640, D11 88%) at res 0.15 on the SNN graph: 2_0 and 2_2 carry the
+    # Yap CCP signature (GATA4 84/68, TBX5 36/19, NKX2-5 14/5, ZFPM2 68, SLC8A1 42/28,
+    # WT1 19/12 — the paper's day-11 committed progenitor is GATA4 83 TBX5 37 NKX2-5
+    # 13 WT1 16); 2_1 and 2_3 are HAND1 77/89 MSX1 54/63 TBX5 3/4 lateral plate.
+    # Cell cycle is not a lineage (Yap: D0 is pluripotent, full stop). Clusters 3 and 5
+    # are cycling cells drawn from D0 hESC, D11 mesenchyme/CCP and D30 mesothelium, so
+    # they are split by lineage; "Proliferating" is reserved for HAND1+ cycling
+    # mesenchyme as in the Louvain maps. Cluster 1 carries a D11 HAND1 88 MSX1 57
+    # UPK3B 11 subcluster that is mesenchyme, not mesothelium.
+    CLUSTER_SUBCLUSTER_MAP <- list(
+      list(cluster = "2", resolution = 0.15,
+           labels = c("0" = "Cardiac progenitor", "2" = "Cardiac progenitor",
+                      "1" = "Mesenchyme (lateral plate)", "3" = "Mesenchyme (lateral plate)")),
+      list(cluster = "1", resolution = 0.15,       # 1_0 UPK3B 60 BNC1 56 D30 58; 1_1 D11 73 HAND1 88; 1_2 D20/D30 DCN 91
+           labels = c("0" = "Epicardial-like", "2" = "Epicardial-like", "1" = "Mesenchyme (lateral plate)")),
+      list(cluster = "3", resolution = 0.30,       # 3_0 D0 76 POU5F1 76; 3_1/3_4 D11 HAND1 86/89 TBX5 1-2;
+           labels = c("0" = "Pluripotent",         # 3_2 D11 97 GATA4 60 TBX5 15 NKX2-5 16 MYL7 89; 3_3 D30 66 UPK3B 56 BNC1 54
+                      "1" = "Proliferating", "4" = "Proliferating",
+                      "2" = "Cardiac progenitor", "3" = "Epicardial-like")),
+      list(cluster = "5", resolution = 0.30,       # 5_0/5_3 D0 85/92 POU5F1 84/87; 5_1/5_5 D11 HAND1 86/97 TOP2A 94/98;
+           labels = c("0" = "Pluripotent", "3" = "Pluripotent",   # 5_2 D0 34/D11 55 POU5F1 30 HAND1 47 GATA4 55 (exiting pluripotency, cycling);
+                      "1" = "Proliferating", "5" = "Proliferating", "2" = "Proliferating",
+                      "4" = "Cardiac progenitor"))   # 5_4 D11 91 GATA4 89 TBX5 45 NKX2-5 36 SLC8A1 62
+    )
+  }
+
+  # ---- 8-sample raw cohort, Leiden (results_H1D01_8samples_leiden) ---------------
+  # No SoupX, H1D20_1 (rho 0.795) included; clusters 1 and 4 are where ambient
+  # collects (1,216 / 1,232 genes, AFP 78/87, DCN 77/86). No true-epicardium
+  # (WT1+ TBX18+) cluster is resolved in this run; the closest cells sit in 14_0.
+  if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 4) &&
+      setequal(SAMPLE_NAMES, c("H1D0_1", "H1D0_2", "H1D11_1", "H1D11_2",
+                               "H1D20_1", "H1D20_2", "H1D30_1", "H1D30_2"))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      "6"  = "Pluripotent",                # cycling cells of several lineages — split by lineage below
+      "5"  = "Pluripotent",                # mixed D0/D11 — split by CLUSTER_SUBCLUSTER_MAP below
+      "13" = "Cardiac progenitor",         # GATA4 87 TBX5 37 NKX2-5 14 ZFPM2 73 WT1 22 TBX18 13; D11 79 (Yap CCP)
+      "15" = "Cardiomyocyte",              # MYH6 63 SLC8A1 77 TTN 87 TNNT2 54 MYOCD 53 NKX2-5 38
+      "3"  = "Proliferating",              # cycling cells of several lineages — split by lineage below
+      "10" = "Proliferating",              # cycling cells of several lineages — split by lineage below
+      "9"  = "Hepatic/Endoderm",           # FOXA2 62 HHEX 43 TBX3 49 TTR 67 HNF4A 29; D11 78
+      "12" = "Hepatic/Endoderm",           # APOB 63 MTTP 62 RBP4 66 HNF4A 40 FOXA2 71 (yolk-sac-like); hepatic UMI 4.6%
+      "18" = "Hepatic/Endoderm",           # FOXA2 74 HHEX 55 TBX3 47 TTR 84; n=531
+      "16" = "Endothelial",                # CDH5 64 PECAM1 45 CD34 51 KDR 78; D11 85
+      "17" = "Amnion-like epithelium",     # GABRP 46 TFAP2A 35 VTCN1 25 GATA3 31 ISL1 33 EPCAM 66
+      "2"  = "Epicardial-like",            # UPK3B 50 BNC1 49 WT1 12; D0/D11 parts and true epicardium split off below
+      "7"  = "Epicardial-like",            # BNC1 45 UPK3B 34 CDH1 43 WT1 15; DCN 89 LUM 94; D20/D30
+      "14" = "Epicardial-like",            # mixed — split by CLUSTER_SUBCLUSTER_MAP below
+      "8"  = "Myofibroblast",              # CDH11 69 FBN1 47 PDGFRB 47 ACTA2 79 TGFBI 74 SNAI2/LOX/MMP2; D30 48
+      "11" = "Myofibroblast",              # CDH11 78 FBN1 50 PDGFRB 48 ACTA2 71 TCF21 30; D30 46
+      "1"  = "Fibroblast (low-depth)",     # 1,216 genes; DCN 77 LUM 81 AFP 78 (ambient); shallow D0 hESC split off below
+      "4"  = "Fibroblast (low-depth)",     # 1,232 genes, %mt 1.3; DCN 86 LUM 89 AFP 87, MT- genes as markers
+      "19" = "Unknown"                     # n=222; ALB 96 AHSG 92 with ACTA2 95 — doublets
+    )
+    CLUSTER_SUBCLUSTER_MAP <- list(
+      # Cluster 5 (7,275): 5_0 and 5_3 are D0 hESC (POU5F1 55/75, XACT 73/91);
+      # 5_1 and 5_2 are D11 lateral plate (HAND1 87/90, MSX1 64/65, TBX5 3/6).
+      list(cluster = "5", resolution = 0.15,
+           labels = c("0" = "Pluripotent", "3" = "Pluripotent",
+                      "1" = "Mesenchyme (lateral plate)", "2" = "Mesenchyme (lateral plate)")),
+      # Cluster 14 (3,402): 14_0 D20/D30 BNC1 63 UPK3B 21 WT1 16 (epicardial-like);
+      # 14_1 D11 81% GATA4 57 ZFPM2 64 TBX5 7 (early CCP, weaker than cl 13; the old
+      # curated run called these cells Cardiac progenitor); 14_2 D30 CDH11 89 PDGFRB 60
+      # ACTA2 68 (fibroblast); 14_3 GATA4 83 TBX5 38 SLC8A1 83 MYH6 53 TNNT2 36.
+      list(cluster = "14", resolution = 0.15,
+           labels = c("0" = "Epicardial-like", "1" = "Cardiac progenitor",
+                      "2" = "Myofibroblast", "3" = "Cardiomyocyte")),
+      # Cluster 2 (13,611): 2_0 D20/D30 UPK3B 62 BNC1 59; 2_1 D11 93 HAND1 96 MSX1 70;
+      # 2_2 D0 83 POU5F1 83; 2_3 (293, D30 85) WT1 41 TBX18 38 ALDH1A2 44 UPK3B 66 —
+      # the true-epicardium population this run otherwise lacks.
+      list(cluster = "2", resolution = 0.15,
+           labels = c("0" = "Epicardial-like", "1" = "Mesenchyme (lateral plate)",
+                      "2" = "Pluripotent", "3" = "Proepicardial")),
+      # Cluster 3 (8,972, cycling, res 0.30): 3_5/3_7 D0 87/77 POU5F1 87/77; 3_0 D0 49
+      # D20 26 POU5F1 49 HAND1 39 (ambient-mixed, majority D0); 3_1/3_3 D11 HAND1 92;
+      # 3_2 D30 61 UPK3B 64; 3_4/3_6 D11 96-98 GATA4 72/65 TBX5 25/12 NKX2-5 22/19.
+      list(cluster = "3", resolution = 0.30,
+           labels = c("5" = "Pluripotent", "7" = "Pluripotent", "0" = "Pluripotent",
+                      "1" = "Proliferating", "3" = "Proliferating",
+                      "2" = "Epicardial-like",
+                      "4" = "Cardiac progenitor", "6" = "Cardiac progenitor")),
+      # Cluster 10 (4,246, cycling): 10_1 D0 78 POU5F1 74; 10_0 D11 67 HAND1 74 TOP2A 80;
+      # 10_2 D11 94 GATA4 93 TBX5 49 NKX2-5 23 SLC8A1 53; 10_3 D30 94 UPK3B 78 BNC1 97
+      # WT1 48 but TBX18 3 (mesothelium, not epicardium proper).
+      list(cluster = "10", resolution = 0.15,
+           labels = c("1" = "Pluripotent", "0" = "Proliferating",
+                      "2" = "Cardiac progenitor", "3" = "Epicardial-like")),
+      # Cluster 1 (15,119, low depth): 1_1 (3,323) is D0 71% POU5F1 70 ESRG 70 — shallow
+      # hESC that co-cluster with the ambient-heavy fibroblast bulk on depth alone.
+      list(cluster = "1", resolution = 0.15,
+           labels = c("0" = "Fibroblast (low-depth)", "1" = "Pluripotent")),
+      # Cluster 6 (6,925, cycling, res 0.30): 6_1/6_2/6_4 D0 85-89 POU5F1 85; 6_0 D0 48
+      # POU5F1 48 HAND1 38 (cycling, majority D0); 6_3 D11 67 HAND1 93 TOP2A 98;
+      # 6_5 D11 71 GATA4 82 TBX5 31 NKX2-5 24 SLC8A1 48.
+      list(cluster = "6", resolution = 0.30,
+           labels = c("1" = "Pluripotent", "2" = "Pluripotent", "4" = "Pluripotent", "0" = "Pluripotent",
+                      "3" = "Proliferating", "5" = "Cardiac progenitor"))
     )
   }
 
