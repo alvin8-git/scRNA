@@ -548,7 +548,17 @@ if (!.species %in% .known_species)
 
 source(file.path(PIPELINE_DIR, "config_species_bat.R"))  # bat / bat_wing overrides (extracted)
 source(file.path(PIPELINE_DIR, "config_species_cm.R"))   # cm overrides (human iPSC-CM)
-source(file.path(PIPELINE_DIR, "config_species_mouse.R")) # mouse cardiomyocyte overrides
+source(file.path(PIPELINE_DIR, "config_species_mouse.R")) # mouse overrides
+
+# SCRNA_NO_CLUSTER_MAP=1 forces de-novo annotation even when a curated map matches the
+# sample set. Needed whenever cluster numbering changes under a curated cohort (new
+# clustering algorithm, resolution, HVG set): the map would label the wrong clusters.
+if (nzchar(Sys.getenv("SCRNA_NO_CLUSTER_MAP"))) {
+  if (!is.null(CLUSTER_CELLTYPE_MAP) || exists("CLUSTER_SUBCLUSTER_MAP"))
+    message("[config] SCRNA_NO_CLUSTER_MAP set — curated cluster maps disabled, SingleR/scType labels only")
+  CLUSTER_CELLTYPE_MAP   <- NULL
+  CLUSTER_SUBCLUSTER_MAP <- NULL
+}
 
 if (!exists("WOUND_MODULES")) WOUND_MODULES <- list()
 

@@ -131,6 +131,11 @@ if [[ $N_SAMPLES -gt 0 ]]; then
 else
   RESULTS_DIR="${BASE_DIR}/Results/results_H1-H2_filtered"  # matches hardcoded config.R defaults
 fi
+# A caller-supplied SCRNA_RESULTS_DIR wins, so the same samples can be re-run into a
+# fresh directory (e.g. an algorithm comparison) without touching the previous run.
+if [[ -n "${SCRNA_RESULTS_DIR:-}" ]]; then
+  RESULTS_DIR="${SCRNA_RESULTS_DIR}"
+fi
 LOG_DIR="${RESULTS_DIR}/logs"
 mkdir -p "${LOG_DIR}"
 
