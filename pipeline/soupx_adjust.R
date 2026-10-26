@@ -21,19 +21,33 @@
 # Originals are never modified; the _sx names give corrected data its own run
 # directory and its own sample_cache entries.
 #
-# Usage: Rscript pipeline/soupx_adjust.R <run_dir> [sample_base_dir]
-#   sample_base_dir defaults to Samples/ — pass e.g. Samples/Cardio when the
-#   run's inputs live in a subdirectory.
+# Usage: Rscript pipeline/soupx_adjust.R [run_dir] [sample_base_dir] [--rho-max=0.3]
+#   run_dir          defaults to $SCRNA_RESULTS_DIR (set by run_pipeline.sh, which
+#                    exposes this script as step "00": `run_pipeline.sh cm <samples> 00`
+#                    after a finished 01-05 run)
+#   sample_base_dir  defaults to the parent of $SCRNA_SAMPLE1, else Samples/
+#   --rho-max        samples whose estimated rho exceeds this are REPORTED but not
+#                    corrected (accepted = FALSE in soupx_rho.csv). Default 0.3: above
+#                    that the "cells" are mostly soup and subtracting it does not
+#                    rescue them (H1D20_1, rho 0.795, is the motivating case).
+#
+# autoEstCont runs WITHOUT forceAccept. When SoupX's own sanity check rejects the
+# estimate the sample is recorded with accepted = FALSE and rho = NA instead of
+# silently taking a value SoupX itself did not trust.
 # =============================================================================
 suppressPackageStartupMessages({
   library(Matrix); library(SoupX); library(Seurat)
 })
 
-args <- commandArgs(trailingOnly = TRUE)
-if (!length(args)) stop("usage: soupx_adjust.R <run_dir> [sample_base_dir]")
-RUN  <- args[1]
-base <- if (length(args) >= 2) args[2] else "Samples"
-dest <- "Samples_soupx"
+args    <- commandArgs(trailingOnly = TRUE)
+flag    <- function(k, d) { v <- sub(paste0("^--", k, "="), "", grep(paste0("^--", k, "="), args, value = TRUE)); if (length(v)) v[1] else d }
+pos     <- args[!grepl("^--", args)]
+RUN     <- if (length(pos) >= 1) pos[1] else Sys.getenv("SCRNA_RESULTS_DIR", "")
+if (!nzchar(RUN)) stop("usage: soupx_adjust.R <run_dir> [sample_base_dir] [--rho-max=0.3]")
+base    <- if (length(pos) >= 2) pos[2] else {
+  s1 <- Sys.getenv("SCRNA_SAMPLE1", ""); if (nzchar(s1)) dirname(s1) else "Samples" }
+RHO_MAX <- as.numeric(flag("rho-max", "0.3"))
+dest    <- "Samples_soupx"
 dir.create(dest, showWarnings = FALSE, recursive = TRUE)
 dir.create(file.path(RUN, "qc"), showWarnings = FALSE, recursive = TRUE)
 
@@ -89,32 +103,49 @@ for (sm in SAMP) {
   g      <- intersect(rownames(R$m), rownames(toc))
   sc <- SoupChannel(R$m[g, , drop = FALSE], toc[g, , drop = FALSE])
   sc <- setClusters(sc, clus)
-  sc <- autoEstCont(sc, doPlot = FALSE, forceAccept = TRUE)
-  rho <- sc$fit$rhoEst
-  adj <- adjustCounts(sc, roundToInt = TRUE)
-  before <- sum(toc[g, ]); after <- sum(adj)
+  est <- tryCatch(autoEstCont(sc, doPlot = FALSE), error = function(e) e)
+  before <- sum(toc[g, ])
+  row <- data.frame(sample = sm, rho = NA_real_, accepted = FALSE, cells = ncol(toc),
+                    counts_before = before, counts_after = NA_real_,
+                    pct_counts_removed = NA_real_, note = "", stringsAsFactors = FALSE)
+  if (inherits(est, "error")) {
+    row$note <- paste("autoEstCont rejected:", conditionMessage(est))
+    msg("  NOT corrected — %s", row$note); rep[[sm]] <- row; next
+  }
+  rho <- est$fit$rhoEst; row$rho <- round(rho, 4)
+  if (rho > RHO_MAX) {
+    row$note <- sprintf("rho %.3f > rho_max %.2f: sample is mostly ambient, left uncorrected", rho, RHO_MAX)
+    msg("  NOT corrected — %s", row$note); rep[[sm]] <- row; next
+  }
+  adj <- adjustCounts(est, roundToInt = TRUE)
+  after <- sum(adj)
   msg("  rho=%.3f  counts %.1fM -> %.1fM (removed %.2f%%)  cells=%d",
       rho, before/1e6, after/1e6, 100*(before-after)/before, ncol(adj))
   outdir <- file.path(dest, paste0(sm, "_sx"), "filter_matrix")
   ftk <- F$ft[match(rownames(adj),
                     make.unique(if (ncol(F$ft) >= 2) F$ft[[2]] else F$ft[[1]])), , drop = FALSE]
   write_mtx(adj, ftk, colnames(adj), outdir)
-  rep[[sm]] <- data.frame(sample = sm, rho = round(rho, 4), cells = ncol(adj),
-                          counts_before = before, counts_after = after,
-                          pct_counts_removed = round(100*(before-after)/before, 2),
-                          stringsAsFactors = FALSE)
+  row$accepted <- TRUE; row$counts_after <- after
+  row$pct_counts_removed <- round(100*(before-after)/before, 2)
+  rep[[sm]] <- row
   msg("  wrote %s", outdir)
 }
 
-if (!length(rep)) stop("no sample could be corrected — check raw_matrix/ paths under ", base)
+if (!length(rep)) stop("no sample had raw_matrix/ + filtered matrix under ", base)
 res <- do.call(rbind, rep)
-res$source <- sprintf("SoupX %s autoEstCont on %s, %s",
-                      as.character(utils::packageVersion("SoupX")),
+res$source <- sprintf("SoupX %s autoEstCont (no forceAccept, rho_max %.2f) on %s, %s",
+                      as.character(utils::packageVersion("SoupX")), RHO_MAX,
                       basename(RUN), format(Sys.Date()))
 out <- file.path(RUN, "qc", "soupx_rho.csv")
 write.csv(res, out, row.names = FALSE)
 msg("wrote %s", out)
 cat("\n=== correction summary ===\n")
-print(res[, c("sample", "rho", "cells", "pct_counts_removed")], row.names = FALSE)
-cat(sprintf("\nCorrected matrices: %s/<sample>_sx/filter_matrix\n", dest))
+print(res[, c("sample", "rho", "accepted", "cells", "pct_counts_removed", "note")], row.names = FALSE)
+ok <- res$sample[res$accepted]
+if (length(ok)) {
+  cat(sprintf("\nCorrected matrices: %s/<sample>_sx/filter_matrix  (%d of %d samples)\n",
+              dest, length(ok), nrow(res)))
+  cat("Re-run on corrected data with:\n  bash pipeline/run_pipeline.sh", Sys.getenv("SCRNA_SPECIES", "human"),
+      paste(file.path(dest, paste0(ok, "_sx")), collapse = " "), "\n")
+}
 cat("SOUPX_ADJUST_DONE\n")

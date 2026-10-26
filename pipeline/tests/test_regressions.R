@@ -144,6 +144,26 @@ if (file.exists(f)) {
     fails <- c(fails, "06_visualize.R sorts SAMPLE_NAMES alphabetically (scrambles per-sample figure order)")
 }
 
+# Regression T12 (review 2026-10-26): statistics must stay replicate-aware and the
+# normalisation covariate must stay configurable.
+#  a) 06b_differential.R must not test conditions per cell (FindMarkers): cells are not
+#     replicates; DE is sample-level pseudobulk via edgeR.
+#  b) 03/04 must not hard-code vars.to.regress = "percent.mt"; cm sets NORM$vars_to_regress
+#     to NULL because mito load is biology there.
+#  c) soupx_adjust.R must not pass forceAccept = TRUE: a rejected rho is reported, not used.
+.code_of <- function(f) grep("^\\s*#", readLines(f, warn = FALSE), value = TRUE, invert = TRUE)
+f <- file.path(.pipeline, "06b_differential.R")
+if (file.exists(f) && any(grepl("FindMarkers\\(", .code_of(f))))
+  fails <- c(fails, "06b_differential.R uses per-cell FindMarkers for condition DE (must be pseudobulk)")
+for (s in c("03_individual.R", "04_integrate.R")) {
+  f <- file.path(.pipeline, s)
+  if (file.exists(f) && any(grepl("vars\\.to\\.regress\\s*=\\s*\"percent\\.mt\"", .code_of(f))))
+    fails <- c(fails, paste0(s, " hard-codes vars.to.regress = \"percent.mt\" (use NORM$vars_to_regress)"))
+}
+f <- file.path(.pipeline, "soupx_adjust.R")
+if (file.exists(f) && any(grepl("forceAccept\\s*=\\s*TRUE", .code_of(f))))
+  fails <- c(fails, "soupx_adjust.R forces acceptance of a rho SoupX rejected")
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

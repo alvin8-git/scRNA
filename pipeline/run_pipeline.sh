@@ -20,6 +20,12 @@
 #   bash run_pipeline.sh bat /path/to/ES03 /path/to/ES12 01 02 03
 #   bash run_pipeline.sh 05 06 07
 #
+#   # Conditions (drive pseudobulk DE in 06b and the composition test in 09):
+#   bash run_pipeline.sh cm /p/D0_1 /p/D0_2 /p/D20_1 /p/D20_2 condition=D0_1=D0,D0_2=D0,D20_1=D20,D20_2=D20
+#
+#   # Ambient RNA (step 00) — on a FINISHED run; writes Samples_soupx/<s>_sx to re-run on:
+#   bash run_pipeline.sh cm /p/A /p/B 00
+#
 # Outputs:
 #   results/report_doublets.pdf
 #   results/report_individual.pdf
@@ -195,6 +201,7 @@ conda run -n "${CONDA_ENV}" Rscript "${PIPELINE_DIR}/validate_config.R" || exit 
 # Step definitions
 # =============================================================================
 declare -A STEP_NAME=(
+  ["00"]="Ambient RNA (SoupX) — needs a finished 01-05 run; writes <sample>_sx inputs"
   ["01"]="Load & QC"
   ["02"]="Doublet Detection"
   ["03"]="Individual Analysis"
@@ -204,6 +211,7 @@ declare -A STEP_NAME=(
   ["06b"]="Differential Expression"
   ["07"]="Finalise PDF Reports"
   ["08"]="Comparison Report"
+  ["09"]="Proportion Statistics (bootstrap + replicate-aware composition test)"
   ["11"]="Wing DEGs & Module Scores"
   ["12"]="Pathway Enrichment"
   ["13"]="CellChat Communication"
@@ -211,6 +219,7 @@ declare -A STEP_NAME=(
 )
 
 declare -A STEP_SCRIPT=(
+  ["00"]="soupx_adjust.R"
   ["01"]="01_load_qc.R"
   ["02"]="02_doublets.R"
   ["03"]="03_individual.R"
@@ -220,6 +229,7 @@ declare -A STEP_SCRIPT=(
   ["06b"]="06b_differential.R"
   ["07"]="07_finalize_reports.R"
   ["08"]="08_comparison_report.R"
+  ["09"]="09_bootstrap_proportions.R"
   ["11"]="projects/bat_wing/11_wing_degs.R"
   ["12"]="projects/bat_wing/12_pathways.R"
   ["13"]="projects/bat_wing/13_cellchat.R"
@@ -290,7 +300,7 @@ TOTAL_START=$(date +%s)
 
 for step in "${STEPS[@]}"; do
   if [[ -z "${STEP_SCRIPT[$step]+_}" ]]; then
-    err "Unknown step: ${step}. Valid: 01 02 03 04 05 06 06b 07 08 11 12 13 14"
+    err "Unknown step: ${step}. Valid: 00 01 02 03 04 05 06 06b 07 08 09 11 12 13 14"
     exit 1
   fi
   run_step "${step}"

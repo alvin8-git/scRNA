@@ -24,6 +24,9 @@ if (.species == "cm") {
   # H1D30_2 cell reaches 435,190 UMI).
   QC$max_features <- 9000
   QC$max_counts   <- 70000
+  # Do not regress %mt: cardiomyocytes are mitochondria-dense by function, so mito
+  # load tracks the CM/progenitor axis here rather than damage (p99 is only 4.6%).
+  NORM$vars_to_regress <- NULL
   # min_features 200 -> 1000 (2026-09-10). The 200 floor let a large ambient-dominated
   # population through: cluster 0 of the first run held 23,498 cells (24.8%) at a median
   # of 1,141 genes, and its top FindAllMarkers genes were all abundant secreted plasma

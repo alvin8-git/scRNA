@@ -131,6 +131,14 @@ QC <- list(
   min_counts     = 500,
   max_counts     = 25000,
   max_percent_mt = 20,
+  # adaptive = TRUE derives per-sample cut-offs from the data: median +/- mad_k MADs on
+  # log10(UMIs), log10(genes) and an upper MAD bound on %mt. The fixed values above
+  # then act as floor/ceiling (a data-derived bound never goes outside them). The
+  # realised thresholds are written to qc/qc_thresholds.csv either way.
+  adaptive       = nzchar(Sys.getenv("SCRNA_QC_ADAPTIVE")) &&
+                   toupper(Sys.getenv("SCRNA_QC_ADAPTIVE")) %in% c("1", "TRUE", "YES"),
+  mad_k          = 3,
+  adaptive_mt_floor = 5,   # %mt bound never drops below this in adaptive mode
   # Gene-name patterns for the mitochondrial and ribosomal fractions. Human and
   # bat annotations both use uppercase symbols (MT-ND1, RPS2), so one default
   # serves both — verified: ^MT- matches 13 genes and ^RP[SL] 97 in the bat
@@ -155,7 +163,11 @@ NORM <- list(
   method       = "LogNormalize",
   scale_factor = 10000,
   n_hvg        = 2000,
-  hvg_method   = "vst"
+  hvg_method   = "vst",
+  # Covariates regressed in ScaleData. "percent.mt" is right for blood, where mito
+  # load is damage. A species overlay sets NULL where mito load is biology (cm:
+  # cardiomyocytes are mitochondria-dense, regressing it erases the CM/progenitor axis).
+  vars_to_regress = "percent.mt"
 )
 
 # --- Dimensionality Reduction ---
@@ -170,7 +182,9 @@ CLUSTER <- list(
   resolutions = c(0.3, 0.4, 0.5, 0.6, 0.8),
   default_res = 0.5,
   compare_res = c(0.5, 0.6, 0.8),   # resolutions shown side-by-side in comparison UMAP
-  algorithm   = 1
+  # 4 = Leiden (igraph backend, no python needed). Louvain (1) is deprecated upstream
+  # and can return badly connected communities. Changing this busts the 03 cache.
+  algorithm   = 4
 )
 
 # --- T Cell Sub-clustering ---

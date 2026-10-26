@@ -277,6 +277,7 @@ if (length(samples_all) == 2) {
 read_csv_safe <- function(p) if (file.exists(p)) tryCatch(read.csv(p, check.names = FALSE), error = function(e) NULL) else NULL
 qc_sum   <- read_csv_safe(file.path(run_dir, "qc", "qc_summary_table.csv"))
 fate     <- read_csv_safe(file.path(run_dir, "qc", "cell_fate.csv"))
+qc_thr   <- read_csv_safe(file.path(run_dir, "qc", "qc_thresholds.csv"))   # realised per-sample cut-offs (01)
 clann    <- read_csv_safe(file.path(integ_dir, "integrated_cluster_markers.csv"))  # optional
 
 # per-sample n cell types + top type computed from data (authoritative for this object)
@@ -696,7 +697,7 @@ bundle <- list(
   samples = samples_all, n_cells_total = nrow(cells),
   cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide, counts_long = counts_long,
   label_source = label_source, prop_long_denovo = prop_long_dn, counts_long_denovo = counts_long_dn,
-  delta = delta, summary = summary, umap_name = umap_name, de = de,
+  delta = delta, summary = summary, qc_thresholds = qc_thr, umap_name = umap_name, de = de,
   markers_dot = markers_dot,
   galleries = galleries, lite = lite, benchmark = benchmark,
   umap_static = umap_static, umap_panels = umap_panels,

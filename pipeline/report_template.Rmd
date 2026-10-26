@@ -480,6 +480,21 @@ gv <- ggplot(long, aes(sample, value, fill = sample)) +
 ggplotly(gv, height = 430, tooltip = "y")
 ```
 
+```{r qc_thresholds, results="asis"}
+# The cut-offs actually applied per sample (01_load_qc.R writes qc/qc_thresholds.csv).
+# In adaptive mode these differ per sample; in fixed mode every row is the same.
+if (!is.null(B$qc_thresholds) && nrow(B$qc_thresholds)) {
+  T2 <- B$qc_thresholds
+  cat('<details class="bench-details"><summary>QC thresholds applied per sample (',
+      htmltools::htmlEscape(T2$mode[1]), ')</summary>\n', sep = "")
+  T2$mode <- NULL
+  names(T2) <- c("Sample", "Min genes", "Max genes", "Min UMIs", "Max UMIs", "Max % mito")
+  print(knitr::kable(T2, format = "html", row.names = FALSE,
+                     table.attr = 'class="summary-table"'))
+  cat('</details>\n')
+}
+```
+
 ## Doublets
 
 <p class="plot-desc">Residual scDblFinder scores of the <i>retained</i> cells per sample (interactive violin, no dots) —

@@ -36,6 +36,9 @@ load_sample <- function(sample_name, data_path) {
   }
 
   n_gem <- ncol(counts)   # raw GEM barcodes before any Seurat filtering
+  # Load gate stays at 200 genes regardless of QC$min_features: cell_fate.csv needs
+  # the same "After_load" denominator across species so retention is comparable,
+  # and the real floor is applied in filter_cells() from qc_thresholds.csv.
   seu <- CreateSeuratObject(counts = counts, project = sample_name,
                             min.cells = 3, min.features = 200)
   seu$sample     <- sample_name
@@ -113,20 +116,43 @@ plot_qc <- function(seu, sample_name) {
   plots
 }
 
-filter_cells <- function(seu, sample_name) {
+# Per-sample thresholds. Fixed mode returns the QC constants. Adaptive mode derives
+# median +/- mad_k MADs on log10(UMIs) and log10(genes), and an upper MAD bound on
+# %mt, then clamps each inside the fixed bounds so a data-derived cut never relaxes
+# past the configured floor/ceiling. Returns one row per sample for qc_thresholds.csv.
+qc_thresholds <- function(seu, sample_name) {
+  thr <- data.frame(Sample = sample_name, mode = "fixed",
+                    min_features = QC$min_features, max_features = QC$max_features,
+                    min_counts = QC$min_counts, max_counts = QC$max_counts,
+                    max_percent_mt = QC$max_percent_mt, stringsAsFactors = FALSE)
+  if (!isTRUE(QC$adaptive)) return(thr)
+  k <- if (!is.null(QC$mad_k)) QC$mad_k else 3
+  band <- function(x) { m <- median(x); d <- mad(x); c(m - k * d, m + k * d) }
+  lf <- 10^band(log10(seu$nFeature_RNA)); lc <- 10^band(log10(seu$nCount_RNA))
+  mt <- median(seu$percent.mt) + k * mad(seu$percent.mt)
+  thr$mode           <- sprintf("adaptive (median +/- %g MAD, clamped to fixed)", k)
+  thr$min_features   <- round(max(QC$min_features, lf[1]))
+  thr$max_features   <- round(min(QC$max_features, lf[2]))
+  thr$min_counts     <- round(max(QC$min_counts,   lc[1]))
+  thr$max_counts     <- round(min(QC$max_counts,   lc[2]))
+  # Floor on the %mt bound: on a low-mito platform (median 0.4%, MAD 0.2%) median+3MAD is
+  # ~1%, which would discard healthy cells at 1.5%. 5% is the conventional minimum.
+  mt_floor <- if (!is.null(QC$adaptive_mt_floor)) QC$adaptive_mt_floor else 5
+  thr$max_percent_mt <- round(min(QC$max_percent_mt, max(mt, mt_floor)), 2)
+  thr
+}
+
+filter_cells <- function(seu, sample_name, thr) {
   n_before <- ncol(seu)
-  seu <- subset(seu,
-    subset =
-      nFeature_RNA >= QC$min_features &
-      nFeature_RNA <= QC$max_features &
-      nCount_RNA   >= QC$min_counts   &
-      nCount_RNA   <= QC$max_counts   &
-      percent.mt   <= QC$max_percent_mt
-  )
+  keep <- seu$nFeature_RNA >= thr$min_features & seu$nFeature_RNA <= thr$max_features &
+          seu$nCount_RNA   >= thr$min_counts   & seu$nCount_RNA   <= thr$max_counts   &
+          seu$percent.mt   <= thr$max_percent_mt
+  seu <- seu[, keep]
   n_after   <- ncol(seu)
   n_removed <- n_before - n_after
-  message("  Filter: ", n_before, " -> ", n_after,
-          " cells (removed ", n_removed,
+  message("  Filter [", thr$mode, "]: genes [", thr$min_features, ",", thr$max_features,
+          "] UMIs [", thr$min_counts, ",", thr$max_counts, "] MT <= ", thr$max_percent_mt,
+          "% : ", n_before, " -> ", n_after, " cells (removed ", n_removed,
           ", ", round(n_removed / n_before * 100, 1), "%)")
   seu
 }
@@ -165,10 +191,13 @@ for (nm in SAMPLE_NAMES) {
 }
 
 message("\n--- Applying QC filters ---")
-message("Thresholds: nFeature [", QC$min_features, ",", QC$max_features, "] | ",
+message("Configured: nFeature [", QC$min_features, ",", QC$max_features, "] | ",
         "nCount [", QC$min_counts, ",", QC$max_counts, "] | ",
-        "MT <= ", QC$max_percent_mt, "%")
-seu_list <- mapply(filter_cells, seu_list, SAMPLE_NAMES, SIMPLIFY = FALSE)
+        "MT <= ", QC$max_percent_mt, "%", if (isTRUE(QC$adaptive)) "  (adaptive: per-sample MAD bounds inside these)")
+qc_thr <- do.call(rbind, mapply(qc_thresholds, seu_list, SAMPLE_NAMES, SIMPLIFY = FALSE))
+write.csv(qc_thr, file.path(DIRS$qc, "qc_thresholds.csv"), row.names = FALSE)
+seu_list <- mapply(function(s, nm) filter_cells(s, nm, qc_thr[qc_thr$Sample == nm, ]),
+                   seu_list, SAMPLE_NAMES, SIMPLIFY = FALSE)
 
 # Capture counts AFTER QC
 n_qc_vec <- sapply(seu_list, ncol)
@@ -220,9 +249,7 @@ print(qc_summary)
 message("\n--- Cell Fate (load + QC) ---")
 message("  Removal reasons:")
 message("    load  : cells with < 200 genes (CreateSeuratObject min.features=200)")
-message("    QC    : nFeature [", QC$min_features, ",", QC$max_features, "]  |  ",
-        "nCount [", QC$min_counts, ",", QC$max_counts, "]  |  ",
-        "MT <= ", QC$max_percent_mt, "%")
+message("    QC    : per-sample thresholds in qc/qc_thresholds.csv (mode: ", qc_thr$mode[1], ")")
 print(cell_fate[, c("Sample", "GEM_barcodes", "Removed_load_low_genes",
                     "After_load", "Removed_QC", "After_QC",
                     "Total_removed", "Pct_retained")])

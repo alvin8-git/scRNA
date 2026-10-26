@@ -3,8 +3,10 @@
 # Normalised cell type proportion comparison across samples using:
 #   1. Bootstrap downsampling  — resample each sample to the smallest n, 1000x
 #   2. Multinomial 95% CI      — analytical CI for each sample's observed proportions
-#   3. Pairwise proportion test — chi-squared goodness-of-fit per cell type pair
-# Output: bootstrap_proportions_report.pdf + bootstrap_summary.csv
+#   3. Pairwise chi-squared     — descriptive only (cells are not replicates)
+#   4. Composition test         — replicate-aware, sample-level, propeller-style
+#                                 (needs SCRNA_CONDITION and >= 2 samples per condition)
+# Output: bootstrap_proportions_report.pdf + bootstrap_summary.csv + composition_test.csv
 # =============================================================================
 .pipeline_dir <- local({
   f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
@@ -108,8 +110,49 @@ chisq_results <- lapply(pair_tests, function(pair) {
   )
 })
 chisq_df <- bind_rows(chisq_results)
-message("\nPairwise chi-squared tests (observed cell counts):")
+message("\nPairwise chi-squared tests (observed cell counts — descriptive only, cells are not replicates):")
 print(chisq_df)
+
+# ── Replicate-aware composition test (propeller-style) ───────────────────────
+# Unit of replication is the SAMPLE, not the cell. Per-sample proportions are
+# arcsin-sqrt transformed (variance-stabilising for proportions) and fitted with
+# limma (~ condition) with empirical-Bayes moderation — the propeller method of
+# Phipson et al. 2022 without the speckle dependency. Needs >= 2 conditions and
+# >= 2 samples in every condition; otherwise the run is descriptive only.
+# ponytail: t-test on asin(sqrt(p)) per cell type; add logit variant if ever needed.
+cond <- SAMPLE_CONDITIONS[samples]
+if (any(is.na(cond))) cond[is.na(cond)] <- "condition1"
+n_per_cond <- table(cond)
+comp_test  <- NULL
+if (length(n_per_cond) >= 2 && all(n_per_cond >= 2)) {
+  prop_mat <- obs %>% select(sample, cell_type, prop) %>%
+    pivot_wider(names_from = sample, values_from = prop, values_fill = 0) %>%
+    as.data.frame()
+  rownames(prop_mat) <- prop_mat$cell_type; prop_mat$cell_type <- NULL
+  prop_mat <- as.matrix(prop_mat[, samples, drop = FALSE])
+  lv       <- unique(cond)
+  design   <- model.matrix(~ 0 + factor(cond, levels = lv)); colnames(design) <- lv
+  pairs    <- combn(lv, 2, simplify = FALSE)                       # every pair: later vs earlier
+  cm       <- sapply(pairs, function(p) { v <- setNames(numeric(length(lv)), lv); v[p[2]] <- 1; v[p[1]] <- -1; v })
+  colnames(cm) <- sapply(pairs, function(p) paste0(p[2], "_vs_", p[1]))
+  fit <- limma::lmFit(asin(sqrt(prop_mat)), design)
+  fit <- limma::eBayes(limma::contrasts.fit(fit, cm), robust = TRUE, trend = FALSE)
+  comp_test <- bind_rows(lapply(colnames(cm), function(cf) {
+    tt  <- limma::topTable(fit, coef = cf, number = Inf, sort.by = "none")
+    alt <- sub("_vs_.*", "", cf); ref <- sub(".*_vs_", "", cf)
+    data.frame(cell_type = rownames(tt), contrast = cf,
+               mean_prop_ref = rowMeans(prop_mat[rownames(tt), cond == ref, drop = FALSE]),
+               mean_prop_alt = rowMeans(prop_mat[rownames(tt), cond == alt, drop = FALSE]),
+               t = tt$t, p_value = tt$P.Value, fdr = tt$adj.P.Val, stringsAsFactors = FALSE)
+  })) %>% mutate(across(where(is.numeric), ~ signif(.x, 4))) %>% arrange(fdr)
+  write.csv(comp_test, file.path(DIRS$reports, "composition_test.csv"), row.names = FALSE)
+  message("\nReplicate-aware composition test (", paste(names(n_per_cond), n_per_cond, sep = "=", collapse = ", "), "):")
+  print(comp_test, row.names = FALSE)
+} else {
+  message("\nComposition test skipped — needs >= 2 conditions with >= 2 samples each ",
+          "(have: ", paste(names(n_per_cond), n_per_cond, sep = "=", collapse = ", "),
+          "). Set SCRNA_CONDITION=sample=label,... Proportions are DESCRIPTIVE only.")
+}
 
 # ── Plots ────────────────────────────────────────────────────────────────────
 ct_colors_use <- CELLTYPE_COLORS[names(CELLTYPE_COLORS) %in% all_cell_types]
@@ -182,12 +225,32 @@ if (nrow(chisq_df) > 0) {
     scale_fill_gradient2(low = "#E64B35", mid = "#FFFBCC", high = "#4DBBD5",
                          midpoint = 0.05, name = "p-value",
                          limits = c(0, 1), na.value = "grey80") +
-    labs(title = "Pairwise Chi-squared Test — Cell Type Composition",
-         subtitle = "p < 0.05 = significantly different composition",
+    labs(title = "Pairwise Chi-squared Test — Cell Type Composition (descriptive)",
+         subtitle = "Treats cells as replicates, so p-values are anti-conservative. Use the composition test below for inference.",
          x = NULL, y = NULL) +
     theme_minimal(base_size = 10) +
     theme(axis.text = element_text(size = 9))
   report_plots[["Pairwise Chi-squared Test"]] <- p_chisq
+}
+
+# 5. Replicate-aware composition test
+if (!is.null(comp_test) && nrow(comp_test) > 0) {
+  ct_df <- comp_test %>%
+    mutate(cell_type = factor(cell_type, levels = rev(unique(cell_type[order(fdr)]))),
+           sig = ifelse(fdr < 0.05, "FDR < 0.05", "n.s."),
+           diff_pp = 100 * (mean_prop_alt - mean_prop_ref))
+  p_comp <- ggplot(ct_df, aes(x = diff_pp, y = cell_type, colour = sig)) +
+    geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5) +
+    geom_point(size = 3) +
+    geom_text(aes(label = paste0("FDR=", signif(fdr, 2))), size = 2.6, vjust = -1) +
+    facet_wrap(~ contrast, scales = "free_x") +
+    scale_colour_manual(values = c("FDR < 0.05" = "#E64B35", "n.s." = "grey50"), name = NULL) +
+    labs(title = "Composition Test — sample-level, replicate-aware (propeller-style)",
+         subtitle = paste0("asin(sqrt(prop)) per sample, limma moderated t; replicates per condition: ",
+                           paste(names(n_per_cond), n_per_cond, sep = "=", collapse = ", ")),
+         x = "Difference in mean proportion (percentage points)", y = NULL) +
+    theme_bw(base_size = 10) + theme(legend.position = "bottom")
+  report_plots[["Composition Test (replicate-aware)"]] <- p_comp
 }
 
 save_report_pdf(report_plots,
@@ -197,3 +260,4 @@ message("\n09_bootstrap_proportions.R complete.")
 message("Outputs:")
 message("  ", file.path(DIRS$reports, "bootstrap_proportions_report.pdf"))
 message("  ", file.path(DIRS$reports, "bootstrap_summary.csv"))
+if (!is.null(comp_test)) message("  ", file.path(DIRS$reports, "composition_test.csv"))

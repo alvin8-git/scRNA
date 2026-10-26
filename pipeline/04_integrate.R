@@ -47,6 +47,10 @@ seu_list <- setNames(
   SAMPLE_NAMES
 )
 
+# Leiden (algorithm 4) must run on the igraph path: Seurat's default "matrix" path
+# densifies the SNN graph (cells x cells), which is 80 GB at 100k cells.
+.cluster_method <- if (identical(CLUSTER$algorithm, 4)) "igraph" else "matrix"
+
 # =============================================================================
 # SINGLE-SAMPLE PATH  -  no batch correction needed
 # =============================================================================
@@ -59,7 +63,7 @@ if (SINGLE_SAMPLE) {
   merged <- FindVariableFeatures(merged, nfeatures = NORM$n_hvg, verbose = FALSE)
   .t <- proc.time()["elapsed"]
   message("[", format(Sys.time(), "%H:%M:%S"), "] ScaleData...")
-  merged <- ScaleData(merged, vars.to.regress = "percent.mt", verbose = FALSE)
+  merged <- ScaleData(merged, vars.to.regress = NORM$vars_to_regress, verbose = FALSE)
   message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   merged <- RunPCA(merged, npcs = DIM$npcs, verbose = FALSE)
   .t <- proc.time()["elapsed"]
@@ -73,7 +77,8 @@ if (SINGLE_SAMPLE) {
 
   for (res in CLUSTER$resolutions) {
     merged <- FindClusters(merged, resolution = res,
-                           algorithm = CLUSTER$algorithm, verbose = FALSE)
+                           algorithm = CLUSTER$algorithm, method = .cluster_method,
+                           random.seed = 1, verbose = FALSE)
     message("  res=", res, ": ", length(unique(merged$seurat_clusters)), " clusters")
   }
   message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
@@ -104,17 +109,23 @@ if (SINGLE_SAMPLE) {
           merge.data   = FALSE,
           project      = "integrated")
   )
-  merged <- suppressWarnings(JoinLayers(merged))
   rm(seu_list); gc()
-  message("Merged: ", ncol(merged), " total cells")
+  message("Merged: ", ncol(merged), " total cells (", length(Layers(merged, search = "counts")),
+          " count layers)")
 
   # Step 2: Normalize, HVG, Scale, PCA
+  # Normalise and pick HVGs while the layers are still split per sample, so Seurat 5
+  # ranks features by how many samples call them variable instead of letting the
+  # deepest library's sample-specific genes dominate. Then join for ScaleData/PCA.
   merged <- NormalizeData(merged, verbose = FALSE)
   merged <- FindVariableFeatures(merged, selection.method = NORM$hvg_method,
                                   nfeatures = NORM$n_hvg, verbose = FALSE)
+  .hvg <- VariableFeatures(merged)
+  merged <- suppressWarnings(JoinLayers(merged))
+  VariableFeatures(merged) <- .hvg
   .t <- proc.time()["elapsed"]
   message("[", format(Sys.time(), "%H:%M:%S"), "] ScaleData...")
-  merged <- ScaleData(merged, vars.to.regress = "percent.mt", verbose = FALSE)
+  merged <- ScaleData(merged, vars.to.regress = NORM$vars_to_regress, verbose = FALSE)
   message("  Done (", round(proc.time()["elapsed"] - .t), "s)")
   merged <- RunPCA(merged, npcs = DIM$npcs, verbose = FALSE)
 
@@ -139,6 +150,7 @@ if (SINGLE_SAMPLE) {
   # Step 4: Harmony
   .t <- proc.time()["elapsed"]
   message("[", format(Sys.time(), "%H:%M:%S"), "] RunHarmony...")
+  set.seed(DIM$umap_seed)   # Harmony's k-means init is stochastic; pin it like UMAP
   merged <- RunHarmony(merged,
     group.by.vars    = HARMONY$group_by_vars,
     dims.use         = DIM$dims_use,
@@ -176,7 +188,8 @@ if (SINGLE_SAMPLE) {
                            dims = HARMONY$dims_use, verbose = FALSE)
   for (res in CLUSTER$resolutions) {
     merged <- FindClusters(merged, resolution = res,
-                           algorithm = CLUSTER$algorithm, verbose = FALSE)
+                           algorithm = CLUSTER$algorithm, method = .cluster_method,
+                           random.seed = 1, verbose = FALSE)
     message("  res=", res, ": ", length(unique(merged$seurat_clusters)), " clusters")
   }
   message("  Done (", round(proc.time()["elapsed"] - .t), "s)")

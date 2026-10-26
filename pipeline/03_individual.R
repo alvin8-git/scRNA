@@ -53,7 +53,7 @@ process_individual <- function(seu, sample_name) {
   plots[[paste0(sample_name, "  -  Highly Variable Genes")]] <- mark_small(p_hvg)
 
   # --- Scale + PCA ---
-  seu <- ScaleData(seu, vars.to.regress = "percent.mt", verbose = FALSE)
+  seu <- ScaleData(seu, vars.to.regress = NORM$vars_to_regress, verbose = FALSE)
   seu <- RunPCA(seu, npcs = DIM$npcs, verbose = FALSE)
 
   p_elbow <- ElbowPlot(seu, ndims = DIM$npcs) +
@@ -75,7 +75,9 @@ process_individual <- function(seu, sample_name) {
   seu <- FindNeighbors(seu, dims = DIM$dims_use, verbose = FALSE)
 
   for (res in CLUSTER$resolutions) {
-    seu <- FindClusters(seu, resolution = res, algorithm = CLUSTER$algorithm, verbose = FALSE)
+    seu <- FindClusters(seu, resolution = res, algorithm = CLUSTER$algorithm,
+                        method = if (identical(CLUSTER$algorithm, 4)) "igraph" else "matrix",
+                        random.seed = 1, verbose = FALSE)
     message("  res=", res, ": ", length(unique(seu$seurat_clusters)), " clusters")
   }
   default_col <- paste0("RNA_snn_res.", CLUSTER$default_res)
