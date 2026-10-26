@@ -47,6 +47,16 @@ if (.ref_name == "MonacoImmune") {
   ref        <- MonacoImmuneData()
   ref_labels <- ref$label.main
   message("  Reference: MonacoImmuneData (blood-optimised, 29 types)")
+} else if (.ref_name == "MouseRNAseqData") {
+  # Mouse symbols are title-case, so a human reference shares almost no gene
+  # names with the data and SingleR returns near-random labels (deltas ~0.03).
+  ref        <- MouseRNAseqData()
+  ref_labels <- ref$label.main
+  message("  Reference: MouseRNAseqData (mouse bulk, 18 types incl. Cardiomyocytes)")
+} else if (.ref_name == "ImmGen") {
+  ref        <- ImmGenData()
+  ref_labels <- ref$label.main
+  message("  Reference: ImmGenData (mouse immune, 20 main types)")
 } else {
   ref        <- HumanPrimaryCellAtlasData()
   ref_labels <- ref$label.main

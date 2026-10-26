@@ -404,6 +404,15 @@ message("\n--- Plot Set 7: Violin plots ---")
 
 key_markers <- c("CD3D", "CD4", "CD8A", "NKG7", "MS4A1", "CD14", "FCGR3A", "PPBP")
 key_markers <- key_markers[key_markers %in% rownames(merged)]
+# Non-human symbols (mouse: Cd3d, Cd14) match none of the PBMC defaults, and
+# wrap_plots() on an empty list is a hard error. Fall back to the first gene of
+# each configured MARKERS panel, which is species-correct by construction.
+if (!length(key_markers)) {
+  key_markers <- unique(vapply(MARKERS, function(g) g[g %in% rownames(merged)][1], character(1)))
+  key_markers <- key_markers[!is.na(key_markers)]
+  if (length(key_markers)) message("  PBMC key markers absent — using MARKERS panels: ",
+                                   paste(key_markers, collapse = ", "))
+}
 
 # Per-marker violin with cell-type association in each plot title
 marker_labels <- c(
@@ -416,8 +425,11 @@ marker_labels <- c(
   "FCGR3A" = "FCGR3A (FCGR3A+ Mono)",
   "PPBP"   = "PPBP (Platelet)"
 )
+if (length(key_markers)) {
 vln_list <- lapply(key_markers, function(gene) {
-  lbl <- if (gene %in% names(marker_labels)) marker_labels[[gene]] else gene
+  lbl <- if (gene %in% names(marker_labels)) marker_labels[[gene]] else
+    { p <- names(MARKERS)[vapply(MARKERS, function(g) gene %in% g, logical(1))][1]
+      if (is.na(p)) gene else sprintf("%s (%s)", gene, p) }
   VlnPlot(merged, features = gene, group.by = "cell_type",
           pt.size = 0, cols = ct_cols) +
     labs(title = lbl) + theme_pub +
@@ -430,6 +442,7 @@ ggsave(file.path(DIRS$integrated, "violin_key_markers.pdf"),
        p_vln, width = 18, height = vln_h, dpi = PLOT$dpi)
 report_plots[["Violin  -  Key Lineage Markers per Cell Type"]] <-
   set_page(p_vln, pw = 11, ph = min(vln_h * 11 / 18, 8.5))
+} else message("  Skipped violin_key_markers.pdf — no key markers present")
 
 # =============================================================================
 # PLOT SET 8: Sample comparison text summaries

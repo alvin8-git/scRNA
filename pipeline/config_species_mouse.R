@@ -1,5 +1,5 @@
 # =============================================================================
-# config_species_mouse.R — mouse cardiomyocyte overrides
+# config_species_mouse.R — mouse overrides (first cohort turned out to be immune cells; see reference note)
 #
 # Sourced by config.R AFTER its own definitions, so everything here overwrites
 # the human defaults in place. Self-guarded on .species, so it is inert for
@@ -21,7 +21,7 @@
 
 if (.species %in% c("mouse", "mouse_cm")) {
 
-  message("[Species] mouse (cardiomyocyte) — applying mouse overrides")
+  message("[Species] mouse — applying mouse overrides (ImmGen reference)")
 
   # ---- gene-name patterns: the blocker ---------------------------------------
   QC$mt_pattern   <- "^mt-"      # 13 genes in this annotation; "^MT-" matches 0
@@ -46,8 +46,16 @@ if (.species %in% c("mouse", "mouse_cm")) {
   # "Cardiomyocytes", which is exactly the class HumanPrimaryCellAtlas lacks and
   # the reason human cardiac cells get called "Neurons" by de-novo SingleR.
   # Gene symbols in it are title-case (Xkr4, Sox17), matching this data.
-  # ImmGenData is immune-only and not useful here.
-  SINGLER_REF <- "MouseRNAseqData"
+  #
+  # REVISED 2026-10-25 after the first PosA run (results_0hCell1_8samples):
+  # the cells are NOT cardiomyocytes. Ptprc is detected in 80-98 % of cells in
+  # every cluster, Lyz2 in 83-100 %, Tnnt2 in <= 7 %, and the unbiased cluster
+  # markers are Adgre1/Mertk/Msr1 (macrophage), Cxcr2/Hdc/Mmp8 (neutrophil),
+  # Ciita/Flt3/Clec9a (DC), Cd79a/Pax5 (B), Itk/Cd247 (T), Nkg7/Gzma (NK),
+  # Flt1/Ptprb (endothelial, 171 cells). This is a mouse immune-cell dataset,
+  # so the immune-only ImmGen reference is the right one and MouseRNAseqData's
+  # single "Macrophages"/"Monocytes" classes are too coarse.
+  SINGLER_REF <- "ImmGen"
 
   # ---- marker panels ---------------------------------------------------------
   # Panel NAMES match CELLTYPE_COLORS entries and the cell-type labels, which
@@ -71,7 +79,10 @@ if (.species %in% c("mouse", "mouse_cm")) {
     `Endothelial`        = c("Pecam1", "Cdh5", "Tie1", "Emcn"),
     `Macrophage`         = c("Ptprc", "Cd68", "Adgre1", "Lyz2", "Itgam"),
     `Proliferating`      = c("Mki67", "Top2a", "Ccnb1"),
-    `RBC`                = c("Hba-a1", "Hbb-bs", "Alas2"),
+    # No RBC panel. With it, scType called five immune clusters (12,266 cells,
+    # Ptprc 54-98 %) "RBC" on a haemoglobin UMI share of 0.00-0.22 %, and the
+    # Monaco-blind override then overwrote the correct ImmGen labels. There are
+    # no erythrocytes in this data to protect.
     # Off-target endoderm. Worth carrying because the human cardiac cohort
     # produced 9.8% hepatic/endoderm — a known failure mode of Wnt-modulation
     # protocols — and the same arm should be visible here if it occurs.
@@ -81,8 +92,8 @@ if (.species %in% c("mouse", "mouse_cm")) {
 
   # ---- contamination / rare types -------------------------------------------
   # Types the annotation step may override on marker evidence rather than trust
-  # the reference for. RBC is the ambient-prone one in a cardiac prep.
-  CONTAMINATION_TYPES <- c("RBC")
+  # the reference for. None for mouse: see the RBC note in the panel block.
+  CONTAMINATION_TYPES <- character(0)
 
   # ---- clustering ------------------------------------------------------------
   # Same resolutions as the cm overlay; a differentiation timecourse needs the

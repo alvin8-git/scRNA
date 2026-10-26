@@ -69,6 +69,18 @@ SINGLER_NORM <- c(
   "Dendritic cells"        = "DC",
   "T cells"                = "CD4 T",
   "Microglia"              = "Macrophage",
+  # --- ImmGenData label.main (SCRNA_SPECIES=mouse, immune datasets) ---
+  # "Monocytes", "Neutrophils", "Macrophages", "Microglia", "Endothelial cells",
+  # "Epithelial cells", "Fibroblasts", "B cells", "NK cells", "T cells", "DC"
+  # are already covered above. NKT and ILC are left raw: neither has a palette
+  # entry and folding them into T / NK would hide a real population.
+  "B cells, pro"           = "B cell",
+  "Basophils"              = "Basophil",
+  "Eosinophils"            = "Eosinophil",
+  "Mast cells"             = "Mast cell",
+  "Tgd"                    = "γδ T",
+  "Stem cells"             = "HSPC",
+  "Stromal cells"          = "MSC",
   # --- MonacoImmuneData labels ---
   "CD4+ T cells"           = "CD4 T",
   "CD8+ T cells"           = "CD8 T",
