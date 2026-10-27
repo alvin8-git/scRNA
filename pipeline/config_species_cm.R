@@ -644,6 +644,111 @@ if (.species == "cm") {
     )
   }
 
+  # =============================================================================
+  # ASF5 and CLMC lines (flowcells C and D, 2026-10-27), Leiden, same Yap rules.
+  # Evidence: /data/alvin/tmp/look_{asf5,clmc}.txt, tp_{asf5,clmc}.txt, sub_{asf5,clmc}.txt.
+  # Both cohorts carry heavy ambient RNA (ASF5: MYL7/TTR/AFP detected in 76-100 % of
+  # cells in nearly every cluster), so labels rest on per-cluster SPECIFIC markers
+  # (pct_in - pct_rest) and timepoint mix, not on raw detection. Clusters that span
+  # D0-D30 are depth or cell-cycle groupings and are split by lineage below.
+  # =============================================================================
+
+  # ---- ASF5 (results_ASF5D01_8samples_filtered, 20 clusters) -------------------
+  if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 4) &&
+      setequal(SAMPLE_NAMES, paste0("ASF5_D", rep(c(0, 11, 20, 30), each = 2), "_", 1:2))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      "1"  = "Unknown",                    # split below; 35,911 cells, 1,584 genes, all timepoints
+      "2"  = "Hepatic/Endoderm",           # HNF4G FOXA1 ONECUT1 RFX6 LINC00261 FOXA2 80 HNF4A 67; D20 56
+      "3"  = "Hepatic/Endoderm",           # split below; NR5A2 CUX2 ROR1 ADAMTS19
+      "4"  = "Hepatic/Endoderm",           # FOXA2 74 CLDN3 RAB25 F2; D11 65
+      "5"  = "Cardiomyocyte",              # SLC8A1 73 TTN 95 MYH6 62 TNNT2 51 MYOCD 44 TECRL ACTC1; cm UMI 1.3 %; D30 76
+      "6"  = "Myofibroblast",              # CDH11 81 PDGFRB 66 PDGFRA 65 ZEB2 PRDM6 COL6A3; D30 63
+      "7"  = "Proliferating",              # split below; HAND1+ cycling mesenchyme, D11-D30
+      "8"  = "Hepatic/Endoderm",           # ONECUT1 SERPINA1 APOC3 CDH6; D20 68
+      "9"  = "Cardiac progenitor",         # GATA4 86 ZFPM2 82 TBX5 30 CHRM2 WT1 25 NKX2-5 6; D30 60 [uncertain: late for a CCP]
+      "10" = "Pluripotent",                # split below; POU5F1 MIR302CHG ESRG, low depth
+      "11" = "Proepicardial",              # WT1 70 TBX18 72 ALDH1A2 57 NPR3 49 BNC1 76; D30 73 (true epicardium)
+      "12" = "Epicardial-like",            # HAND1 87 BNC1 70 UPK3B 22 DCN 88 LUM 94 NPNT FRZB; D20/D30
+      "13" = "Proliferating",              # split below; cycling D0 hESC + D11/D20 endoderm
+      "14" = "Pluripotent",                # POU5F1 78 ESRG 63, low depth; D0 86
+      "15" = "Endothelial",                # CDH5 67 PECAM1 58 CD34 53 EMCN CALCRL
+      "16" = "Hepatic/Endoderm",           # split below; cycling, FOXA2 65 HHEX 59
+      "17" = "Hepatic/Endoderm",           # FOXA2 HNF1A-AS1 VTN APOA2 HHEX
+      "18" = "Pluripotent",                # POU5F1 91 SOX2 89 NANOG 84 UTF1 FOXD3-AS1; D0 91
+      "19" = "Unknown",                    # n=1,116, 1,710 genes, all timepoints; RBFOX1 CSMD1 NRG3 long-gene signature
+      "20" = "Epicardial-like"             # n=347, D30 99; ITLN1 MGP BNC1 46 WT1 31 TBX18 28 (mesothelium)
+    )
+    CLUSTER_SUBCLUSTER_MAP <- list(
+      # 1_0 (28,643): 1,584 genes, D11-D30, every lineage marker at ambient level (cm UMI
+      # share 0.14 % vs 1.27 % in true CMs) — no identity; 1_1 (7,268): D0 64 POU5F1 65.
+      list(cluster = "1", resolution = 0.15, labels = c("0" = "Unknown", "1" = "Pluripotent")),
+      # 3_2/3_4 D0 97-99 POU5F1 86-90; 3_0/3_1/3_3 GATA4 + FOXA2 39-73 HHEX endoderm;
+      # 3_5 (444) GATA4 96 TBX5 21 SLC8A1 66 MYH6 47.
+      list(cluster = "3", resolution = 0.15,
+           labels = c("0" = "Hepatic/Endoderm", "1" = "Hepatic/Endoderm", "3" = "Hepatic/Endoderm",
+                      "2" = "Pluripotent", "4" = "Pluripotent", "5" = "Cardiac progenitor")),
+      # 7_1/7_2 TOP2A 72/99 HAND1 64/79 (cycling mesenchyme); 7_0/7_3 D20/D30 CDH11 61-71
+      # PDGFRB DCN (activated fibroblast); 7_4 (253) GABRP 77 ISL1 32 (amnion).
+      list(cluster = "7", resolution = 0.15,
+           labels = c("1" = "Proliferating", "2" = "Proliferating", "0" = "Myofibroblast",
+                      "3" = "Myofibroblast", "4" = "Amnion-like epithelium")),
+      # 10_0/10_1 POU5F1 37/87 (D0 plus residual undifferentiated cells); 10_2 18 cells.
+      list(cluster = "10", resolution = 0.15,
+           labels = c("0" = "Pluripotent", "1" = "Pluripotent", "2" = "Unknown")),
+      # 13_0 D0 56 POU5F1 57 (cycling hESC); 13_1 D11/D20 FOXA2 64 HHEX 48.
+      list(cluster = "13", resolution = 0.15, labels = c("0" = "Pluripotent", "1" = "Hepatic/Endoderm")),
+      # 16_0 D0 78 POU5F1 78; 16_1-16_3 FOXA2 82-94 HHEX 72-77 (cycling endoderm).
+      list(cluster = "16", resolution = 0.15,
+           labels = c("0" = "Pluripotent", "1" = "Hepatic/Endoderm", "2" = "Hepatic/Endoderm", "3" = "Hepatic/Endoderm"))
+    )
+  }
+
+  # ---- CLMC (results_CLMCD01_8samples_filtered, 14 clusters) -------------------
+  # CLMC goes mesothelial/fibroblast: no cluster carries a cardiomyocyte signal above the
+  # D11 ambient background (cm UMI share <= 0.19 % everywhere vs 1.27 % in ASF5 CMs).
+  if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 4) &&
+      setequal(SAMPLE_NAMES, paste0("CLMC_D", rep(c(0, 11, 20, 30), each = 2), "_", 1:2))) {
+    CLUSTER_CELLTYPE_MAP <- c(
+      "1"  = "Epicardial-like",            # BNC1 84 UPK3B 37 WT1 25 TBX18 2 AQP1 MGP NPNT DCN 100; D20/D30
+      "2"  = "Unknown",                    # split below; 16,776 cells, 1,394 genes, D11 84
+      "3"  = "Epicardial-like",            # TENM2 KCNQ5 SOX6 CNTN5 BNC1 59 DCN 93; D30 77 (as H1 Leiden cl 8)
+      "4"  = "Pluripotent",                # POU5F1 86 SOX2 81 NANOG 72 UTF1; D0 86
+      "5"  = "Myofibroblast",              # split below; TGFBI HAND2 CDH11 SNAI2 MFAP4
+      "6"  = "Fibroblast (low-depth)",     # 1,141 genes; DCN 93 LUM 92 MGP FRZB + AFP (ambient); D30 69
+      "7"  = "Epicardial-like",            # DCN MGP FRZB SOX6 TENM2 BNC1 66 UPK3B 18; D30 79
+      "8"  = "Hepatic/Endoderm",           # FOXA2 63 CLDN3 F10 MTTP APOM VTN; D11 67
+      "9"  = "Hepatic/Endoderm",           # FOXA2 92 HHEX 70 TBX3 82 HNF4A 39; D11 95
+      "10" = "Proliferating",              # split below; cycling D0 hESC + D20 mesenchyme
+      "11" = "Proliferating",              # split below; S-phase HAND1+ cycling mesenchyme
+      "12" = "Hepatic/Endoderm",           # split below; ADAMTS19 ROR1 FGF13 (as ASF5 cl 3)
+      "13" = "Endothelial",                # CDH5 52 PECAM1 43 CD34 56 HOPX; D11 89
+      "14" = "Hepatic/Endoderm"            # FOXA2 96 HHEX 77 FOXA3 TBX3 87; D11 99
+    )
+    CLUSTER_SUBCLUSTER_MAP <- list(
+      # 2_0/2_1 (16,093): D11, 1,345-1,540 genes; MYL7/TTN/MYH6 no higher than the D11
+      # endoderm clusters (ambient), TBX5 5 NKX2-5 4 — no identity [possibly immature CMs,
+      # needs SoupX]; 2_2 (683) D0 96 POU5F1 79.
+      list(cluster = "2", resolution = 0.15,
+           labels = c("0" = "Unknown", "1" = "Unknown", "2" = "Pluripotent")),
+      # 5_0/5_2 D20/D30 HAND1 93 CDH11 78-85 PDGFRB 50-66; 5_1 (2,790) D11 47 GATA4 84
+      # ZFPM2 72 NKX2-5 20 TBX5 16 ISL1 24 SLC8A1 39.
+      list(cluster = "5", resolution = 0.15,
+           labels = c("0" = "Myofibroblast", "2" = "Myofibroblast", "1" = "Cardiac progenitor")),
+      # 10_0 D0 86 POU5F1 86 (cycling hESC); 10_1/10_2 HAND1 89-92 TOP2A 92-98.
+      list(cluster = "10", resolution = 0.15,
+           labels = c("0" = "Pluripotent", "1" = "Proliferating", "2" = "Proliferating")),
+      # 11_0/11_1/11_3 HAND1 95-98 TOP2A 69-98; 11_2 (825) D11 86 GATA4 93 TBX5 31
+      # NKX2-5 21 ISL1 31 SLC8A1 47 (Yap CCP).
+      list(cluster = "11", resolution = 0.15,
+           labels = c("0" = "Proliferating", "1" = "Proliferating", "3" = "Proliferating",
+                      "2" = "Cardiac progenitor")),
+      # 12_0 D11 FOXA2 72; 12_1 D0 93 POU5F1 79; 12_2 D11 FOXA2 56 GATA4 91 TBX5 9
+      # (below the CCP TBX5 bar, kept with endoderm).
+      list(cluster = "12", resolution = 0.15,
+           labels = c("0" = "Hepatic/Endoderm", "2" = "Hepatic/Endoderm", "1" = "Pluripotent"))
+    )
+  }
+
   # ---- CAVEAT recorded in config so it travels with the analysis -------------
   # COL1A1 (100.0%), COL3A1 (100.0%), LUM (99.8%), DCN (99.1%) and AFP (99.4%) are
   # detected in essentially EVERY cell at D30. Near-universal detection of secreted /
