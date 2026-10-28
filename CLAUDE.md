@@ -122,7 +122,9 @@ stop future/BiocParallel workers from oversubscribing.
 `SCRNA_SAMPLE1..N` (sample paths, exported by the runner), `SCRNA_SPECIES`, `SCRNA_CONDITION`
 (`name=label,…`), `SCRNA_BASE_DIR`, `SCRNA_RESULTS_DIR` (point a step at an existing run dir instead
 of re-deriving one from samples), `SCRNA_REFERENCE_MODEL` (enables 05r/08c), `SCRNA_ANCHORS` (default
-`Aksh1,ES332`), `SCRNA_DRIFT_PP` (default `5`), `RSCRIPT` (override in `build_report.sh`).
+`Aksh1,ES332`), `SCRNA_DRIFT_PP` (default `5`), `RSCRIPT` (override in `build_report.sh`),
+`SCRNA_CLUSTER_ALGORITHM` (`1` Louvain / `4` Leiden, overrides `CLUSTER$algorithm`; busts the 03 cache),
+`SCRNA_NO_CLUSTER_MAP` (any value disables curated cluster maps).
 
 ## Gotchas
 

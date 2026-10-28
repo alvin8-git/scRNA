@@ -186,6 +186,9 @@ CLUSTER <- list(
   # and can return badly connected communities. Changing this busts the 03 cache.
   algorithm   = 4
 )
+# SCRNA_CLUSTER_ALGORITHM=1 reruns an older Louvain-curated cohort under its original numbering.
+if (nzchar(Sys.getenv("SCRNA_CLUSTER_ALGORITHM")))
+  CLUSTER$algorithm <- as.integer(Sys.getenv("SCRNA_CLUSTER_ALGORITHM"))
 
 # --- T Cell Sub-clustering ---
 # Set enabled = FALSE to skip.  t_patterns is a regex matched against cell_type labels.
