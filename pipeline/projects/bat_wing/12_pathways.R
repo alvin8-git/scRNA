@@ -19,6 +19,12 @@ suppressPackageStartupMessages({
 }
 source(file.path(dirname(dirname(.pipeline_dir)), "config.R"))  # core config is two dirs up (pipeline/)
 
+# Step 11 self-skips with one condition and writes no DEG table, so there is nothing to enrich.
+if (length(CONDITION_LEVELS) < 2) {
+  message("Only one condition found — skipping 12_pathways.R (step 11 wrote no DEGs; set SCRNA_CONDITION)")
+  quit(save = "no", status = 0)
+}
+
 dir.create(DIRS$pathways, showWarnings = FALSE, recursive = TRUE)
 
 # Bar chart from enrichResult — does not require enrichplot/ggtree
