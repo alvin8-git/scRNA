@@ -1,0 +1,35 @@
+flowcell,flowcell_id,library_id,sample,cDNA_barcode,oligo_barcode,sample_type,reference_used
+A,E250164106 (Pos_A),MS_Sham1,MS_Sham1,1,17,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),MS_Sham2,MS_Sham2,2,18,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),0 Hrs - media-1,0hMed_1,3,19,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),0 Hrs - media-2,0hMed_2,4,20,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),0 Hrs - cells-1,0hCell_1,5,21,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),0 Hrs - cells-2,0hCell_2,6,22,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),6 Hrs - cells-1,6hCell_1,7,23,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),6 Hrs - media-1,6hMed_1,8,24,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),6 Hrs - cells-2,6hCell_2,9,25,Flow-sorted CD45+ mouse heart,GRCm38
+A,E250164106 (Pos_A),6 Hrs - media-2,6hMed_2,10,26,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),24 Hrs - cells-1,24hCell_1,1,17,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),24 Hrs - cells-2,24hCell_2,2,18,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),24 Hrs - media-1,24hMed_1,3,19,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),24 Hrs - media-2,24hMed_2,4,20,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),72 Hrs - cells-1,72hCell_1,5,21,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),72 Hrs - cells-2,72hCell_2,6,22,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),72 Hrs - media a,72hMed_a,7,23,Flow-sorted CD45+ mouse heart,GRCm38
+B,E250164093 (Pos_B),72 Hrs - media b,72hMed_b,8,24,Flow-sorted CD45+ mouse heart,GRCm38
+C,E250164134 (Pos_C),ASF5-D11-1,ASF5_D11_1,5,21,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D11-2,ASF5_D11_2,6,22,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D30-1,ASF5_D30_1,7,23,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D30-2,ASF5_D30_2,8,24,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D20-1,ASF5_D20_1,9,25,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D20-2,ASF5_D20_2,10,26,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D0-1,ASF5_D0_1,11,27,hPSC line ASF5-derived cardiac differentiation,GRCh38
+C,E250164134 (Pos_C),ASF5-D0-2,ASF5_D0_2,12,28,hPSC line ASF5-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D20-1,CLMC_D20_1,5,21,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D20-2,CLMC_D20_2,6,22,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D11-1,CLMC_D11_1,7,23,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D11-2,CLMC_D11_2,8,24,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D0-1,CLMC_D0_1,13,29,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D0-2,CLMC_D0_2,14,30,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D30-1,CLMC_D30_1,15,31,hPSC line CLMC-derived cardiac differentiation,GRCh38
+D,E250164148 (Pos_D),CLMC-D30-2,CLMC_D30_2,16,32,hPSC line CLMC-derived cardiac differentiation,GRCh38

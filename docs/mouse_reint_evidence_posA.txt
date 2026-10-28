@@ -1,0 +1,253 @@
+            used   (Mb) gc trigger   (Mb)  max used   (Mb)
+Ncells   3513075  187.7    6377221  340.6   5010900  267.7
+Vcells 170881639 1303.8  571197153 4357.9 593261870 4526.3
+cells 42488 
+
+=== detection % per CLUSTER (cluster label on top) ===
+
+-- tissue_heart_resident_mac 
+      0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Timd4        0        0        1        0        0        2        1       12        1        0        0     0     8     7         0         1         0
+Lyve1        3        2        2        1        1        1        3       36        5        1        2     1     2     3         0         4         0
+Folr2       28       10       11        4        4        9       24       37       34        3        3     4     7    10         5         5         4
+Cd163       14        4       10        3        3        7       13       55       14        2        2     3     4     6         2         5         1
+Mrc1        84       41       56       24       24       48       75       96       76       19       25    23    34    39        30        29        31
+Igf1        23        6        7        2        2        4       17       51       24        2        2     2     4     4         2        10         5
+
+-- tissue_peritoneal_LPM 
+      0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Gata6        0        0        1        0        0        0        0        0        0        0        0     0     0     0         0         3         1
+Prg4         2        1        3        0        1        1        2        1        1        0        1     0     1     2         1         9         1
+Icam2       11        3        9        1        2        4       14        4       14        7        6     9     1     5         3        11         0
+Saa3        71       50       77       60       50       63       77       57       67       48       56    56    65    71        55        42        31
+Ltbp1        1        0        2        1        0        1        1        1        1        0        0     1     0     1         0         5         0
+
+-- tissue_alveolar_or_spleen 
+        0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Siglecf        3        1        3        7       29        6        4        2        4        0        1     1     2     3        28         2         1
+Marco          0        0        0        0        0        0        0        1        1        0        0     0     0     1         0         1         0
+Car4           0        0        0        0        1        0        0        0        0        0        0     0     0     0         0        13         1
+Vcam1          7        2        2        1        2        2        6       25        6        1        1     1     3     3         1         2         0
+Spic          11        4        6        1        1        2        9       14        7        1        2     2     3     3         0         2         1
+
+-- recruited_mono_mac 
+      0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Ccr2        82       53       86       24       26       73       91       46       75       11       27    49    37    59        31        32        30
+Ly6c2       47       30       61       39       17       37       74       25       43        9       27    30    25    31        31        25        16
+Plac8       75       60       87       67       59       78       93       54       71       52       48    41    62    91        87        51        39
+Chil3       69       51       80       40       45       41       83       39       56       15       20    22    36    46        49        30        25
+Fn1         88       69       93       44       44       63       91       59       81       27       34    37    57    59        47        44        46
+Arg1        76       54       76       40       37       53       78       48       72       24       33    35    50    51        35        35        37
+
+-- post_MI_repair_mac 
+       0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Spp1         93       82       89       73       75       81       95       78       93       47       58    63    78    83        82        65        71
+Trem2        78       48       62       20       21       38       79       57       74       10       18    20    33    40        19        23        16
+Gpnmb        45       17       27        8        9       17       43       18       40        5        9    10    12    21         7         9        13
+Fabp5        78       55       71       49       40       64       83       55       77       28       37    32    94    60        50        47        33
+Lgals3       93       87       96       70       63       90       98       76       94       40       50    53    80    91        67        54        55
+Cd9          47       23       51       81       71       47       44       44       63       13       19    41    36    60        70        35        10
+
+-- neutrophil 
+       0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+S100a8       94       83       96       99       95       92       97       90       92       89       93    92    91    95        96        84        70
+S100a9       95       85       97       99       97       93       98       92       93       90       95    95    93    96        99        85        76
+Retnlg       61       39       62       89       47       59       63       54       62       57       61    60    62    68        49        46        26
+Cxcr2        31       10       31       89       73       26       34       27       33       16       18    17    24    31        85        23         7
+Ly6g          2        1        2       24        1        2        2        2        2        1        3     2     1     4         3         2         1
+Mmp8         34       19       53       78       20       23       43       19       31       11       16    16    20    25        30        12        13
+
+-- T_cell_core 
+      0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Cd3e         1        1        1        0        0        1        1        1        1        1       60     3     1     1         0         0         1
+Cd3g         1        0        1        1        0        1        1        1        1        0       46     4     0     1         0         1         1
+Cd4          1        0        1        0        0        1        1        5        2        0       23     1     1     1         0         1         0
+Cd8a         0        0        0        0        0        1        0        0        1        0       13     0     2     0         0         1         0
+Cd8b1        1        0        1        0        0        1        1        1        1        1       28     0     1     3         0         1         0
+Trac         1        0        1        1        1        1        1        0        1        1       55     4     2     2         0         1         1
+Trbc2        2        1        2        1        1        1        2        1        3        1       66    28     2     2         0         1         1
+Lck          1        0        1        1        0        1        1        2        1        4       55    44     1     1         0         1         0
+
+-- NK_ILC_gdT 
+        0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Ncr1           0        0        0        0        0        0        0        1        0        0        0    42     0     0         0         0         0
+Klrb1c         1        0        1        0        0        1        1        1        1        0        3    73     1     0         0         1         0
+Gzma           3        2        3        2        1        3        3        3        4        1        8    80     2     4         3         2         2
+Trdc           0        0        0        0        0        0        0        0        0        0        4    18     0     0         0         0         1
+Tcrg-C1        0        0        0        0        0        0        0        0        0        0        4     1     0     0         0         0         0
+Il7r          24        8       22        4        3       27       20        7       24       15       71    19    67     8         3         9         4
+Rorc           0        0        0        0        0        0        0        0        0        0        2     0     0     0         0         1         0
+Gata3          1        0        0        0        0        0        0        0        0        0       24    23     0     0         0         1         0
+
+-- stroma_heart 
+       0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Col1a1        1        0        1        1        0        1        1        1        2        0        1     0     0     1         1         4         3
+Dcn           1        0        0        0        0        0        1        2        2        0        0     0     0     0         0         6         1
+Pdgfra        0        0        0        0        0        0        0        0        0        0        0     0     0     0         0         5         1
+Tcf21         0        0        0        0        0        0        0        0        0        0        0     0     0     0         0         1         0
+Pecam1       14        3       17        7        6       20       18       12       14       46       47    25     7    18         9        53         3
+Cdh5          2        0        1        0        1        2        3        1        1        0        0     0     0     1         0        47         0
+Kdr           3        1        2        0        1        6       10        1        2        0        0     0     4     5         0        38         1
+
+-- cardiomyocyte_ambient 
+      0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Mb           3        1        3        1        2        2        3        9        2        0        1     0     2     1         2         5         6
+Myl2         5        2        4        4        3        3        6       15        5        1        1     1     2     4         3        11         4
+Myl3         3        1        2        1        1        1        3        7        2        0        0     0     1     1         1         4         3
+Tnnt2        3        1        2        1        1        1        3        7        2        0        0     1     2     2         3         6         7
+Actc1        2        1        2        1        1        1        2        5        2        0        0     1     2     1         1         2         6
+Myh6         1        0        1        0        0        0        1        3        1        0        0     0     0     1         0         1         1
+Nppa         1        0        0        0        0        0        1        1        0        0        0     0     0     0         0         1         0
+Ttn          1        0        1        1        1        1        2        3        1        0        2     2     1     1         0         1         5
+
+-- cvp_conserved 
+      0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Gata4        1        0        1        0        0        0        1        0        0        0        0     1     0     1         0         1         0
+Myl7         0        0        0        0        0        0        0        0        0        0        0     0     0     0         0         0         0
+Tbx5         0        0        0        0        0        0        0        0        0        0        0     0     0     0         0         1         0
+Mdk          3        0        3        1        1        1        2        1        2        0        1     1     4     0         0         2         1
+
+-- blood_rbc 
+       0:Macrop 1:Macrop 2:Macrop 3:Neutro 4:Neutro 5:Macrop 6:Macrop 7:Macrop 8:Macrop 9:B cell 10:CD4 T 11:NK 12:DC 13:DC 14:Neutro 15:Endoth 16:Macrop
+Hba-a1        5        3        5        4        3        5        5        3        5        3        4     4     6     6         5         2         1
+Hbb-bs        7        5        7        5        3        7        7        6        8        4        4     5     5     7         3         5         4
+Alas2         0        0        0        0        0        0        0        0        0        0        0     0     0     1         0         0         0
+
+
+=== detection % per SAMPLE ===
+
+-- tissue_heart_resident_mac 
+      0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Timd4        0        1       1       1        0        1       1       2
+Lyve1        1        3       1       1        2        3       4      10
+Folr2       12       23      14      13       17        7      21      17
+Cd163        3        8       4       4       11        6      14      19
+Mrc1        34       63      61      63       57       37      66      61
+Igf1         8       19       9      11       10        7      17      15
+
+-- tissue_peritoneal_LPM 
+      0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Gata6        0        0       1       0        0        0       0       1
+Prg4         0        1       3       1        2        0       2       3
+Icam2        6        8       9       7        9        2       9       6
+Saa3        48       28      69      33       77       73      67      55
+Ltbp1        0        1       2       1        1        0       1       1
+
+-- tissue_alveolar_or_spleen 
+        0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Siglecf        2        9       8       9        8        3      10       8
+Marco          0        0       0       0        0        0       1       1
+Car4           0        0       0       0        0        0       0       1
+Vcam1          2        3       2       1        2        5       5       6
+Spic           2        3       3       3        4        8       6       6
+
+-- recruited_mono_mac 
+      0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Ccr2        46       69      67      75       77       35      76      59
+Ly6c2       16       47      64      51       45       31      44      34
+Plac8       46       73      88      79       75       69      69      56
+Chil3       63       63      66      79       74       36      60      51
+Fn1         79       82      84      85       83       51      74      65
+Arg1        63       55      72      63       85       42      62      49
+
+-- post_MI_repair_mac 
+       0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Spp1         93       94      91      94       97       63      93      81
+Trem2        56       62      54      54       64       32      65      41
+Gpnmb        13       29      29      34       31       14      29      23
+Fabp5        57       77      73      77       71       48      67      51
+Lgals3       91       92      90      91       92       72      87      77
+Cd9          43       52      55      50       58       44      45      55
+
+-- neutrophil 
+       0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+S100a8       88       79      91      87       96       99      90      92
+S100a9       90       84      92      89       96       99      92      94
+Retnlg       21       26      45      23       64       83      43      61
+Cxcr2        11       29      44      37       45       39      38      47
+Ly6g          1        1       1       2        3        8       2       4
+Mmp8         13       16      27      27       49       41      29      36
+
+-- T_cell_core 
+      0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Cd3e         0        1       1       0        1        4       1       3
+Cd3g         1        1       1       1        1        3       1       3
+Cd4          1        1       1       1        1        2       1       2
+Cd8a         0        1       1       0        0        1       1       1
+Cd8b1        1        1       1       1        1        2       1       2
+Trac         1        1       1       1        1        4       1       2
+Trbc2        1        2       2       1        1        5       2       5
+Lck          1        1       1       1        1        4       1       5
+
+-- NK_ILC_gdT 
+        0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Ncr1           0        0       0       0        0        0       0       2
+Klrb1c         1        1       1       1        1        2       0       3
+Gzma           3        3       1       1        2        4       2      10
+Trdc           0        0       0       0        0        1       0       1
+Tcrg-C1        0        0       0       0        0        0       0       1
+Il7r           8       18      18      23       14       20      11      13
+Rorc           0        0       0       0        0        0       0       0
+Gata3          1        1       1       0        0        1       1       3
+
+-- stroma_heart 
+       0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Col1a1        1        1       3       2        1        1       1       1
+Dcn           0        1       1       1        1        0       0       1
+Pdgfra        0        0       0       0        0        0       0       0
+Tcf21         0        0       0       0        0        0       0       0
+Pecam1        5       14      17      16       10       14      10      18
+Cdh5          1        2       2       2        1        1       1       1
+Kdr           1        3       3       4        3        1       4       2
+
+-- cardiomyocyte_ambient 
+      0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Mb           1        3       5       5        4        1       2       3
+Myl2         2        4       8       8        6        2       4       6
+Myl3         1        3       3       4        3        1       1       3
+Tnnt2        2        2       5       4        3        1       2       3
+Actc1        1        1       3       2        2        1       1       2
+Myh6         0        1       2       1        0        0       1       1
+Nppa         0        0       5       1        0        0       0       0
+Ttn          0        1       2       2        1        1       1       2
+
+-- cvp_conserved 
+      0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Gata4        1        0       1       1        1        0       1       1
+Myl7         0        0       0       0        0        0       0       0
+Tbx5         0        0       0       0        0        0       0       0
+Mdk          3        2       5       3        2        1       2       2
+
+-- blood_rbc 
+       0hCell_1 0hCell_2 0hMed_1 0hMed_2 6hCell_1 6hCell_2 6hMed_1 6hMed_2
+Hba-a1        6        4       5       9        1        6       1       2
+Hbb-bs       14        5       9      16        1        9       1       2
+Alas2         0        0       0       1        0        0       0       0
+
+
+=== UMI share (%) per sample: cardiac ambient, RBC, ECM ===
+         cardiac   rbc   ecm
+0hCell_1   0.002 0.004 0.000
+0hCell_2   0.002 0.001 0.001
+0hMed_1    0.003 0.001 0.000
+0hMed_2    0.003 0.050 0.000
+6hCell_1   0.003 0.000 0.000
+6hCell_2   0.001 0.020 0.000
+6hMed_1    0.001 0.000 0.000
+6hMed_2    0.003 0.000 0.001
+
+=== cells co-expressing >= 3 of Tnnt2/Actc1/Myl7/Gata4/Myl4/Ttn (possible human-CVP or CM footprint) ===
+   sample cells n_cardiac3  pct
+ 0hCell_1   594          0 0.00
+ 0hCell_2  4738          1 0.02
+  0hMed_1  1085          2 0.18
+  0hMed_2  2943          3 0.10
+ 6hCell_1  8594          9 0.10
+ 6hCell_2 14601          2 0.01
+  6hMed_1  5744          2 0.03
+  6hMed_2  4189         11 0.26
+
+=== T-cell cluster: is it real T (Cd3e+Trac+) or NK/ILC labelled CD4 T? ===
+cl 10 (CD4 T, n=886): Cd3e 60 Trac 55 Trbc2 66 Cd4 23 Cd8a 13 Trdc 4 Ncr1 0 Il7r 71 Rorc 2 Gata3 24
+
+REINT_DONE
