@@ -407,7 +407,9 @@ CLUSTER_CELLTYPE_MAP <- NULL  # reset for each new analysis
 # smooth muscle "MSC" (ACTA2 60, MYH11 22, TAGLN 42) — i.e. the two are swapped.
 # All 20 clusters are listed because unmapped clusters fall back to *per-cell* SingleR
 # labels (05_annotate.R), which shatters the clusters left out of the map.
-if (length(SAMPLE_NAMES) == 3 && setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
+# Curated on Louvain cluster numbers, so it must not apply to a Leiden run (default since 2026-10-26).
+if (length(SAMPLE_NAMES) == 3 && isTRUE(CLUSTER$algorithm == 1) &&
+    setequal(SAMPLE_NAMES, c("T1", "T2", "T6"))) {
   CLUSTER_CELLTYPE_MAP <- c(
     "0"  = "Fibroblast",           # DCN/COL1A1/COL3A1/LUM/PDGFRA, no ACTA2 or MYH11
     "1"  = "RBC",                  # HBB 2905

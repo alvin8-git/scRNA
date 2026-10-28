@@ -172,6 +172,19 @@ f <- file.path(.pipeline, "report_template.Rmd")
 if (file.exists(f) && any(grepl("Pct_retained(_loaded)?\\s*<\\s*70|ret\\s*<\\s*70", .code_of(f))))
   fails <- c(fails, "report_template.Rmd tags low QC on retention (use median genes and ambient rho)")
 
+# Regression T14: a curated cluster map is tied to the clustering algorithm that numbered
+# its clusters. The default moved Louvain -> Leiden on 2026-10-26; the bat-wing T1/T2/T6
+# map was guarded on sample names only and would have labelled the wrong Leiden clusters.
+for (s in c("config.R", list.files(.pipeline, "^config_species_.*\\.R$"))) {
+  f <- file.path(.pipeline, s); if (!file.exists(f)) next
+  src <- readLines(f)
+  for (i in grep("setequal\\(SAMPLE_NAMES", src)) {
+    guard <- paste(src[max(1, i - 2):i], collapse = " ")
+    if (!grepl("FALSE &&", guard) && !grepl("CLUSTER\\$algorithm", guard))
+      fails <- c(fails, sprintf("%s:%d curated map guard lacks CLUSTER$algorithm", s, i))
+  }
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

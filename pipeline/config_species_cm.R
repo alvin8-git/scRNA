@@ -374,7 +374,7 @@ if (.species == "cm") {
   # Identity TFs decide each call; secreted cargo (AFP/ALB/TTR/APOA1, collagens)
   # does NOT, since it survives correction where real endoderm exists.
   # Unassignable fell from 26% (raw cohort) to 9.1% here.
-  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) &&
+  if (length(SAMPLE_NAMES) == 7 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 1) &&
       setequal(SAMPLE_NAMES, c("H1D0_1_sx", "H1D0_2_sx", "H1D11_1_sx", "H1D11_2_sx",
                                "H1D20_2_sx", "H1D30_1_sx", "H1D30_2_sx"))) {
     CLUSTER_CELLTYPE_MAP <- c(

@@ -130,8 +130,9 @@ of re-deriving one from samples), `SCRNA_REFERENCE_MODEL` (enables 05r/08c), `SC
 - `CLUSTER_CELLTYPE_MAP` must stay `NULL` for a new dataset — cluster numbers are not stable across
   runs. The archived maps at the bottom of `config.R` are commented "do NOT activate". The live maps
   (bat wing T1/T2/T6 in `config.R`; the H1 cardio cohort in `config_species_cm.R`) are wrapped in a
-  `setequal(SAMPLE_NAMES, ...)` guard so they cannot leak into a run with different cluster numbering;
-  copy that pattern rather than assigning the map at top level. A map guarded on a `QC` value too
+  `setequal(SAMPLE_NAMES, ...)` guard plus `isTRUE(CLUSTER$algorithm == N)` (1 = Louvain, 4 = Leiden,
+  the default since 2026-10-26) so they cannot leak into a run with different cluster numbering;
+  copy that pattern rather than assigning the map at top level (regression guard T14). A map guarded on a `QC` value too
   must live in the species overlay, because `config.R` sources the overlays after its own map
   blocks, so `QC` isn't final there yet (regression guard T8).
 - `CLUSTER_SUBCLUSTER_MAP` (`list(cluster=, resolution=, labels=)`) splits one mixed cluster in step 05
