@@ -109,17 +109,22 @@ process_individual <- function(seu, sample_name) {
             file.path(outdir, paste0(sample_name, "_cluster_markers.csv")),
             row.names = FALSE)
 
-  top5 <- all_markers %>%
-    group_by(cluster) %>% slice_max(avg_log2FC, n = 5) %>%
-    pull(gene) %>% unique()
-
-  p_dot <- DotPlot(seu, features = top5) +
-    labs(title = paste0(sample_name, "  -  Top 5 Markers per Cluster")) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7))
-  ggsave(file.path(outdir, paste0(sample_name, "_dotplot_markers.pdf")),
-         p_dot, width = max(12, length(top5) * 0.4), height = 7, limitsize = FALSE)
-  plots[[paste0(sample_name, "  -  Top Marker Dot Plot")]] <-
-    set_page(p_dot, pw = 11, ph = 7)
+  # A tiny or homogeneous sample can land in one cluster, and FindAllMarkers then
+  # returns an empty frame with no `cluster` column (mouse 72hMed_b: 47 cells).
+  if (nrow(all_markers) && "cluster" %in% names(all_markers)) {
+    top5 <- all_markers %>%
+      group_by(cluster) %>% slice_max(avg_log2FC, n = 5) %>%
+      pull(gene) %>% unique()
+    p_dot <- DotPlot(seu, features = top5) +
+      labs(title = paste0(sample_name, "  -  Top 5 Markers per Cluster")) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 7))
+    ggsave(file.path(outdir, paste0(sample_name, "_dotplot_markers.pdf")),
+           p_dot, width = max(12, length(top5) * 0.4), height = 7, limitsize = FALSE)
+    plots[[paste0(sample_name, "  -  Top Marker Dot Plot")]] <-
+      set_page(p_dot, pw = 11, ph = 7)
+  } else {
+    message("  No cluster markers (", length(unique(Idents(seu))), " cluster) — dot plot skipped")
+  }
 
   # --- Canonical marker feature plots ---
   markers_present <- ALL_MARKERS[ALL_MARKERS %in% rownames(seu)]
