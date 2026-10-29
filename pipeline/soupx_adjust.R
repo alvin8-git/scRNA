@@ -58,6 +58,27 @@ msg <- function(fmt, ...) message(sprintf(paste0("[soupx] ", fmt), ...))
 
 s    <- readRDS(rds)
 SAMP <- sort(unique(as.character(s$sample)))
+# The run's own QC floors, so "cells passing QC after correction" uses the cut these
+# cells already passed. Correction only lowers counts, so the floors are what can bite.
+thr_f <- file.path(RUN, "qc", "qc_thresholds.csv")
+THR   <- if (file.exists(thr_f)) read.csv(thr_f, stringsAsFactors = FALSE) else NULL
+# Older runs predate qc_thresholds.csv: fall back to the species config's fixed floors
+# (config.R pinned to this run dir, species from SCRNA_SPECIES, as 08b does).
+if (is.null(THR)) {
+  Sys.setenv(SCRNA_RESULTS_DIR = normalizePath(RUN))
+  # Top level and global, as every step does: config.R finds its helpers through
+  # sys.frame(1)$ofile and its species overlays read its globals. None of its names
+  # collide with this script's.
+  source(file.path(dirname(normalizePath(sub("^--file=", "",
+         grep("^--file=", commandArgs(FALSE), value = TRUE)[1]))), "config.R"))
+  THR <- data.frame(Sample = SAMP, min_features = QC$min_features, min_counts = QC$min_counts)
+  msg("no qc_thresholds.csv — using config QC floors (%d genes, %d UMIs)", THR$min_features[1], THR$min_counts[1])
+}
+n_qc  <- function(m, sm) {
+  t <- THR[THR$Sample == sm, , drop = FALSE]
+  if (!nrow(t)) return(NA_integer_)
+  sum(colSums(m > 0) >= t$min_features[1] & colSums(m) >= t$min_counts[1])
+}
 msg("run %s | %d samples | base %s", basename(RUN), length(SAMP), base)
 
 filtered_dir <- function(sm) {
@@ -105,9 +126,15 @@ for (sm in SAMP) {
   sc <- setClusters(sc, clus)
   est <- tryCatch(autoEstCont(sc, doPlot = FALSE), error = function(e) e)
   before <- sum(toc[g, ])
+  # Per-cell medians before/after correction: SoupX removes counts, never cells, so the
+  # customer report shows what each cell keeps rather than a cell count that cannot move.
   row <- data.frame(sample = sm, rho = NA_real_, accepted = FALSE, cells = ncol(toc),
                     counts_before = before, counts_after = NA_real_,
-                    pct_counts_removed = NA_real_, note = "", stringsAsFactors = FALSE)
+                    pct_counts_removed = NA_real_,
+                    med_umi_before = median(colSums(toc[g, ])), med_umi_after = NA_real_,
+                    med_genes_before = median(colSums(toc[g, ] > 0)), med_genes_after = NA_real_,
+                    cells_qc_before = n_qc(toc[g, ], sm), cells_qc_after = NA_integer_,
+                    note = "", stringsAsFactors = FALSE)
   if (inherits(est, "error")) {
     row$note <- paste("autoEstCont rejected:", conditionMessage(est))
     msg("  NOT corrected — %s", row$note); rep[[sm]] <- row; next
@@ -127,6 +154,8 @@ for (sm in SAMP) {
   write_mtx(adj, ftk, colnames(adj), outdir)
   row$accepted <- TRUE; row$counts_after <- after
   row$pct_counts_removed <- round(100*(before-after)/before, 2)
+  row$med_umi_after <- median(colSums(adj)); row$med_genes_after <- median(colSums(adj > 0))
+  row$cells_qc_after <- n_qc(adj, sm)
   rep[[sm]] <- row
   msg("  wrote %s", outdir)
 }

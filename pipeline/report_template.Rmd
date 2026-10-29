@@ -274,6 +274,15 @@ stage_links <- if (gal && length(B$galleries$stage)) paste0('<div class="groupla
 sample_links <- if (gal && length(B$galleries$by_sample)) paste0('<div class="grouplabel">Per sample</div>',
   paste(sprintf('<a href="#sample-%s">%s</a>', slug(names(B$galleries$by_sample)),
                 htmltools::htmlEscape(names(B$galleries$by_sample))), collapse="")) else ''
+# customer-only sections; the headings' pandoc ids are their slugs
+cl <- c(if (!is.null(B$cust$eff)) "Differentiation efficiency",
+        if (!is.null(B$cust$comp)) "Composition statistics",
+        if (!is.null(B$cust$de_vol) && nrow(B$cust$de_vol)) "Gene expression changes between groups",
+        if (!is.null(B$cust$cor_pb)) "Sample concordance",
+        if (!is.null(B$cust$rho)) "Ambient RNA",
+        if (!is.null(B$cust$qc_png)) "Per-sample quality detail")
+cust_links <- if (length(cl)) paste0('<div class="grouplabel">Results</div>',
+  paste(sprintf('<a href="#%s">%s</a>', slug(cl), sub(" between groups", "", cl)), collapse = "")) else ''
 nav <- paste0('<nav class="report-nav">',
   '<div class="grouplabel">Run</div><a href="#overview">Overview</a>',
   '<div class="grouplabel">Compare</div>',
@@ -281,8 +290,11 @@ nav <- paste0('<nav class="report-nav">',
   '<a href="#cell-proportions">Cell proportions</a>',
   '<a href="#cell-type-markers">Cell-type markers</a>',
   if (!is.null(B$benchmark)) '<a href="#benchmark">Frozen-ref benchmark</a>' else '',
+  cust_links,
   stage_links, sample_links,
-  '<div class="grouplabel">About</div><a href="#versions">Versions</a>',
+  '<div class="grouplabel">About</div>',
+  if (!is.null(B$cust$xlsx)) '<a href="#downloads">Downloads</a>' else '',
+  '<a href="#versions">Versions</a>',
   '</nav>')
 cat(top, nav)
 ```
@@ -456,7 +468,7 @@ htmltools::browsable(htmltools::tagList(
 ```
 
 Click a sample chip to add or drop its panel. Click a cell type in the shared legend to toggle it
-across every UMAP at once (e.g. isolate CD14+ Mono pre vs post to read the sort).
+across every UMAP at once (e.g. isolate one population to compare it across samples).
 
 ## QC
 
@@ -519,7 +531,7 @@ if (all(is.na(cells$doublet_score))) {
 # Cell proportions {.tabset .tabset-pills}
 
 ```{r lblsrc, results='asis', eval=isTRUE(B$label_source=="ref")}
-cat('<div class="read-line"><b>Labels:</b> these bars show the <b>frozen-reference</b> call (<code>cell_type_ref</code>) — run-independent, transferred onto a fixed bat reference. It is the correct view where the per-run de-novo annotation mislabels across species (e.g. bat neutrophils collapsing into CD14+ Mono). Switch to <b>De-novo</b> to see this run\'s own clustering call.</div>')
+cat('<div class="read-line"><b>Labels:</b> these bars show the <b>frozen-reference</b> call (<code>cell_type_ref</code>) — run-independent, transferred onto a fixed reference built for this sample type. It is the correct view where the per-run de-novo annotation shifts with the sample mix or mislabels a population. Switch to <b>De-novo</b> to see this run\'s own clustering call.</div>')
 cat('<div class="lblsrc-toggle"><span class="sellabel">Labels</span>',
     '<button class="selchip on" data-src="ref" aria-pressed="true">Frozen reference</button>',
     '<button class="selchip" data-src="denovo" aria-pressed="false">De-novo (this run)</button></div>')
@@ -552,8 +564,8 @@ if (isTRUE(B$label_source == "ref") && !is.null(B$prop_long_denovo)) {
 Each segment is labelled with its cell type where it is large enough to fit (and textured per type, so
 the bars read without relying on colour); hover any segment for the exact value. Click a cell type in
 the legend to drop it from the bars (or **Hide all**, then click one back on).
-The myeloid fraction here doubles as a contamination read: a high CD14+ Mono / granulocyte share in a
-lymphocyte-sorted sample flags carry-over.
+A cell type that should be absent from a sample (for example myeloid cells in a lymphocyte sort, or an
+off-target lineage in a differentiation) reads directly as carry-over or contamination here.
 
 ## Cell numbers
 
@@ -610,7 +622,7 @@ if (is.null(B$delta)) {
 
 Canonical marker panel across the annotated types — dot **size** is the % of cells in that type
 expressing the gene, **colour** is the scaled average expression. This is the evidence behind the
-labels (e.g. CD14/LYZ/S100A8 lighting up CD14+ Mono, MS4A1/CD79A on B cells).
+labels: each type should light up its own marker genes and few others.
 
 ```{r marker_dot}
 md_ <- B$markers_dot
@@ -654,6 +666,144 @@ datatable(B$cust$evidence, rownames = FALSE,
                          columnDefs = list(list(className = "dt-right", targets = 1))))
 ```
 
+```{r cust_eff_head, results='asis', eval=!is.null(B$cust$eff)}
+cat("# Differentiation efficiency\n\n",
+    "<p class='plot-desc'>The read-outs a cardiac differentiation is usually judged by, per sample. ",
+    "<strong>TNNT2+ cells</strong> is the single-cell equivalent of a cardiac troponin T flow ",
+    "cytometry stain: a cell counts when it has at least 2 TNNT2 reads, so one stray ambient read ",
+    "does not make a cardiomyocyte. It does not depend on the cell-type labels; ",
+    "<strong>Labelled cardiomyocytes</strong> does, and the two should agree. Among cardiomyocytes, ",
+    "<strong>MYH7/MYH6</strong> and <strong>MYL2/MYL7</strong> (summed reads) rise as cells mature ",
+    "and take on a ventricular identity. Each sample is one library: compare replicates of the same ",
+    "day to judge spread before reading a trend.</p>\n", sep = "")
+```
+
+```{r cust_eff, eval=!is.null(B$cust$eff)}
+datatable(B$cust$eff, rownames = FALSE, class = "compact stripe hover", selection = "none",
+          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
+                         columnDefs = list(list(className = "dt-right", targets = seq_len(ncol(B$cust$eff) - 1))))) |>
+  formatStyle("TNNT2+ cells (%)", background = styleColorBar(c(0, 100), "#f5c6c6"),
+              backgroundSize = "98% 70%", backgroundRepeat = "no-repeat", backgroundPosition = "center")
+```
+
+```{r cust_comp_head, results='asis', eval=!is.null(B$cust$comp)}
+cat("# Composition statistics\n\n",
+    "<p class='plot-desc'>Whether a cell type's share really changes between two groups of samples, ",
+    "tested on the replicate libraries rather than on cells (thousands of cells from one library are ",
+    "not independent). A comparison <em>A vs B</em> uses B as the reference: <strong>Reference %</strong> ",
+    "is B, <strong>Compared %</strong> is A, and \"up\" means higher in A. <strong>FDR</strong> is the ",
+    "false-discovery-rate adjusted p-value across all tests; below 0.05 is called a change. With two ",
+    "libraries per group the test has little power, so a large shift that is not called significant ",
+    "is <em>uncertain</em>, not absent. Groups with a single library are not tested.",
+    if (!is.null(B$cust$contrasts)) " Only the comparisons the study design supports are shown." else "",
+    "</p>\n", sep = "")
+```
+
+```{r cust_comp, eval=!is.null(B$cust$comp)}
+cp <- B$cust$comp
+ct_ <- data.frame(`Cell type` = cp$cell_type, Contrast = gsub("_", " ", cp$contrast),
+                  `Reference %` = round(100 * cp$mean_prop_ref, 1),
+                  `Compared %` = round(100 * cp$mean_prop_alt, 1),
+                  `Change (points)` = round(100 * (cp$mean_prop_alt - cp$mean_prop_ref), 1),
+                  FDR = signif(cp$fdr, 2),
+                  Call = ifelse(cp$fdr < 0.05, ifelse(cp$mean_prop_alt > cp$mean_prop_ref, "up", "down"), "n.s."),
+                  check.names = FALSE, stringsAsFactors = FALSE)
+datatable(ct_, rownames = FALSE, filter = "top", class = "compact stripe hover", selection = "none",
+          options = list(dom = "tip", pageLength = 15, ordering = TRUE, scrollX = TRUE,
+                         order = list(list(5, "asc")),
+                         columnDefs = list(list(className = "dt-right", targets = 2:5)))) |>
+  formatStyle("Call", fontWeight = "bold",
+              color = styleEqual(c("up", "down", "n.s."), c("#1e8449", "#c0392b", "#888")))
+```
+
+```{r cust_boot_head, results='asis', eval=!is.null(B$cust$boot) && all(c("ci_lo", "ci_hi") %in% names(B$cust$boot))}
+cat("<p class='plot-desc'>Per-sample share (%) of each cell type with its 95% confidence interval ",
+    "(multinomial, from the cell counts). The interval reflects counting noise within one library ",
+    "only; differences between replicate libraries are the larger source of uncertainty.</p>\n")
+```
+
+```{r cust_boot, eval=!is.null(B$cust$boot) && all(c("ci_lo", "ci_hi") %in% names(B$cust$boot))}
+bt <- B$cust$boot
+lab <- sprintf("%.1f (%.1f–%.1f)", 100 * bt$prop, 100 * bt$ci_lo, 100 * bt$ci_hi)
+w <- tapply(lab, list(bt$cell_type, bt$sample), function(v) v[1])
+w <- w[, intersect(B$samples, colnames(w)), drop = FALSE]
+w[is.na(w)] <- "—"
+datatable(data.frame(`Cell type` = rownames(w), w, check.names = FALSE),
+          rownames = FALSE, class = "compact stripe hover", selection = "none",
+          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE))
+```
+
+```{r cust_de_head, results='asis', eval=!is.null(B$cust$de_vol) && nrow(B$cust$de_vol) > 0}
+cat("# Gene expression changes between groups\n\n",
+    "<p class='plot-desc'>For each cell type, genes whose expression differs between two groups of ",
+    "samples. Each library's cells of that type are summed into one profile and compared with edgeR ",
+    "(quasi-likelihood), so replicate libraries, not cells, carry the statistics. Pick a cell type ",
+    "and comparison <em>A vs B</em> (B is the reference); <span style='color:#c0392b'><b>red</b></span> ",
+    "genes are higher in A, <span style='color:#2c6fbb'><b>blue</b></span> lower (FDR &lt; 0.05 and at ",
+    "least 2-fold). Up to the 300 strongest significant genes are drawn per panel, over a grey sample ",
+    "of 300 unchanged genes; the counts above the plot are the full totals. Hover a point for the gene.",
+    if (length(B$cust$de_desc)) paste0(" Not tested (a group with a single library): ",
+      paste(gsub("_", " ", B$cust$de_desc), collapse = ", "), ".") else "",
+    if (!is.null(B$cust$contrasts)) " Only the comparisons the study design supports are shown." else "",
+    "</p>\n", sep = "")
+```
+
+```{r cust_de, eval=!is.null(B$cust$de_vol) && nrow(B$cust$de_vol) > 0}
+V <- B$cust$de_vol; N <- attr(V, "n")
+V$key <- paste(V$cell_type, V$comparison, sep = "|"); N$key <- paste(N$cell_type, N$comparison, sep = "|")
+first <- N$key[which.max(N$up + N$down)]
+p <- plot_ly(height = 470)
+for (k in unique(V$key)) {
+  x <- V[V$key == k, ]; x <- x[order(x$sig), ]   # significant genes drawn on top
+  p <- add_trace(p, x = x$avg_log2FC, y = x$nl10, text = x$gene, name = k, visible = k == first,
+                 # SVG, not scattergl: the UMAP grid already holds most of the browser's WebGL
+                 # contexts, and one visible 600-point panel needs no GPU
+                 type = "scatter", mode = "markers",
+                 marker = list(size = 5, opacity = 0.8,
+                               color = ifelse(!x$sig, "#c8c8c8", ifelse(x$avg_log2FC > 0, "#c0392b", "#2c6fbb"))),
+                 hovertemplate = "<b>%{text}</b><br>log2 fold change %{x}<br>−log10 FDR %{y}<extra></extra>")
+}
+p <- layout(p, showlegend = FALSE,
+            xaxis = list(title = "log2 fold change (A vs reference B)", zeroline = FALSE),
+            yaxis = list(title = "−log10 FDR"),
+            shapes = list(
+              list(type = "line", x0 = -1, x1 = -1, y0 = 0, y1 = 1, yref = "paper", line = list(dash = "dot", color = "#999", width = 1)),
+              list(type = "line", x0 = 1, x1 = 1, y0 = 0, y1 = 1, yref = "paper", line = list(dash = "dot", color = "#999", width = 1)),
+              list(type = "line", x0 = 0, x1 = 1, xref = "paper", y0 = -log10(0.05), y1 = -log10(0.05), line = list(dash = "dot", color = "#999", width = 1))))
+# Build once and slim: plotly copies hovertemplate onto every point and keeps an unbuilt copy
+# of the data in attrs, which tripled this widget (5.8 MB -> ~1.5 MB on 54 panels).
+p <- plotly_build(p); p$x$attrs <- NULL
+p$x$data <- lapply(p$x$data, function(t) { t$hovertemplate <- t$hovertemplate[1]
+                                           t[c("error_x", "error_y", "line")] <- NULL; t })
+opt <- function(v, sel) paste(sprintf("<option value='%s'%s>%s</option>", htmltools::htmlEscape(v),
+                                      ifelse(v == sel, " selected", ""), htmltools::htmlEscape(gsub("_", " ", v))), collapse = "")
+f1 <- strsplit(first, "|", fixed = TRUE)[[1]]
+cnt <- jsonlite::toJSON(setNames(lapply(seq_len(nrow(N)), function(i) c(N$up[i], N$down[i])), N$key))
+htmltools::browsable(htmltools::tagList(
+  htmltools::HTML(sprintf(paste0("<div class='selrow'><span class='sellabel'>Cell type</span>",
+    "<select id='de-ct'>%s</select><span class='sellabel'>Contrast</span><select id='de-cmp'>%s</select>",
+    "<span id='de-n' class='sellabel' style='margin-left:12px'></span></div>"),
+    opt(sort(unique(V$cell_type)), f1[1]), opt(sort(unique(V$comparison)), f1[2]))),
+  htmltools::div(id = "devol", p),
+  htmltools::tags$script(htmltools::HTML(sprintf(paste0(
+    "(function(){var N=%s;function upd(){var k=document.getElementById('de-ct').value+'|'+",
+    "document.getElementById('de-cmp').value;var n=N[k],el=document.getElementById('de-n');",
+    "el.textContent=n?(n[0]+' up, '+n[1]+' down'):'not tested for this cell type';",
+    "var gd=document.querySelector('#devol .js-plotly-plot');if(gd&&gd.data&&window.Plotly)",
+    "Plotly.restyle(gd,{visible:gd.data.map(function(t){return t.name===k;})});}",
+    "['de-ct','de-cmp'].forEach(function(id){document.getElementById(id).addEventListener('change',upd);});",
+    "upd();})();"), cnt)))))
+```
+
+```{r cust_de_top, eval=!is.null(B$cust$de_top) && nrow(B$cust$de_top) > 0}
+dt_ <- B$cust$de_top; dt_$Contrast <- gsub("_", " ", dt_$Contrast)
+datatable(dt_, rownames = FALSE, filter = "top", class = "compact stripe hover",
+          selection = "none", caption = "Top 50 significant genes per cell type and contrast (filter by column).",
+          options = list(dom = "tip", pageLength = 10, ordering = TRUE, scrollX = TRUE,
+                         order = list(list(4, "asc")),
+                         columnDefs = list(list(className = "dt-right", targets = 3:4))))
+```
+
 ```{r cust_cor, results='asis', eval=!is.null(B$cust$cor_pb)}
 cat("# Sample concordance\n\n",
     "<p class='plot-desc'>Each sample's counts summed into a single expression profile, then ",
@@ -670,13 +820,12 @@ cat("# Sample concordance\n\n",
 
 ```{r cust_cor_plot, eval=!is.null(B$cust$cor_pb)}
 C <- B$cust$cor_pb
-# viridis "mako", matching the report's existing viridis family; the range is
-# stretched from the observed minimum because all correlations sit near 1 and a
-# 0-1 scale would render the whole matrix one flat colour.
-stops <- scales::viridis_pal(option = "G", direction = -1)(9)
+# Diverging RdYlBu on fixed limits: red = -1, yellow = 0, blue = +1, so the colour
+# means the same r in every report (colour-blind safe, unlike a rainbow).
+stops <- RColorBrewer::brewer.pal(11, "RdYlBu")
 plot_ly(x = colnames(C), y = rownames(C), z = C, type = "heatmap",
-        colorscale = Map(function(p, c) list(p, c), seq(0, 1, length.out = 9), stops),
-        zmin = min(C), zmax = 1,
+        colorscale = Map(function(p, c) list(p, c), seq(0, 1, length.out = 11), stops),
+        zmin = -1, zmax = 1,
         hovertemplate = "<b>%{y}</b> vs <b>%{x}</b><br>Spearman r = %{z:.3f}<extra></extra>",
         colorbar = list(title = list(text = "r", side = "top"), len = 0.5, thickness = 11,
                         tickfont = list(size = 9)),
@@ -695,7 +844,11 @@ cat("# Ambient RNA\n\n",
     "<strong>rho</strong> is the estimated fraction of each library's counts coming from that ",
     "free-floating pool, measured with SoupX. Below about 0.05 it is negligible; from roughly ",
     "0.3 upward a library's apparent composition should be treated with caution, because the ",
-    "contamination is shared across every cell type. Sort any column.</p>\n", sep = "")
+    "contamination is shared across every cell type. Correction subtracts those counts from ",
+    "every cell rather than removing cells, but a cell left with too few genes or UMIs no longer ",
+    "meets this run's quality floor. <strong>Cells passing QC</strong> counts the cells that clear ",
+    "that floor before and after correction; the median columns show what a typical cell keeps. ",
+    "Sort any column.</p>\n", sep = "")
 ```
 
 ```{r cust_rho, eval=!is.null(B$cust$rho)}
@@ -704,20 +857,36 @@ rh <- B$cust$rho
 # ambient signal: correcting it does not recover the sample, it reconstructs a
 # minority of it, biased toward whatever dominated the soup. Saying "interpret
 # with caution" there would understate a result that should stop the analysis.
-band <- function(x) if (x < 0.05) "negligible" else if (x < 0.15) "low" else
+band <- function(x) if (is.na(x)) "not estimated (SoupX rejected its fit)" else
+                    if (x < 0.05) "negligible" else if (x < 0.15) "low" else
                     if (x < 0.30) "moderate" else
                     if (x < 0.50) "high — interpret with caution" else
                     "UNSUITABLE — recommend excluding this sample"
 tb <- data.frame(Sample = rh$sample,
                  rho = round(rh$rho, 3),
                  `% of counts ambient` = round(100 * rh$rho, 1),
-                 Assessment = vapply(rh$rho, band, character(1)),
                  check.names = FALSE, stringsAsFactors = FALSE)
+# Older soupx_rho.csv files carry rho only; the per-cell columns appear when present.
+.n  <- function(x) format(round(x), big.mark = ",", trim = TRUE)
+.ba <- function(b, a) ifelse(is.na(a), sprintf("%s → not corrected", .n(b)), sprintf("%s → %s", .n(b), .n(a)))
+# (all-NA when the run has no qc_thresholds.csv to count against)
+if (all(c("cells_qc_before", "cells_qc_after") %in% names(rh)) && !all(is.na(rh$cells_qc_before))) {
+  # SoupX never drops a cell, but a corrected cell can fall below the run's QC floor.
+  tb$`Cells passing QC (before → after)` <- ifelse(is.na(rh$cells_qc_after),
+    sprintf("%s → not corrected", .n(rh$cells_qc_before)),
+    sprintf("%s → %s (%s%%)", .n(rh$cells_qc_before), .n(rh$cells_qc_after),
+            round(100 * rh$cells_qc_after / rh$cells_qc_before)))
+} else if ("cells" %in% names(rh)) tb$Cells <- as.integer(rh$cells)   # numeric so the column sorts
+if (all(c("med_umi_before", "med_umi_after") %in% names(rh)))
+  tb$`Median UMIs/cell (before → after)` <- .ba(rh$med_umi_before, rh$med_umi_after)
+if (all(c("med_genes_before", "med_genes_after") %in% names(rh)))
+  tb$`Median genes/cell (before → after)` <- .ba(rh$med_genes_before, rh$med_genes_after)
+tb$Assessment <- vapply(rh$rho, band, character(1))
 datatable(tb, rownames = FALSE, class = "compact stripe hover", selection = "none",
           callback = DT::JS("return table;"),
           options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
                          order = list(list(1, "desc")),   # worst sample first
-                         columnDefs = list(list(className = "dt-right", targets = 1:2)))) |>
+                         columnDefs = list(list(className = "dt-right", targets = seq_len(ncol(tb) - 2))))) |>
   formatStyle("rho", backgroundColor = styleInterval(c(0.05, 0.15, 0.30, 0.50),
               c("#f1f8f3", "#fdf6e3", "#fdeee3", "#fbe3e3", "#f5c6c6")),
               fontWeight = styleInterval(0.50, c("normal", "bold"))) |>
@@ -756,9 +925,13 @@ cat("<div class='umapgrid qcgrid'>",
                   sg(names(qp)), htmltools::htmlEscape(names(qp)), unlist(qp),
                   htmltools::htmlEscape(names(qp))), collapse = ""),
     "</div>\n", sep = "")
+# Small multiples: 4 x 2 for 7-8 samples, 3 x 3 up to 9, 4 across beyond; 2 across on phones.
+qc_cols <- if (length(qp) %in% 7:8 || length(qp) > 9) 4 else 3
 cat("<style>.qcscale{display:flex;align-items:center;gap:7px;font-size:.82em;color:#555;",
     "margin:.2em 0 .7em}.qcscale i{display:inline-block;width:120px;height:9px;",
-    "border-radius:2px}.qcgrid .umapcell{padding:0}</style>\n", sep = "")
+    "border-radius:2px}.qcgrid .umapcell{padding:0}.qcgrid .umaptitle{font-size:.8em}",
+    sprintf(".umapgrid.qcgrid{grid-template-columns:repeat(%d,1fr);gap:8px}", qc_cols),
+    "@media (max-width:760px){.umapgrid.qcgrid{grid-template-columns:repeat(2,1fr)}}</style>\n", sep = "")
 cat("<script>document.querySelectorAll('.selchip.qcchip').forEach(function(b){",
     "b.addEventListener('click',function(){var on=b.classList.toggle('on');",
     "b.setAttribute('aria-pressed',on);var w=document.getElementById('qcwrap-'+",
@@ -901,6 +1074,16 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
     cat('<script>(function(){var secs=document.querySelectorAll("#per-sample .level2");var chips=document.querySelectorAll(".psel .selchip");if(!secs.length)return;var hdr=document.getElementById("per-sample");function show(sl){secs.forEach(function(s){s.style.display=(s.id==="sample-"+sl)?"":"none";});chips.forEach(function(c){c.classList.toggle("on",c.getAttribute("data-psample")===sl);});}function goPS(sl){show(sl);if(hdr)hdr.scrollIntoView();}var valid={};chips.forEach(function(c){valid[c.getAttribute("data-psample")]=1;});chips.forEach(function(c){c.addEventListener("click",function(){goPS(c.getAttribute("data-psample"));});});function fromHash(){var m=(location.hash||"").match(/^#sample-(.+)$/);if(m&&valid[m[1]])goPS(m[1]);}window.addEventListener("hashchange",fromHash);if(/^#sample-/.test(location.hash)){fromHash();}else{show(chips[0].getAttribute("data-psample"));}})();</script>\n')
   }
 }
+```
+
+```{r cust_xlsx, results='asis', eval=!is.null(B$cust$xlsx)}
+x <- B$cust$xlsx
+cat("# Downloads\n\n",
+    sprintf(paste0("<p class='plot-desc'><a href='%s' download='%s'><b>%s</b></a> (%s KB): every table ",
+                   "behind this report — run parameters, per-sample QC, ambient RNA, cell-type counts, ",
+                   "cluster evidence and markers — one sheet each, with a contents sheet. Opens in Excel ",
+                   "or LibreOffice; no internet connection needed.</p>\n"),
+            x$uri, htmltools::htmlEscape(x$name), htmltools::htmlEscape(x$name), round(x$size / 1024)), sep = "")
 ```
 
 # Versions {#versions}

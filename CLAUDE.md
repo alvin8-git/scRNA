@@ -154,6 +154,11 @@ of re-deriving one from samples), `SCRNA_REFERENCE_MODEL` (enables 05r/08c), `SC
   (plus `cell_type_ref` / `cell_type_denovo` after 05r). `final_cell_type` is only the per-cluster
   majority column inside `annotation/cluster_annotation_table.csv`.
 - `DOUBLET$doublet_rate` is hardcoded per example sample (`list(H1=0.031, H2=0.077)`).
+- Steps 06b/09 test every pair of groups. On a design where some pairs differ in two factors at once
+  (mouse Cell/Med x time, or across a flowcell), put the valid contrasts, one per line, in
+  `<run>/report_contrasts.txt`; the customer report (`08b --customer`) then shows only those.
+  Absent = all contrasts shown. The customer report is species-agnostic: each section appears
+  only when its data exists (the differentiation-efficiency panel is cm-only by data, not wording).
 - `.rds`, `results*/`, `*.log`, `*.pptx` are gitignored; `Samples/H1` + `Samples/H2` matrices are
   force-tracked as the quick-start fixture.
 

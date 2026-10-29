@@ -550,18 +550,32 @@ if (!lite) {
 }
 
 # ---- scRNA analysis tool versions (only the single-cell stack; report-gen tools excluded) ----
+# Clustering algorithm as the run actually used it (Seurat logs FindClusters' arguments),
+# not the current config: 1 = Louvain, 4 = Leiden.
+fc_cmd   <- grep("^FindClusters", names(obj@commands), value = TRUE)
+clus_alg <- if (length(fc_cmd)) obj@commands[[tail(fc_cmd, 1)]]$algorithm else NULL
+clus_lbl <- if (identical(as.numeric(clus_alg), 4)) "Leiden" else if (identical(as.numeric(clus_alg), 1)) "Louvain" else NULL
 tool_roles <- c(
-  Seurat               = "Core single-cell toolkit (QC, normalization, clustering, UMAP)",
+  Seurat               = sprintf("Core single-cell toolkit (QC, normalization, %sclustering, UMAP)",
+                                 if (is.null(clus_lbl)) "" else paste(clus_lbl, "")),
   SeuratObject         = "Single-cell data structures for Seurat",
   harmony              = "Batch integration across samples",
   scDblFinder          = "Doublet detection",
   SingleR              = "Reference-based cell-type annotation",
   celldex              = "Reference expression datasets for SingleR",
+  presto               = "Fast Wilcoxon tests for cluster marker genes",
+  uwot                 = "UMAP embedding",
   SingleCellExperiment = "Bioconductor single-cell data container",
   # listed because the customer report's Ambient RNA section reports its rho;
   # the row self-omits when the package is not installed
   SoupX                = "Ambient (free-floating) RNA estimation and correction",
   scattermore          = "Fast rasterised scatter rendering for large cell counts")
+if (identical(clus_lbl, "Leiden"))
+  tool_roles <- c(tool_roles, leidenbase = "Leiden community detection for clustering",
+                  igraph = "Graph backend for Leiden clustering")
+# step 06b (edgeR) only runs with 2+ conditions; list it only when it left results
+if (length(list.files(file.path(run_dir, "differential"), pattern = "\\.csv$", recursive = TRUE)))
+  tool_roles <- c(tool_roles, edgeR = "Pseudobulk differential expression between conditions")
 tool_urls <- c(
   R                    = "https://www.r-project.org",
   Seurat               = "https://satijalab.org/seurat",
@@ -572,7 +586,12 @@ tool_urls <- c(
   celldex              = "https://bioconductor.org/packages/celldex",
   SingleCellExperiment = "https://bioconductor.org/packages/SingleCellExperiment",
   SoupX                = "https://github.com/constantAmateur/SoupX",
-  scattermore          = "https://github.com/exaexa/scattermore")
+  scattermore          = "https://github.com/exaexa/scattermore",
+  presto               = "https://github.com/immunogenomics/presto",
+  uwot                 = "https://github.com/jlmelville/uwot",
+  edgeR                = "https://bioconductor.org/packages/edgeR",
+  leidenbase           = "https://github.com/cole-trapnell-lab/leidenbase",
+  igraph               = "https://r.igraph.org")
 tv_rows <- lapply(names(tool_roles), function(p) {
   v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
   if (is.na(v)) NULL else data.frame(Tool = p, Version = v, Role = unname(tool_roles[p]),
@@ -624,7 +643,8 @@ if (customer) {
       g + ggplot2::scale_colour_viridis_c(option = "magma", direction = -1,
                                           limits = c(0, mt_cap), oob = scales::squish)
     tf <- file.path(tempdir(), paste0("cust_qc_", gsub("[^A-Za-z0-9]", "_", s), ".png"))
-    ok <- tryCatch({ ggplot2::ggsave(tf, g, width = 4.6, height = 3.5, dpi = 140,
+    # sized for a 3-4 column small-multiples grid in the report
+    ok <- tryCatch({ ggplot2::ggsave(tf, g, width = 3.4, height = 2.8, dpi = 150,
                                      bg = "white"); TRUE }, error = function(e) FALSE)
     if (ok) qc_png[[s]] <- knitr::image_uri(tf)
   }
@@ -689,8 +709,90 @@ if (customer) {
                           basename(rho_csv))
   }
 
+  # (5) differentiation efficiency (cm only): the numbers a cardio lab reports. TNNT2
+  # is called at >= 2 UMIs so a single ambient read does not count as a cardiomyocyte.
+  eff <- NULL
+  if (identical(Sys.getenv("SCRNA_SPECIES"), "cm") &&
+      all(c("TNNT2", "MYH6", "MYH7", "MYL2", "MYL7") %in% rownames(cmat))) {
+    is_cm <- grepl("^Cardiomyocyte", ct)
+    eff <- do.call(rbind, lapply(samples_all, function(s) {
+      i <- which(smp == s); j <- i[is_cm[i]]
+      ratio <- function(a, b) if (length(j)) round(sum(cmat[a, j]) / max(1, sum(cmat[b, j])), 2) else NA_real_
+      sub_ct <- function(p) if (length(j)) round(100 * mean(grepl(p, ct[j])), 1) else NA_real_
+      data.frame(Sample = s, Cells = length(i),
+                 `TNNT2+ cells (%)` = round(100 * mean(cmat["TNNT2", i] >= 2), 1),
+                 `Labelled cardiomyocytes (%)` = round(100 * length(j) / length(i), 1),
+                 `Ventricular (% of CMs)` = sub_ct("ventricular"),
+                 `Atrial (% of CMs)` = sub_ct("atrial"),
+                 `MYH7/MYH6` = ratio("MYH7", "MYH6"), `MYL2/MYL7` = ratio("MYL2", "MYL7"),
+                 check.names = FALSE, stringsAsFactors = FALSE)
+    }))
+    # a curation without CM subtype labels would show two columns of zeros
+    if (!any(grepl("ventricular|atrial", ct)))
+      eff[c("Ventricular (% of CMs)", "Atrial (% of CMs)")] <- NULL
+  }
+
+  # (6) composition statistics (step 09): replicate-aware proportion test + per-sample CIs
+  csv_or_null <- function(p) if (file.exists(p)) tryCatch(read.csv(p, stringsAsFactors = FALSE),
+                                                           error = function(e) NULL) else NULL
+  # Optional <run>/report_contrasts.txt, one contrast per line as named in the step 06b/09
+  # outputs (e.g. 24hMed_vs_24hCell). Steps 06b/09 test every pair of groups; on a design
+  # where some pairs differ in two factors at once (arm AND time, or a flowcell boundary)
+  # those pairs are confounded, so the customer sees only the listed ones. Absent = all.
+  ctr_f <- file.path(run_dir, "report_contrasts.txt")
+  contrasts <- if (file.exists(ctr_f)) { v <- trimws(readLines(ctr_f, warn = FALSE))
+                                         v[nzchar(v) & !startsWith(v, "#")] } else NULL
+  comp <- csv_or_null(file.path(run_dir, "composition_test.csv"))
+  if (!is.null(comp) && !is.null(contrasts)) comp <- comp[comp$contrast %in% contrasts, , drop = FALSE]
+  if (!is.null(comp) && !nrow(comp)) comp <- NULL
+  boot <- csv_or_null(file.path(run_dir, "bootstrap_summary.csv"))
+
+  # (7) timepoint DE volcano (step 06b, pseudobulk edgeR QL). Contrasts without replicates on
+  # both sides have no p-values; they are named, never plotted. Per panel: every significant
+  # gene up to the 300 strongest, plus 300 random non-significant genes as the backdrop.
+  de_vol <- de_top <- NULL; de_desc <- character(0)
+  dd <- if (file.exists(de_path)) tryCatch(read.csv(de_path, stringsAsFactors = FALSE),
+                                           error = function(e) NULL) else NULL
+  if (!is.null(dd) && !all(c("gene", "cell_type", "comparison", "avg_log2FC", "p_val_adj") %in% names(dd))) dd <- NULL
+  if (!is.null(dd)) {
+    if (!is.null(contrasts)) dd <- dd[dd$comparison %in% contrasts, , drop = FALSE]
+    inf <- is.finite(dd$p_val_adj) & (if ("inferential" %in% names(dd)) as.logical(dd$inferential) else TRUE)
+    de_desc <- setdiff(unique(dd$comparison), unique(dd$comparison[inf]))
+    dd <- dd[inf & is.finite(dd$avg_log2FC), ]
+  }
+  if (!is.null(dd) && nrow(dd)) {   # nothing left once filtered = section omitted
+    dd$nl10 <- round(pmin(-log10(pmax(dd$p_val_adj, 1e-300)), 300), 2)
+    dd$sig  <- dd$p_val_adj < 0.05 & abs(dd$avg_log2FC) >= 1
+    dd$avg_log2FC <- round(dd$avg_log2FC, 2)
+    set.seed(1)
+    parts <- split(dd, paste(dd$cell_type, dd$comparison, sep = "|"))
+    de_vol <- do.call(rbind, lapply(parts, function(x) {
+      s <- x[x$sig, ]; s <- head(s[order(s$p_val_adj, -abs(s$avg_log2FC)), ], 300)
+      b <- x[!x$sig, ]; b <- b[sample.int(nrow(b), min(nrow(b), 300)), ]
+      rbind(s, b)[, c("cell_type", "comparison", "gene", "avg_log2FC", "nl10", "sig")]
+    }))
+    de_n <- do.call(rbind, lapply(parts, function(x)
+      data.frame(cell_type = x$cell_type[1], comparison = x$comparison[1],
+                 up = sum(x$sig & x$avg_log2FC > 0), down = sum(x$sig & x$avg_log2FC < 0))))
+    attr(de_vol, "n") <- de_n
+    de_top <- do.call(rbind, lapply(parts, function(x) {
+      s <- x[x$sig, ]; head(s[order(s$p_val_adj), ], 50) }))
+    if (!is.null(de_top) && nrow(de_top))
+      de_top <- data.frame(Gene = de_top$gene, `Cell type` = de_top$cell_type,
+                           Contrast = de_top$comparison, log2FC = de_top$avg_log2FC,
+                           FDR = signif(de_top$p_val_adj, 3), check.names = FALSE)
+    rownames(de_vol) <- NULL; rm(dd, parts)
+  }
+
+  # (8) the run's Excel workbook (08f + build_export_xlsx.py), embedded as a download
+  xl <- Sys.glob(file.path(run_dir, "export", "*_analysis.xlsx"))
+  xlsx <- if (length(xl)) list(name = basename(xl[1]), size = file.size(xl[1]),
+                               uri = xfun::base64_uri(xl[1])) else NULL
+
   cust <- list(qc_png = qc_png, qc_scale = qc_scale, cor_pb = cor_pb,
-               evidence = evidence, rho = rho, n_panel = length(panel))
+               evidence = evidence, rho = rho, n_panel = length(panel),
+               eff = eff, comp = comp, boot = boot, de_vol = de_vol, de_top = de_top,
+               de_desc = de_desc, xlsx = xlsx, contrasts = contrasts)
   msg("customer extras: qc panels=%d cor=%dx%d evidence=%s rho=%s",
       if (is.null(qc_png)) 0L else length(qc_png), nrow(cor_pb), ncol(cor_pb),
       if (is.null(evidence)) "none" else paste0(nrow(evidence), " clusters"),
