@@ -5,10 +5,6 @@
 #           differential signaling heatmap, cellchat_report.pdf
 # =============================================================================
 
-suppressPackageStartupMessages({
-  library(CellChat); library(Seurat); library(dplyr)
-  library(ggplot2); library(patchwork)
-})
 .pipeline_dir <- {
   args <- commandArgs(trailingOnly = FALSE)
   f <- grep("^--file=", args, value = TRUE)
@@ -20,6 +16,11 @@ if (length(CONDITION_LEVELS) < 2) {
   message("Only one condition — skipping 13_cellchat.R")
   quit(save = "no", status = 0)
 }
+# Loaded after the condition check: a one-condition run must skip even where CellChat isn't installed.
+suppressPackageStartupMessages({
+  library(CellChat); library(Seurat); library(dplyr)
+  library(ggplot2); library(patchwork)
+})
 dir.create(DIRS$cellchat, showWarnings = FALSE, recursive = TRUE)
 
 rds_path <- file.path(DIRS$integrated, "integrated_annotated.rds")
