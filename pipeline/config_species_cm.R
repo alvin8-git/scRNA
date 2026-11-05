@@ -704,8 +704,11 @@ if (.species == "cm") {
   }
 
   # ---- CLMC (results_CLMCD01_8samples_filtered, 14 clusters) -------------------
-  # CLMC goes mesothelial/fibroblast: no cluster carries a cardiomyocyte signal above the
-  # D11 ambient background (cm UMI share <= 0.19 % everywhere vs 1.27 % in ASF5 CMs).
+  # CLMC goes mesothelial/fibroblast, with one small D11 cardiomyocyte population that only
+  # a finer split of cluster 5 resolves (5_4 below; sarcomeric UMI share 1.55 % vs a
+  # 0.2 % D11 ambient median). The D20 "TNNT2+" cells (14 %) are TNNT2 alone, no other
+  # sarcomere gene, in HAND1+ mesenchyme: not cardiomyocytes. Evidence:
+  # /data/alvin/tmp/clmc_cm_look.txt, clmc_cm_sub_louvain.txt (2026-11-03).
   if (length(SAMPLE_NAMES) == 8 && isTRUE(QC$min_features == 1000) && isTRUE(CLUSTER$algorithm == 4) &&
       setequal(SAMPLE_NAMES, paste0("CLMC_D", rep(c(0, 11, 20, 30), each = 2), "_", 1:2))) {
     CLUSTER_CELLTYPE_MAP <- c(
@@ -730,10 +733,12 @@ if (.species == "cm") {
       # needs SoupX]; 2_2 (683) D0 96 POU5F1 79.
       list(cluster = "2", resolution = 0.15,
            labels = c("0" = "Unknown", "1" = "Unknown", "2" = "Pluripotent")),
-      # 5_0/5_2 D20/D30 HAND1 93 CDH11 78-85 PDGFRB 50-66; 5_1 (2,790) D11 47 GATA4 84
-      # ZFPM2 72 NKX2-5 20 TBX5 16 ISL1 24 SLC8A1 39.
-      list(cluster = "5", resolution = 0.15,
-           labels = c("0" = "Myofibroblast", "2" = "Myofibroblast", "1" = "Cardiac progenitor")),
+      # 5_0/5_1/5_3/5_5 D20/D30 HAND1 81-96 (myofibroblast); 5_2 (1,733) D11 44 GATA4 85
+      # TBX5 19 ISL1 17 NKX2-5 11; 5_4 (581) D11 96 ACTC1 90 TTN 92 MYH6 78 TNNT2 68
+      # NKX2-5 63 ISL1 67, 65 % of cells with >= 6 sarcomere genes (early cardiomyocytes).
+      list(cluster = "5", resolution = 0.30,
+           labels = c("0" = "Myofibroblast", "1" = "Myofibroblast", "3" = "Myofibroblast",
+                      "5" = "Myofibroblast", "2" = "Cardiac progenitor", "4" = "Cardiomyocyte")),
       # 10_0 D0 86 POU5F1 86 (cycling hESC); 10_1/10_2 HAND1 89-92 TOP2A 92-98.
       list(cluster = "10", resolution = 0.15,
            labels = c("0" = "Pluripotent", "1" = "Proliferating", "2" = "Proliferating")),
