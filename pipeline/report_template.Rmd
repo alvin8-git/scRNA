@@ -559,7 +559,9 @@ mk_comp <- function(pl) {
              buttons = list(
                list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
                list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
-  style_ct_bars(pb)
+  pb <- style_ct_bars(pb)
+  pb$width <- "100%"   # printed bare, knitr fixes the widget at 840 px and the page scrolls on a phone
+  pb
 }
 if (isTRUE(B$label_source == "ref") && !is.null(B$prop_long_denovo)) {
   htmltools::browsable(htmltools::tagList(
@@ -588,7 +590,9 @@ mk_count <- function(cl) {
              buttons = list(
                list(label = "Show all", method = "restyle", args = list("visible", TRUE)),
                list(label = "Hide all", method = "restyle", args = list("visible", "legendonly"))))))
-  style_ct_bars(cb)
+  cb <- style_ct_bars(cb)
+  cb$width <- "100%"
+  cb
 }
 cl <- B$counts_long
 if (is.null(cl) || !nrow(cl)) {
@@ -784,6 +788,7 @@ p <- layout(p, showlegend = FALSE,
 # Build once and slim: plotly copies hovertemplate onto every point and keeps an unbuilt copy
 # of the data in attrs, which tripled this widget (5.8 MB -> ~1.5 MB on 54 panels).
 p <- plotly_build(p); p$x$attrs <- NULL
+p$width <- "100%"   # knitr's default is a fixed 840 px, which scrolls the whole page on a phone
 p$x$data <- lapply(p$x$data, function(t) { t$hovertemplate <- t$hovertemplate[1]
                                            t[c("error_x", "error_y", "line")] <- NULL; t })
 opt <- function(v, sel) paste(sprintf("<option value='%s'%s>%s</option>", htmltools::htmlEscape(v),
