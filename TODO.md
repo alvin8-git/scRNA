@@ -5,6 +5,34 @@
 - [x] **bat_wing species documentation** — done 2026-09-14: new `docs/howto-bat-wing.md` (T1/T2/T6
   worked example) cross-linked from `docs/howto-bat-whole-blood.md`. Earlier (2026-07-28): `docs/reference-config.md` now documents the overlay, including the `QC$max_features` 8000 / `QC$max_counts` 60000 widening and its cache-invalidation consequence. Still open: `docs/howto-bat-whole-blood.md` has **zero** `bat_wing` mentions. Add a section there (or a sibling `docs/howto-bat-wing.md`) covering the T1/T2/T6 run as the worked example.
 
+### Customer report: cell-type agnostic (2026-11-05)
+
+The customer report (`08b --customer`) must carry no cell-type names in code. Each sample type
+supplies its own reference and model; the report reads only that. Target shape: one report profile
+per species overlay (`config_species_*.R`) holding the marker panel, the target-population spec,
+the expected types and the reference name/model.
+
+- [x] **Marker dot plot hard-codes a human PBMC panel** — fixed 2026-11-05: up to 3 genes per
+  `MARKERS` panel present in the data (cm 44, mouse 34, bat 45 genes); regression guard T15. Was (`08b_html_report.R:335`): The cardiac
+  reports plot 32 immune genes against cardiac types; both mouse reports print "Marker dot plot is
+  unavailable" (`Cd3d` vs `CD3D`). Build the panel from the overlay's `MARKERS`/`ALL_MARKERS`, as
+  the cluster-evidence table (`08b_html_report.R:671`) already does.
+- [x] **Report does not name the reference that labelled the cells** — fixed 2026-11-05: a
+  "Cell-type labels" line under the intro names the frozen model (05r now writes
+  `annotation/reference_transfer_model.txt`; older runs fall back to `REFERENCE_MODEL`) or the
+  de-novo SingleR reference. Original item: Print the reference name,
+  version and model file, and whether labels are frozen-reference or this run's de-novo call.
+- [ ] **Differentiation-efficiency panel is cardiac-only** (`08b_html_report.R:712-732`,
+  `report_template.Rmd:685-700`): gated on `SCRNA_SPECIES == "cm"` with TNNT2/MYH6/MYH7/MYL2/MYL7
+  and `^Cardiomyocyte` in code. Drive it from a target-population spec in the profile (label,
+  marker + UMI threshold, subtypes, wording); blood can use it for sort purity.
+- [ ] **Frozen reference exists only for bat.** Human PBMC, human whole blood, cm and mouse get
+  run-relative de-novo labels. Build one per sample type with `build_reference.R`.
+- [ ] **Contamination is prose only.** Give each reference an expected-types list and flag any
+  unexpected type above a threshold.
+- [ ] **Standard (non-customer) report has bat/PBMC text** (`report_template.Rmd:992`, `1019`,
+  `1044`): "frozen bat reference", the whole-blood sort table, the CD3D/CD14 lineage caption.
+
 ### Open bugs and decisions (2026-07-30)
 
 Surfaced by the 8-sample bat run, the T3/T4/T5 marker check, and the graphify knowledge-graph

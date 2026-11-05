@@ -210,6 +210,8 @@ small{color:var(--muted)}
 .plot-desc{color:var(--muted);font-size:12.5px;line-height:1.45;margin:2px 0 14px;max-width:820px}
 /* fixed-width plots scroll inside their own box on a narrow screen, not the whole page */
 .hscroll{overflow-x:auto;max-width:100%}
+/* long model file names in the labels line wrap instead of widening the page */
+.read-line code{overflow-wrap:anywhere}
 
 /* static gallery figures — ONE consistent, bounded width for every per-stage and
    per-sample plot (like the comparison panels; not full-bleed). height:auto keeps each
@@ -313,6 +315,16 @@ else
   'Hover any plot for values, drag to zoom, and click a cell type in a legend to toggle it across every panel — that toggle <em>is</em> the depletion view. ')
 cat(sprintf('Source: <code>integrated_annotated.rds</code> (reduction <code>%s</code>) + the QC tables. No data is recomputed.',
             htmltools::htmlEscape(B$umap_name)))
+# which reference labelled the cells: names come from the run, never from this template
+nm <- function(x) if (length(x) && !is.na(x[1]) && nzchar(x[1])) x[1] else "unrecorded"
+lab <- if (identical(B$label_source, "ref")) {
+  sprintf('a <b>frozen reference</b> model, <code>%s</code>, so the labels do not shift with the sample mix',
+          htmltools::htmlEscape(basename(nm(B$ref_model))))
+} else
+  sprintf('this run&rsquo;s own annotation (SingleR against <code>%s</code>, then marker curation), so the labels can shift when the sample mix changes',
+          htmltools::htmlEscape(nm(B$singler_ref)))
+cat(sprintf('<div class="read-line"><b>Cell-type labels</b> (%s): %s.</div>',
+            htmltools::htmlEscape(nm(B$species)), lab))
 ```
 
 # Overview

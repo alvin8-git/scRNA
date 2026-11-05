@@ -185,6 +185,13 @@ for (s in c("config.R", list.files(.pipeline, "^config_species_.*\\.R$"))) {
   }
 }
 
+# Regression T15: the report's marker dot plot takes its genes from the species overlay's
+# MARKERS. A hard-coded human PBMC list plotted immune genes on cardiac runs and matched
+# nothing on mouse (Cd3d vs CD3D), so the plot read "unavailable".
+f <- file.path(.pipeline, "08b_html_report.R")
+if (file.exists(f) && any(grepl("marker_panel\\s*<-\\s*c\\(\"", .code_of(f))))
+  fails <- c(fails, "08b_html_report.R hard-codes the marker dot plot genes (use MARKERS)")
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

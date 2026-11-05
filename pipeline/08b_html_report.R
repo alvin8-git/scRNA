@@ -135,6 +135,7 @@ cells <- data.frame(
 # collapsing into CD14+ Mono). See 05r_reference_transfer.R / docs/frozen_reference_scope.md.
 cells$cell_type_denovo <- cells$cell_type
 label_source <- "denovo"
+ref_model <- NA_character_
 ref_path <- file.path(run_dir, "annotation", "reference_transfer_cells.csv.gz")
 if (file.exists(ref_path)) {
   rt <- tryCatch(read.csv(gzfile(ref_path), stringsAsFactors = FALSE), error = function(e) NULL)
@@ -151,6 +152,10 @@ if (file.exists(ref_path)) {
       ov <- refmap[colnames(obj)]; ov[is.na(ov) | ov == ""] <- "Unassigned"
       obj$cell_type_ref <- unname(ov); ct_col <- "cell_type_ref"
       msg("frozen-ref labels joined (%d/%d cells); main views now use cell_type_ref", hit, nrow(md))
+      # runs labelled before 05r wrote its sidecar fall back to the configured model
+      mf <- file.path(run_dir, "annotation", "reference_transfer_model.txt")
+      ref_model <- if (file.exists(mf)) readLines(mf, n = 1L, warn = FALSE)
+                   else if (exists("REFERENCE_MODEL") && nzchar(REFERENCE_MODEL)) REFERENCE_MODEL else NA
     } else msg("frozen-ref barcode overlap too low (%d/%d) — keeping de-novo labels", hit, nrow(md))
   }
 }
@@ -332,13 +337,12 @@ hvg_n <- vapply(samples_all, function(s) {
 }, integer(1))
 summary$HVG <- hvg_n[summary$Sample]
 
-# ---- marker dot plot data (canonical human-PBMC panel, computed off the object) ----
-# Mirrors the families the pipeline draws (T / NK / B / mono / DC / platelet / etc.).
-marker_panel <- c("CD3D","CD3E","TRAC","IL7R","CCR7","CD4","CD8A","GZMK","CCL5",
-                  "NKG7","GNLY","KLRD1","NCAM1","KLRB1","MS4A1","CD79A","CD19",
-                  "CD14","LYZ","S100A8","S100A9","FCGR3A","MS4A7","FCER1A","CLEC9A","CST3",
-                  "PPBP","PF4","CD34","CSF3R","GATA2","MS4A2")
-marker_panel <- marker_panel[marker_panel %in% rownames(obj)]
+# ---- marker dot plot data (the species overlay's MARKERS panels, computed off the object) ----
+# Panel genes come from config (MARKERS after the species overlay), never from this file,
+# so a cardiac or mouse run plots its own lineages rather than a human PBMC set. Up to 3
+# genes per panel that are present in the data, in panel order.
+marker_panel <- unique(unlist(lapply(Filter(is.character, MARKERS), function(g)
+  head(g[g %in% rownames(obj)], 3L)), use.names = FALSE))
 markers_dot <- tryCatch({
   d <- Seurat::DotPlot(obj, features = marker_panel, group.by = ct_col)$data
   data.frame(gene = as.character(d$features.plot), cell_type = as.character(d$id),
@@ -806,7 +810,9 @@ bundle <- list(
   run_name = run_name, generated = as.character(Sys.time()),
   samples = samples_all, n_cells_total = nrow(cells),
   cells = cells_plot, prop_long = prop_long, prop_wide = prop_wide, counts_long = counts_long,
-  label_source = label_source, prop_long_denovo = prop_long_dn, counts_long_denovo = counts_long_dn,
+  label_source = label_source, ref_model = ref_model,
+  singler_ref = if (exists("SINGLER_REF")) SINGLER_REF else NA,
+  species = Sys.getenv("SCRNA_SPECIES", "human"), prop_long_denovo = prop_long_dn, counts_long_denovo = counts_long_dn,
   delta = delta, summary = summary, qc_thresholds = qc_thr, umap_name = umap_name, de = de,
   markers_dot = markers_dot,
   galleries = galleries, lite = lite, benchmark = benchmark,

@@ -88,6 +88,8 @@ comp <- do.call(rbind, lapply(c("ALL", samps), function(s) {
 }))
 comp_path <- file.path(RUN_DIR, "annotation", "reference_transfer_composition.csv")
 write.csv(comp, comp_path, row.names = FALSE)
+# the report names the model that labelled the cells; config's default can change later
+writeLines(normalizePath(MODEL), file.path(RUN_DIR, "annotation", "reference_transfer_model.txt"))
 
 message("\n  overall cell_type_ref composition (%):")
 print(sort(comp_one(cells$cell_type_ref), decreasing = TRUE))
