@@ -208,6 +208,8 @@ small{color:var(--muted)}
 
 /* one- or two-line grey description printed under a section title */
 .plot-desc{color:var(--muted);font-size:12.5px;line-height:1.45;margin:2px 0 14px;max-width:820px}
+/* fixed-width plots scroll inside their own box on a narrow screen, not the whole page */
+.hscroll{overflow-x:auto;max-width:100%}
 
 /* static gallery figures — ONE consistent, bounded width for every per-stage and
    per-sample plot (like the comparison panels; not full-bleed). height:auto keeps each
@@ -250,11 +252,16 @@ small{color:var(--muted)}
   .report-nav{transform:translateX(-100%);transition:transform .2s ease;width:240px;
     box-shadow:2px 0 12px rgba(16,24,40,.18)}
   body.nav-open .report-nav{transform:none}
-  .navtoggle{left:10px;top:58px}
+  /* the menu button moves into the top bar so it never covers the first line of text */
+  .navtoggle{left:12px;top:11px;z-index:101}
+  .report-top{padding-left:54px}
   .main-container{margin-left:0 !important;margin-right:auto;padding:10px 16px 60px}
   .report-top .meta{display:none}
   .report-top .title{font-size:14px}
-  .umapwrap{flex-direction:column}
+  .cardgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .scard{padding:10px 11px}
+  /* stretch: flex-start shrank the stacked UMAP grid to its content width (~60 px panels) */
+  .umapwrap{flex-direction:column;align-items:stretch}
   .umapgrid{grid-template-columns:1fr}
   .shlegend{position:static;width:auto;top:auto}
   .galgrid{grid-template-columns:1fr}
@@ -642,8 +649,12 @@ if (is.null(md_) || !nrow(md_)) {
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 10.5),
           axis.text.y = element_text(size = 10.5),
           axis.title = element_blank(), panel.grid.major = element_line(color = "#f0f0f0"))
-  ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 150)) |>
-    layout(xaxis = list(automargin = TRUE), yaxis = list(automargin = TRUE))
+  # hscroll: one gene per column cannot shrink to a phone, so below ~16 px a gene the plot
+  # stops shrinking and scrolls in its own box instead of overlapping the gene labels
+  htmltools::browsable(htmltools::div(class = "hscroll",
+    htmltools::div(style = sprintf("min-width:%dpx", 16 * length(go) + 230),
+      ggplotly(gp, tooltip = "text", height = max(360, 26 * nlevels(md_$cell_type) + 150)) |>
+        layout(xaxis = list(automargin = TRUE), yaxis = list(automargin = TRUE)))))
 }
 ```
 
@@ -823,7 +834,7 @@ C <- B$cust$cor_pb
 # Diverging RdYlBu on fixed limits: red = -1, yellow = 0, blue = +1, so the colour
 # means the same r in every report (colour-blind safe, unlike a rainbow).
 stops <- RColorBrewer::brewer.pal(11, "RdYlBu")
-plot_ly(x = colnames(C), y = rownames(C), z = C, type = "heatmap",
+htmltools::browsable(htmltools::div(class = "hscroll", plot_ly(x = colnames(C), y = rownames(C), z = C, type = "heatmap",
         colorscale = Map(function(p, c) list(p, c), seq(0, 1, length.out = 11), stops),
         zmin = -1, zmax = 1,
         hovertemplate = "<b>%{y}</b> vs <b>%{x}</b><br>Spearman r = %{z:.3f}<extra></extra>",
@@ -834,7 +845,7 @@ plot_ly(x = colnames(C), y = rownames(C), z = C, type = "heatmap",
   layout(xaxis = list(title = "", tickangle = -90, automargin = TRUE,
                       tickfont = list(size = 10)),
          yaxis = list(title = "", automargin = TRUE, tickfont = list(size = 10)),
-         margin = list(l = 4, r = 4, t = 6, b = 4))
+         margin = list(l = 4, r = 4, t = 6, b = 4))))
 ```
 
 ```{r cust_rho_head, results='asis', eval=!is.null(B$cust$rho)}
