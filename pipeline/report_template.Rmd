@@ -284,7 +284,7 @@ sample_links <- if (gal && length(B$galleries$by_sample)) paste0('<div class="gr
   paste(sprintf('<a href="#sample-%s">%s</a>', slug(names(B$galleries$by_sample)),
                 htmltools::htmlEscape(names(B$galleries$by_sample))), collapse="")) else ''
 # customer-only sections; the headings' pandoc ids are their slugs
-cl <- c(if (!is.null(B$cust$eff)) "Differentiation efficiency",
+cl <- c(if (!is.null(B$cust$eff)) B$cust$eff_spec$title,
         if (!is.null(B$cust$comp)) "Composition statistics",
         if (!is.null(B$cust$de_vol) && nrow(B$cust$de_vol)) "Gene expression changes between groups",
         if (!is.null(B$cust$cor_pb)) "Sample concordance",
@@ -694,22 +694,16 @@ datatable(B$cust$evidence, rownames = FALSE,
 ```
 
 ```{r cust_eff_head, results='asis', eval=!is.null(B$cust$eff)}
-cat("# Differentiation efficiency\n\n",
-    "<p class='plot-desc'>The read-outs a cardiac differentiation is usually judged by, per sample. ",
-    "<strong>TNNT2+ cells</strong> is the single-cell equivalent of a cardiac troponin T flow ",
-    "cytometry stain: a cell counts when it has at least 2 TNNT2 reads, so one stray ambient read ",
-    "does not make a cardiomyocyte. It does not depend on the cell-type labels; ",
-    "<strong>Labelled cardiomyocytes</strong> does, and the two should agree. Among cardiomyocytes, ",
-    "<strong>MYH7/MYH6</strong> and <strong>MYL2/MYL7</strong> (summed reads) rise as cells mature ",
-    "and take on a ventricular identity. Each sample is one library: compare replicates of the same ",
-    "day to judge spread before reading a trend.</p>\n", sep = "")
+cat("# ", B$cust$eff_spec$title, "\n\n<p class='plot-desc'>", B$cust$eff_spec$desc,
+    " Each sample is one library: compare replicates of the same ",
+    "group to judge spread before reading a trend.</p>\n", sep = "")
 ```
 
 ```{r cust_eff, eval=!is.null(B$cust$eff)}
 datatable(B$cust$eff, rownames = FALSE, class = "compact stripe hover", selection = "none",
           options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
                          columnDefs = list(list(className = "dt-right", targets = seq_len(ncol(B$cust$eff) - 1))))) |>
-  formatStyle("TNNT2+ cells (%)", background = styleColorBar(c(0, 100), "#f5c6c6"),
+  formatStyle(B$cust$eff_spec$marker_col, background = styleColorBar(c(0, 100), "#f5c6c6"),
               backgroundSize = "98% 70%", backgroundRepeat = "no-repeat", backgroundPosition = "center")
 ```
 
@@ -1001,7 +995,7 @@ pass <- grepl("^PASS", BM$verdict %||% "")
 vcol <- if (pass) "var(--good)" else "var(--bad)"
 cat(sprintf('<div class="read-line" style="border-left-color:%s"><b>Verdict:</b> %s</div>\n',
             vcol, esc(BM$verdict %||% "(see benchmark_report.md)")))
-cat('Cells were classified against a **frozen bat reference** (built once from a canonical run), so these labels (`cell_type_ref`) are *run-independent*: they do not shift with this run\'s sample mix. The anchor samples carried into every run are the reproducibility control — identical input + same model should give the same proportions across runs, so any drift is a pipeline/run artifact, not biology.\n\n')
+cat('Cells were classified against a **frozen reference** (built once from a canonical run), so these labels (`cell_type_ref`) are *run-independent*: they do not shift with this run\'s sample mix. The anchor samples carried into every run are the reproducibility control — identical input + same model should give the same proportions across runs, so any drift is a pipeline/run artifact, not biology.\n\n')
 if (!is.null(BM$model) && !is.na(BM$model))
   cat(sprintf('<p class="plot-desc">Reference model: <code>%s</code></p>\n', esc(BM$model)))
 
@@ -1025,8 +1019,11 @@ if (!is.null(conc) && nrow(conc)) {
 }
 
 # ---- whole-blood / sort-status signature ----
+# only a blood reference has these labels; elsewhere 08c writes all-zero columns
 sig <- BM$signature
-if (!is.null(sig) && nrow(sig)) {
+wb <- intersect(c("Neutrophil", "RBC", "Platelet"), names(sig))
+if (!is.null(sig) && nrow(sig) && length(wb) &&
+    any(suppressWarnings(as.numeric(unlist(sig[wb]))) > 0, na.rm = TRUE)) {
   cat('<h2>Whole-blood signature (sort readout)</h2>\n')
   cat('<p class="plot-desc">Granulocyte / RBC / platelet fractions per sample under the frozen reference. High values indicate presort / whole blood; depleted values indicate postsort PBMC.</p>\n')
   cat(htab(sig))
@@ -1053,7 +1050,7 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
     "Top DE marker heatmap" =
       "Top differentially expressed genes per cell type (rows), scaled across types (columns). Bright red marks the type where each gene is most enriched — the molecular signature behind each label.",
     "Key lineage marker expression" =
-      "Canonical lineage genes projected on the shared UMAP. Each panel lights up where one marker is expressed (CD3D = T, MS4A1/CD79A = B, NKG7/GNLY = NK, CD14/LYZ = monocyte), confirming the annotation spatially.",
+      "Canonical lineage genes projected on the shared UMAP. Each panel lights up where one marker is expressed (the lead gene of each marker panel for this sample type), confirming the annotation spatially.",
     "SingleR reference heatmap" =
       "SingleR correlation scores of every cell (columns) against each reference label (rows). Strong diagonal blocks indicate confident, unambiguous assignments.",
     "QC: UMIs vs genes" =

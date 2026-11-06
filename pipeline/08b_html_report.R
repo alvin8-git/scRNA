@@ -536,8 +536,9 @@ if (!lite) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title = element_blank()),
       w = 7.5, h = max(4, 0.17 * length(genes))) }, error = function(e) NULL)
   # Key lineage marker expression (replaces SingleR delta) — 05_annotate.R FeaturePlot style
-  lin <- intersect(c("CD3D","CD4","CD8A","CCR7","MS4A1","CD79A","NKG7","GNLY",
-                     "CD14","LYZ","FCGR3A","FCER1A","PPBP"), rownames(obj))
+  # lead marker of each MARKERS panel present in the data, so the species overlay sets it
+  lin <- head(unique(unlist(lapply(Filter(is.character, MARKERS), function(g)
+    head(g[g %in% rownames(obj)], 1L)), use.names = FALSE)), 16L)
   if (length(lin)) stage[["Key lineage marker expression"]] <- tryCatch(
     mk_uri(Seurat::FeaturePlot(obj, features = lin, reduction = umap_name, ncol = 4, order = TRUE,
                                cols = c("lightgrey", "#E64B35"), raster = TRUE, raster.dpi = c(200, 200)) &
@@ -713,27 +714,29 @@ if (customer) {
                           basename(rho_csv))
   }
 
-  # (5) differentiation efficiency (cm only): the numbers a cardio lab reports. TNNT2
-  # is called at >= 2 UMIs so a single ambient read does not count as a cardiomyocyte.
-  eff <- NULL
-  if (identical(Sys.getenv("SCRNA_SPECIES"), "cm") &&
-      all(c("TNNT2", "MYH6", "MYH7", "MYL2", "MYL7") %in% rownames(cmat))) {
-    is_cm <- grepl("^Cardiomyocyte", ct)
+  # (5) target-population panel: the species overlay's TARGET_POPULATION names the
+  # population, its marker + UMI floor, subtypes and expression ratios. No spec, no panel.
+  eff <- eff_spec <- NULL; tp <-if (exists("TARGET_POPULATION")) TARGET_POPULATION else NULL
+  if (!is.null(tp) && tp$marker %in% rownames(cmat)) {
+    is_t <- grepl(tp$label, ct)
+    ratios <- Filter(function(g) all(g %in% rownames(cmat)), tp$ratios)
+    mcol <- sprintf("%s+ cells (%%)", tp$marker)
     eff <- do.call(rbind, lapply(samples_all, function(s) {
-      i <- which(smp == s); j <- i[is_cm[i]]
-      ratio <- function(a, b) if (length(j)) round(sum(cmat[a, j]) / max(1, sum(cmat[b, j])), 2) else NA_real_
-      sub_ct <- function(p) if (length(j)) round(100 * mean(grepl(p, ct[j])), 1) else NA_real_
-      data.frame(Sample = s, Cells = length(i),
-                 `TNNT2+ cells (%)` = round(100 * mean(cmat["TNNT2", i] >= 2), 1),
-                 `Labelled cardiomyocytes (%)` = round(100 * length(j) / length(i), 1),
-                 `Ventricular (% of CMs)` = sub_ct("ventricular"),
-                 `Atrial (% of CMs)` = sub_ct("atrial"),
-                 `MYH7/MYH6` = ratio("MYH7", "MYH6"), `MYL2/MYL7` = ratio("MYL2", "MYL7"),
-                 check.names = FALSE, stringsAsFactors = FALSE)
+      i <- which(smp == s); j <- i[is_t[i]]
+      row <- list(Sample = s, Cells = length(i),
+                  round(100 * mean(cmat[tp$marker, i] >= tp$min_umi), 1),
+                  round(100 * length(j) / length(i), 1))
+      names(row)[3:4] <- c(mcol, sprintf("Labelled %s (%%)", tp$name))
+      for (k in names(tp$subtypes))  # a curation without subtype labels is dropped below
+        row[[sprintf("%s (%% of %s)", k, tp$short)]] <-
+          if (length(j)) round(100 * mean(grepl(tp$subtypes[[k]], ct[j])), 1) else NA_real_
+      for (k in names(ratios)) { g <- ratios[[k]]
+        row[[k]] <- if (length(j)) round(sum(cmat[g[1], j]) / max(1, sum(cmat[g[2], j])), 2) else NA_real_ }
+      as.data.frame(row, check.names = FALSE, stringsAsFactors = FALSE)
     }))
-    # a curation without CM subtype labels would show two columns of zeros
-    if (!any(grepl("ventricular|atrial", ct)))
-      eff[c("Ventricular (% of CMs)", "Atrial (% of CMs)")] <- NULL
+    for (k in names(tp$subtypes)) if (!any(grepl(tp$subtypes[[k]], ct)))
+      eff[[sprintf("%s (%% of %s)", k, tp$short)]] <- NULL
+    eff_spec <- list(title = tp$title, desc = tp$desc, marker_col = mcol)
   }
 
   # (6) composition statistics (step 09): replicate-aware proportion test + per-sample CIs
@@ -795,7 +798,7 @@ if (customer) {
 
   cust <- list(qc_png = qc_png, qc_scale = qc_scale, cor_pb = cor_pb,
                evidence = evidence, rho = rho, n_panel = length(panel),
-               eff = eff, comp = comp, boot = boot, de_vol = de_vol, de_top = de_top,
+               eff = eff, eff_spec = eff_spec, comp = comp, boot = boot, de_vol = de_vol, de_top = de_top,
                de_desc = de_desc, xlsx = xlsx, contrasts = contrasts)
   msg("customer extras: qc panels=%d cor=%dx%d evidence=%s rho=%s",
       if (is.null(qc_png)) 0L else length(qc_png), nrow(cor_pb), ncol(cor_pb),

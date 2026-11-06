@@ -158,7 +158,9 @@ of re-deriving one from samples), `SCRNA_REFERENCE_MODEL` (enables 05r/08c), `SC
   (mouse Cell/Med x time, or across a flowcell), put the valid contrasts, one per line, in
   `<run>/report_contrasts.txt`; the customer report (`08b --customer`) then shows only those.
   Absent = all contrasts shown. The customer report is species-agnostic: each section appears
-  only when its data exists (the differentiation-efficiency panel is cm-only by data, not wording).
+  only when its data exists. Cell-type content comes from the species overlay: the marker dot
+  plot and lineage UMAP from `MARKERS`, the target-population (differentiation-efficiency) panel
+  from `TARGET_POPULATION` (set only in `config_species_cm.R`). Regression guards T15/T16.
 - `.rds`, `results*/`, `*.log`, `*.pptx` are gitignored; `Samples/H1` + `Samples/H2` matrices are
   force-tracked as the quick-start fixture.
 

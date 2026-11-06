@@ -22,16 +22,18 @@ the expected types and the reference name/model.
   `annotation/reference_transfer_model.txt`; older runs fall back to `REFERENCE_MODEL`) or the
   de-novo SingleR reference. Original item: Print the reference name,
   version and model file, and whether labels are frozen-reference or this run's de-novo call.
-- [ ] **Differentiation-efficiency panel is cardiac-only** (`08b_html_report.R:712-732`,
-  `report_template.Rmd:685-700`): gated on `SCRNA_SPECIES == "cm"` with TNNT2/MYH6/MYH7/MYL2/MYL7
-  and `^Cardiomyocyte` in code. Drive it from a target-population spec in the profile (label,
-  marker + UMI threshold, subtypes, wording); blood can use it for sort purity.
+- [x] **Differentiation-efficiency panel is cardiac-only** — fixed 2026-11-06: the panel is built
+  from `TARGET_POPULATION` in the species overlay (title, label regex, marker + UMI floor,
+  subtypes, ratios, description); only `config_species_cm.R` sets one. Regression guard T16.
+  Open follow-up: a blood `TARGET_POPULATION` for sort purity.
 - [ ] **Frozen reference exists only for bat.** Human PBMC, human whole blood, cm and mouse get
   run-relative de-novo labels. Build one per sample type with `build_reference.R`.
 - [ ] **Contamination is prose only.** Give each reference an expected-types list and flag any
   unexpected type above a threshold.
-- [ ] **Standard (non-customer) report has bat/PBMC text** (`report_template.Rmd:992`, `1019`,
-  `1044`): "frozen bat reference", the whole-blood sort table, the CD3D/CD14 lineage caption.
+- [x] **Standard (non-customer) report has bat/PBMC text** — fixed 2026-11-06: "frozen reference"
+  wording; the whole-blood table shows only when the reference has Neutrophil/RBC/Platelet labels;
+  the lineage UMAP takes the lead gene of each `MARKERS` panel (was a hard-coded PBMC list in
+  `08b`) and its caption no longer names immune genes.
 
 ### Open bugs and decisions (2026-07-30)
 

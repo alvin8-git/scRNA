@@ -15,6 +15,24 @@ if (.species == "cm") {
 
   message("[Species] cm (human iPSC/ESC -> cardiomyocyte) — applying differentiation overrides")
 
+  # ---- Customer report: target-population panel (08b --customer) -------------
+  # The read-outs a cardiac differentiation is judged by. `label` is a regex on the cell
+  # label; the marker is called at >= min_umi so one ambient read does not count.
+  TARGET_POPULATION <- list(
+    title   = "Differentiation efficiency",
+    label   = "^Cardiomyocyte", name = "cardiomyocytes", short = "CMs",
+    marker  = "TNNT2", min_umi = 2,
+    subtypes = c(Ventricular = "ventricular", Atrial = "atrial"),
+    ratios  = list(`MYH7/MYH6` = c("MYH7", "MYH6"), `MYL2/MYL7` = c("MYL2", "MYL7")),
+    desc    = paste0(
+      "The read-outs a cardiac differentiation is usually judged by, per sample. ",
+      "<strong>TNNT2+ cells</strong> is the single-cell equivalent of a cardiac troponin T flow ",
+      "cytometry stain: a cell counts when it has at least 2 TNNT2 reads, so one stray ambient read ",
+      "does not make a cardiomyocyte. It does not depend on the cell-type labels; ",
+      "<strong>Labelled cardiomyocytes</strong> does, and the two should agree. Among cardiomyocytes, ",
+      "<strong>MYH7/MYH6</strong> and <strong>MYL2/MYL7</strong> (summed reads) rise as cells mature ",
+      "and take on a ventricular identity."))
+
   # ---- QC: iPSC-CMs are large, RNA-rich cells --------------------------------
   # Measured on the D0-D30 cohort: p99 nFeature reaches 8,071 and p99 nCount 54,422.
   # The human defaults (5000 / 25000) discard 12.7% of all cells and up to 21.2% of
