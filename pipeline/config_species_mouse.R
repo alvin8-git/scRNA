@@ -21,7 +21,7 @@
 
 if (.species %in% c("mouse", "mouse_cm")) {
 
-  message("[Species] mouse — applying mouse overrides (ImmGen reference)")
+  message("[Species] ", .species, " — applying mouse overrides (ImmGen reference)")
 
   # ---- gene-name patterns: the blocker ---------------------------------------
   QC$mt_pattern   <- "^mt-"      # 13 genes in this annotation; "^MT-" matches 0
@@ -64,7 +64,23 @@ if (.species %in% c("mouse", "mouse_cm")) {
   # "Macrophage" and "RBC" are used rather than "Immune"/"Erythrocyte" because
   # those two have no palette entry.
   # Every symbol below was confirmed present in the data.
+  # Immune panels (2026-11-06): the only mouse cohort so far is immune cells (see the
+  # reference note), and the cardiac panels below scored it against Pluripotent /
+  # Cardiomyocyte. Named after the labels the ImmGen run produced. The cardiac panels
+  # stay for the first mouse cardiac cohort (`mouse_cm`).
   MARKERS <- list(
+    `Macrophage`   = c("Adgre1", "C1qa", "C1qb", "Mertk", "Msr1", "Cd68", "Lyz2"),
+    `CD14+ Mono`   = c("Ly6c2", "Ccr2", "Plac8", "Cd14"),
+    `Neutrophil`   = c("S100a8", "S100a9", "Retnlg", "Cxcr2", "Csf3r", "Mmp8", "Ly6g"),
+    `DC`           = c("Flt3", "Clec9a", "Xcr1", "Cd209a", "H2-Ab1", "Ciita", "Itgax"),
+    `B cell`       = c("Cd79a", "Cd79b", "Ms4a1", "Cd19", "Pax5"),
+    `CD4 T`        = c("Cd3e", "Cd3g", "Cd4", "Il7r", "Itk"),
+    `CD8 T`        = c("Cd3e", "Cd8a", "Cd8b1"),
+    `NK`           = c("Nkg7", "Gzma", "Klrb1c", "Ncr1"),
+    `Endothelial`  = c("Pecam1", "Cdh5", "Flt1", "Ptprb"),
+    `Proliferating` = c("Mki67", "Top2a", "Ccnb1")
+  )
+  if (.species == "mouse_cm") MARKERS <- list(
     `Pluripotent`        = c("Pou5f1", "Sox2", "Nanog", "Lin28a", "L1td1", "Zfp42"),
     `Cardiac progenitor` = c("Nkx2-5", "Isl1", "Tbx5", "Gata4", "Mesp1", "Kdr", "Mef2c"),
     `Cardiomyocyte`      = c("Tnnt2", "Tnni3", "Tnni1", "Myh6", "Myh7", "Myl7", "Myl4",
@@ -94,6 +110,8 @@ if (.species %in% c("mouse", "mouse_cm")) {
   # Types the annotation step may override on marker evidence rather than trust
   # the reference for. None for mouse: see the RBC note in the panel block.
   CONTAMINATION_TYPES <- character(0)
+  EXPECTED_TYPES <- if (.species == "mouse_cm") NULL else
+    setdiff(names(MARKERS), "Endothelial")   # immune cohort: endothelial cells are carry-over
 
   # ---- clustering ------------------------------------------------------------
   # Same resolutions as the cm overlay; a differentiation timecourse needs the

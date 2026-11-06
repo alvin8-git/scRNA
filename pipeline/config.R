@@ -447,6 +447,14 @@ SAMPLE_COLORS <- c(H1 = "#E64B35", H2 = "#4DBBD5")
 CONTAMINATION_TYPES <- c("Neutrophil", "RBC", "HSPC", "Platelet",
                           "Basophil", "Eosinophil", "Mast cell")
 
+# Cell types this sample type should contain. The customer report flags any other label
+# above UNEXPECTED_FLAG_PCT % of a sample. Prefix match: "CD4 T" covers "CD4 T (memory)".
+# Unknown/Unassigned are never flagged. NULL = no check. Default is PBMC, so RBC, Platelet
+# and Neutrophil flag as carry-over; human whole blood must add them by hand.
+EXPECTED_TYPES <- c("CD4 T", "CD8 T", "Treg", "γδ T", "MAIT", "NK", "B cell", "Plasma",
+                    "Monocyte", "CD14+ Mono", "FCGR3A+ Mono", "DC", "cDC", "pDC", "HSPC")
+UNEXPECTED_FLAG_PCT <- 1
+
 CELLTYPE_COLORS <- c(
   # CD4 T subtypes — red family
   "CD4 T"              = "#E64B35",

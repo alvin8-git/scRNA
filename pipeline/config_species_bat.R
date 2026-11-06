@@ -87,6 +87,9 @@ if (.species == "bat") {
 
   # ---- Contamination: RBC and Neutrophil expected in bat whole blood ---------
   CONTAMINATION_TYPES <- c("Basophil", "Eosinophil", "Mast cell")
+  # whole blood: granulocytes, RBC and platelets belong; mast cells are tissue-resident
+  EXPECTED_TYPES <- c(EXPECTED_TYPES, "Neutrophil", "RBC", "Platelet", "Basophil",
+                      "Eosinophil", "Progenitors")
 
   # ---- SingleR: Monaco resolves CD4/CD8/γδ T cells in blood ------------------
   SINGLER_REF <- "MonacoImmune"
@@ -211,6 +214,12 @@ if (.species == "bat") {
 
   # ---- No blood contamination types in wing tissue --------------------------
   CONTAMINATION_TYPES <- c("RBC", "HSPC", "Platelet")
+  # wing tissue: stromal/epidermal types plus tissue-resident and wound-recruited immune
+  # cells; RBC and Platelet are blood carry-over and flag
+  EXPECTED_TYPES <- c("Fibroblast", "Myofibroblast", "Keratinocyte", "Wound_keratinocyte",
+                      "Endothelial", "Pericyte", "Smooth Muscle", "Melanocyte", "Epithelial",
+                      "Chondrocyte", "MSC", "Macrophage", "Mast cell", "CD4 T", "CD8 T",
+                      "γδ T", "NK", "DC", "CD14+ Mono", "B cell")
 
   # ---- Clustering: moderate resolution for tissue heterogeneity -------------
   CLUSTER$resolutions <- c(0.3, 0.5, 0.8)

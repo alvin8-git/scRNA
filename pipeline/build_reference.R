@@ -88,6 +88,12 @@ label_markers <- function(L) {
       is.character(MARKERS[[L]])) {
     return(present(MARKERS[[L]]))
   }
+  # curated variants of a panel name ("Epicardial-like", "Fibroblast (low-depth)") take
+  # the longest panel name they start with
+  if (exists("MARKERS") && is.list(MARKERS)) {
+    nm <- names(Filter(is.character, MARKERS)); nm <- nm[startsWith(L, nm)]
+    if (length(nm)) return(present(MARKERS[[nm[which.max(nchar(nm))]]]))
+  }
   g <- if (grepl("^CD8", L))               c(MARKERS$T_pan, MARKERS$CD8_T)
        else if (grepl("^CD4|Treg", L))     c(MARKERS$T_pan, MARKERS$CD4_T)
        else if (grepl("γδ|gamma", L)) c(MARKERS$T_pan, MARKERS$gamma_delta_T)

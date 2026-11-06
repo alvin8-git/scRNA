@@ -285,6 +285,7 @@ sample_links <- if (gal && length(B$galleries$by_sample)) paste0('<div class="gr
                 htmltools::htmlEscape(names(B$galleries$by_sample))), collapse="")) else ''
 # customer-only sections; the headings' pandoc ids are their slugs
 cl <- c(if (!is.null(B$cust$eff)) B$cust$eff_spec$title,
+        if (!is.null(B$cust$unexp)) "Unexpected cell types",
         if (!is.null(B$cust$comp)) "Composition statistics",
         if (!is.null(B$cust$de_vol) && nrow(B$cust$de_vol)) "Gene expression changes between groups",
         if (!is.null(B$cust$cor_pb)) "Sample concordance",
@@ -306,25 +307,6 @@ nav <- paste0('<nav class="report-nav">',
   '<a href="#versions">Versions</a>',
   '</nav>')
 cat(top, nav)
-```
-
-```{r intro, results='asis'}
-cat(if (STATIC)
-  'Each UMAP comparison panel is a high-resolution static snapshot (live zoom and legend-toggling apply automatically to runs of 8 samples or fewer). Hover the violins and bar charts for values, and drag to zoom. '
-else
-  'Hover any plot for values, drag to zoom, and click a cell type in a legend to toggle it across every panel — that toggle <em>is</em> the depletion view. ')
-cat(sprintf('Source: <code>integrated_annotated.rds</code> (reduction <code>%s</code>) + the QC tables. No data is recomputed.',
-            htmltools::htmlEscape(B$umap_name)))
-# which reference labelled the cells: names come from the run, never from this template
-nm <- function(x) if (length(x) && !is.na(x[1]) && nzchar(x[1])) x[1] else "unrecorded"
-lab <- if (identical(B$label_source, "ref")) {
-  sprintf('a <b>frozen reference</b> model, <code>%s</code>, so the labels do not shift with the sample mix',
-          htmltools::htmlEscape(basename(nm(B$ref_model))))
-} else
-  sprintf('this run&rsquo;s own annotation (SingleR against <code>%s</code>, then marker curation), so the labels can shift when the sample mix changes',
-          htmltools::htmlEscape(nm(B$singler_ref)))
-cat(sprintf('<div class="read-line"><b>Cell-type labels</b> (%s): %s.</div>',
-            htmltools::htmlEscape(nm(B$species)), lab))
 ```
 
 # Overview
@@ -411,6 +393,23 @@ cat(sprintf('<details class="glossary" open><summary>What the columns mean</summ
 
 Pick a metric below, then choose which samples to compare with the chips. Every panel shares the
 integrated coordinate space, so a depleted population shows up as the same hole across samples.
+
+```{r intro, results='asis'}
+cat(if (STATIC)
+  'Each UMAP comparison panel is a high-resolution static snapshot (live zoom and legend-toggling apply automatically to runs of 8 samples or fewer). Hover the violins and bar charts for values, and drag to zoom.'
+else
+  'Hover any plot for values, drag to zoom, and click a cell type in a legend to toggle it across every panel — that toggle <em>is</em> the depletion view.')
+# which reference labelled the cells: names come from the run, never from this template
+nm <- function(x) if (length(x) && !is.na(x[1]) && nzchar(x[1])) x[1] else "unrecorded"
+lab <- if (identical(B$label_source, "ref")) {
+  sprintf('a <b>frozen reference</b> model, <code>%s</code>, so the labels do not shift with the sample mix',
+          htmltools::htmlEscape(basename(nm(B$ref_model))))
+} else
+  sprintf('this run&rsquo;s own annotation (SingleR against <code>%s</code>, then marker curation), so the labels can shift when the sample mix changes',
+          htmltools::htmlEscape(nm(B$singler_ref)))
+cat(sprintf('<div class="read-line"><b>Cell-type labels</b> (%s): %s.</div>',
+            htmltools::htmlEscape(nm(B$species)), lab))
+```
 
 ## UMAP
 
@@ -705,6 +704,23 @@ datatable(B$cust$eff, rownames = FALSE, class = "compact stripe hover", selectio
                          columnDefs = list(list(className = "dt-right", targets = seq_len(ncol(B$cust$eff) - 1))))) |>
   formatStyle(B$cust$eff_spec$marker_col, background = styleColorBar(c(0, 100), "#f5c6c6"),
               backgroundSize = "98% 70%", backgroundRepeat = "no-repeat", backgroundPosition = "center")
+```
+
+```{r cust_unexp, results='asis', eval=!is.null(B$cust$unexp)}
+U <- B$cust$unexp
+cat("# Unexpected cell types\n\n<p class='plot-desc'>Cell types outside the list expected for ",
+    "this sample type, at ", B$cust$unexp_thr, "% of a sample or more: carry-over, contamination ",
+    "or an off-target lineage. Expected: ", htmltools::htmlEscape(paste(B$cust$expected, collapse = ", ")),
+    ".</p>\n", sep = "")
+if (!nrow(U)) cat(sprintf('<div class="read-line" style="border-left-color:var(--good)">No unexpected cell type reaches %s%% in any sample.</div>\n',
+                          B$cust$unexp_thr))
+```
+
+```{r cust_unexp_tab, eval=!is.null(B$cust$unexp) && nrow(B$cust$unexp) > 0}
+datatable(B$cust$unexp, rownames = FALSE, class = "compact stripe hover", selection = "none",
+          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
+                         order = list(list(3, "desc")),
+                         columnDefs = list(list(className = "dt-right", targets = 2:3))))
 ```
 
 ```{r cust_comp_head, results='asis', eval=!is.null(B$cust$comp)}
@@ -1115,6 +1131,11 @@ cat("# Downloads\n\n",
 
 <p class="plot-desc">Versions of the single-cell analysis packages used to produce this run. Report-generation
 tooling (R Markdown, plotly, etc.) is intentionally excluded.</p>
+
+```{r source_line, results='asis'}
+cat(sprintf('<p class="plot-desc">Source: <code>integrated_annotated.rds</code> (reduction <code>%s</code>) + the QC tables. No data is recomputed.</p>\n',
+            htmltools::htmlEscape(B$umap_name)))
+```
 
 ```{r versions}
 tv <- B$tool_versions

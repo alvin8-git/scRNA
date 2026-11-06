@@ -26,10 +26,16 @@ the expected types and the reference name/model.
   from `TARGET_POPULATION` in the species overlay (title, label regex, marker + UMI floor,
   subtypes, ratios, description); only `config_species_cm.R` sets one. Regression guard T16.
   Open follow-up: a blood `TARGET_POPULATION` for sort purity.
-- [ ] **Frozen reference exists only for bat.** Human PBMC, human whole blood, cm and mouse get
-  run-relative de-novo labels. Build one per sample type with `build_reference.R`.
-- [ ] **Contamination is prose only.** Give each reference an expected-types list and flag any
-  unexpected type above a threshold.
+- [ ] **Frozen reference exists only for bat.** In progress 2026-11-06: built (not enabled) in
+  `Results/frozen_reference_{human,cm,mouse}/`. Agreement with each run's own labels — human PBMC
+  85.7% on a held-out sample, 82.4% on the non-SoupX run (RBC and HSPC 0%); mouse 94.3% held-out,
+  88.9% on the 24h/72h run (CD4 T 48-62%). cm test pending. Not the default label source anywhere
+  yet: enabling one replaces that run's labels in its reports. `build_reference.R` now maps curated
+  label variants ("Epicardial-like") to the panel they start with. No human whole-blood sample
+  exists in DNBelab_Data to build one from.
+- [x] **Contamination is prose only** — fixed 2026-11-06: each overlay sets `EXPECTED_TYPES`
+  (prefix match; PBMC default, bat blood, bat wing, cm, mouse) and the customer report lists any
+  other type at >= `UNEXPECTED_FLAG_PCT` (1%) of a sample, or says none was found.
 - [x] **Standard (non-customer) report has bat/PBMC text** — fixed 2026-11-06: "frozen reference"
   wording; the whole-blood table shows only when the reference has Neutrophil/RBC/Platelet labels;
   the lineage UMAP takes the lead gene of each `MARKERS` panel (was a hard-coded PBMC list in

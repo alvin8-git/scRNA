@@ -739,6 +739,24 @@ if (customer) {
     eff_spec <- list(title = tp$title, desc = tp$desc, marker_col = mcol)
   }
 
+  # (5b) unexpected types: labels outside the overlay's EXPECTED_TYPES (prefix match) at
+  # >= UNEXPECTED_FLAG_PCT % of a sample. A 0-row table is reported as "none found".
+  unexp <- NULL; thr <- if (exists("UNEXPECTED_FLAG_PCT")) UNEXPECTED_FLAG_PCT else 1
+  if (exists("EXPECTED_TYPES") && length(EXPECTED_TYPES)) {
+    u <- unique(ct)
+    bad <- u[!vapply(u, function(l) any(startsWith(l, c(EXPECTED_TYPES, "Unknown", "Unassigned"))), TRUE)]
+    unexp <- do.call(rbind, c(list(data.frame(Sample = character(0), `Cell type` = character(0),
+                                              Cells = integer(0), `% of sample` = numeric(0),
+                                              check.names = FALSE)),
+      lapply(samples_all, function(s) {
+        v <- ct[smp == s]; n <- table(factor(v[v %in% bad], levels = bad)); p <- 100 * n / length(v)
+        k <- p >= thr
+        if (!any(k)) return(NULL)
+        data.frame(Sample = s, `Cell type` = names(n)[k], Cells = as.integer(n[k]),
+                   `% of sample` = round(as.numeric(p[k]), 1), check.names = FALSE)
+      })))
+  }
+
   # (6) composition statistics (step 09): replicate-aware proportion test + per-sample CIs
   csv_or_null <- function(p) if (file.exists(p)) tryCatch(read.csv(p, stringsAsFactors = FALSE),
                                                            error = function(e) NULL) else NULL
@@ -798,7 +816,8 @@ if (customer) {
 
   cust <- list(qc_png = qc_png, qc_scale = qc_scale, cor_pb = cor_pb,
                evidence = evidence, rho = rho, n_panel = length(panel),
-               eff = eff, eff_spec = eff_spec, comp = comp, boot = boot, de_vol = de_vol, de_top = de_top,
+               eff = eff, eff_spec = eff_spec, unexp = unexp, unexp_thr = thr,
+               expected = if (exists("EXPECTED_TYPES")) EXPECTED_TYPES, comp = comp, boot = boot, de_vol = de_vol, de_top = de_top,
                de_desc = de_desc, xlsx = xlsx, contrasts = contrasts)
   msg("customer extras: qc panels=%d cor=%dx%d evidence=%s rho=%s",
       if (is.null(qc_png)) 0L else length(qc_png), nrow(cor_pb), ncol(cor_pb),

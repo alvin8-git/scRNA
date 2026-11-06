@@ -160,6 +160,12 @@ if (.species == "cm") {
   # contaminants). A per-cell override on a quarter of the data fights the curated map and
   # scatters labels; leave only the genuinely rare types the map could miss.
   CONTAMINATION_TYPES <- c("Endothelial", "Pericyte")
+  # Cardiac-lineage and mesoderm-derived states of the differentiation. Off-target arms
+  # (Hepatic/Endoderm, Amnion-like epithelium, Epithelial) are what the flag is for.
+  EXPECTED_TYPES <- c("Pluripotent", "Cardiac progenitor", "Cardiomyocyte", "Epicardial",
+                      "Proepicardial", "Fibroblast", "Myofibroblast", "Smooth Muscle",
+                      "Pericyte", "Endothelial", "Proliferating",
+                      "Mesenchyme")   # lateral plate mesoderm, the route to cardiac
 
   # ---- Clustering ------------------------------------------------------------
   # The source figures used RNA_snn_res.0.1, which yields only 5-6 clusters. That is
