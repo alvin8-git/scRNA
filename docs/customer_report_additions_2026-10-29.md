@@ -28,6 +28,7 @@ plotly/DT sections cost only their data.
 | Cluster markers | `export/cluster_markers.csv` | Dot plot only |
 | Pseudobulk CPM | `export/pseudobulk_cpm.csv.gz` | Correlation heatmap only |
 | Excel bundle of the above | `export/<run>_analysis.xlsx` (45 KB) | No |
+| Per-cell table (barcode, sample, cluster, labels, UMAP) | embedded in the HTML as `<run>_per_cell.csv.gz`; same columns as `export/per_cell_assignments.csv.gz` minus QC extras, UMAP rounded to 3 decimals | Yes (Downloads section) |
 | Trajectory, pathways, CellChat | `trajectory/`, `pathways/`, `cellchat/` | Empty in all four runs |
 
 ## Replicate check (decides what may carry a p-value)

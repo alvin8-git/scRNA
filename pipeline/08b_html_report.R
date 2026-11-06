@@ -814,11 +814,38 @@ if (customer) {
   xlsx <- if (length(xl)) list(name = basename(xl[1]), size = file.size(xl[1]),
                                uri = xfun::base64_uri(xl[1])) else NULL
 
+  # (9) per-cell table (barcode, sample, cluster, label, UMAP) as a gzip CSV download.
+  # UMAP is rounded to 3 decimals: plenty for plotting, ~25% smaller on 100k+ cells.
+  percell <- tryCatch({
+    pm <- obj@meta.data
+    keep <- as.character(if (!is.na(sample_col)) pm[[sample_col]] else pm$sample) %in% samples_all
+    pm <- pm[keep, , drop = FALSE]
+    pc <- data.frame(barcode = rownames(pm),
+                     sample  = as.character(pm[[sample_col]]),
+                     cluster = if ("seurat_clusters" %in% colnames(pm)) as.character(pm$seurat_clusters)
+                               else NA_character_,
+                     stringsAsFactors = FALSE)
+    pc$cell_type <- as.character(pm[[if (label_source == "ref" && "cell_type_ref" %in% colnames(pm)) "cell_type_ref"
+                                     else ct_col]])
+    if ("cell_type_ref" %in% colnames(pm) && !all(is.na(pm$cell_type_ref)))
+      pc$cell_type_ref <- as.character(pm$cell_type_ref)
+    if ("cell_type_denovo" %in% colnames(pm) && !all(is.na(pm$cell_type_denovo)))
+      pc$cell_type_denovo <- as.character(pm$cell_type_denovo)
+    pc$UMAP_1 <- round(emb[rownames(pm), "UMAP_1"], 3)
+    pc$UMAP_2 <- round(emb[rownames(pm), "UMAP_2"], 3)
+    if (all(is.na(pc$cluster))) pc$cluster <- NULL
+    tf <- tempfile(fileext = ".csv.gz")
+    gz <- gzfile(tf, "w", compression = 9); utils::write.csv(pc, gz, row.names = FALSE); close(gz)
+    list(name = paste0(run_name, "_per_cell.csv.gz"), size = file.size(tf), n = nrow(pc),
+         cols = colnames(pc), uri = xfun::base64_uri(tf))
+  }, error = function(e) { msg("per-cell table skipped: %s", conditionMessage(e)); NULL })
+  if (!is.null(percell)) msg("per-cell table: %d rows, %.1f MB gz", percell$n, percell$size / 1e6)
+
   cust <- list(qc_png = qc_png, qc_scale = qc_scale, cor_pb = cor_pb,
                evidence = evidence, rho = rho, n_panel = length(panel),
                eff = eff, eff_spec = eff_spec, unexp = unexp, unexp_thr = thr,
                expected = if (exists("EXPECTED_TYPES")) EXPECTED_TYPES, comp = comp, boot = boot, de_vol = de_vol, de_top = de_top,
-               de_desc = de_desc, xlsx = xlsx, contrasts = contrasts)
+               de_desc = de_desc, xlsx = xlsx, percell = percell, contrasts = contrasts)
   msg("customer extras: qc panels=%d cor=%dx%d evidence=%s rho=%s",
       if (is.null(qc_png)) 0L else length(qc_png), nrow(cor_pb), ncol(cor_pb),
       if (is.null(evidence)) "none" else paste0(nrow(evidence), " clusters"),

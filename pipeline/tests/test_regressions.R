@@ -197,6 +197,7 @@ if (file.exists(f) && any(grepl("marker_panel\\s*<-\\s*c\\(\"", .code_of(f))))
 if (file.exists(f) && any(grepl("\"(CD3D|TNNT2)\"", .code_of(f))))
   fails <- c(fails, "08b_html_report.R names CD3D/TNNT2 (use MARKERS / TARGET_POPULATION)")
 
+
 # Regression T17: Parse Biosciences (split-pipe) input. The loader must read count_matrix.mtx
 # (cells x genes, so transposed) and config/run_pipeline.sh must recognise DGE_filtered /
 # DGE_unfiltered for sample naming and the _raw/_filtered results tag.
@@ -209,6 +210,11 @@ if (file.exists(f) && !any(grepl("DGE_unfiltered", .code_of(f))))
 f <- file.path(.pipeline, "run_pipeline.sh")
 if (file.exists(f) && !any(grepl("DGE_unfiltered", readLines(f, warn = FALSE))))
   fails <- c(fails, "run_pipeline.sh no longer recognises Parse DGE_filtered/DGE_unfiltered")
+
+# Regression T18: the customer report embeds the per-cell table as a gzip CSV download.
+f <- file.path(.pipeline, "08b_html_report.R")
+if (file.exists(f) && !any(grepl("_per_cell.csv.gz", .code_of(f), fixed = TRUE)))
+  fails <- c(fails, "08b_html_report.R no longer embeds <run>_per_cell.csv.gz in the customer report")
 
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
