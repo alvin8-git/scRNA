@@ -2,6 +2,7 @@
 
 ## Pending
 
+- [x] **Per-cell table in the customer HTML** — done 2026-11-06: `08b --customer` embeds `<run>_per_cell.csv.gz` (barcode, sample, cluster, cell_type, cell_type_ref/denovo when present, UMAP_1/2) as a second base64 download in the Downloads section.
 - [x] **bat_wing species documentation** — done 2026-09-14: new `docs/howto-bat-wing.md` (T1/T2/T6
   worked example) cross-linked from `docs/howto-bat-whole-blood.md`. Earlier (2026-07-28): `docs/reference-config.md` now documents the overlay, including the `QC$max_features` 8000 / `QC$max_counts` 60000 widening and its cache-invalidation consequence. Still open: `docs/howto-bat-whole-blood.md` has **zero** `bat_wing` mentions. Add a section there (or a sibling `docs/howto-bat-wing.md`) covering the T1/T2/T6 run as the worked example.
 

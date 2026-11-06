@@ -303,7 +303,7 @@ nav <- paste0('<nav class="report-nav">',
   cust_links,
   stage_links, sample_links,
   '<div class="grouplabel">About</div>',
-  if (!is.null(B$cust$xlsx)) '<a href="#downloads">Downloads</a>' else '',
+  if (!is.null(B$cust$xlsx) || !is.null(B$cust$percell)) '<a href="#downloads">Downloads</a>' else '',
   '<a href="#versions">Versions</a>',
   '</nav>')
 cat(top, nav)
@@ -1117,14 +1117,24 @@ if (!isTRUE(B$lite) && !is.null(B$galleries)) {
 }
 ```
 
-```{r cust_xlsx, results='asis', eval=!is.null(B$cust$xlsx)}
+```{r cust_xlsx, results='asis', eval=!is.null(B$cust$xlsx) || !is.null(B$cust$percell)}
+cat("# Downloads\n\n")
 x <- B$cust$xlsx
-cat("# Downloads\n\n",
-    sprintf(paste0("<p class='plot-desc'><a href='%s' download='%s'><b>%s</b></a> (%s KB): every table ",
-                   "behind this report — run parameters, per-sample QC, ambient RNA, cell-type counts, ",
-                   "cluster evidence and markers — one sheet each, with a contents sheet. Opens in Excel ",
-                   "or LibreOffice; no internet connection needed.</p>\n"),
-            x$uri, htmltools::htmlEscape(x$name), htmltools::htmlEscape(x$name), round(x$size / 1024)), sep = "")
+if (!is.null(x)) {
+  cat(sprintf(paste0("<p class='plot-desc'><a href='%s' download='%s'><b>%s</b></a> (%s KB): every table ",
+                     "behind this report — run parameters, per-sample QC, ambient RNA, cell-type counts, ",
+                     "cluster evidence and markers — one sheet each, with a contents sheet. Opens in Excel ",
+                     "or LibreOffice; no internet connection needed.</p>\n"),
+              x$uri, htmltools::htmlEscape(x$name), htmltools::htmlEscape(x$name), round(x$size / 1024)))
+}
+pcx <- B$cust$percell
+if (!is.null(pcx)) {
+  cat(sprintf(paste0("<p class='plot-desc'><a href='%s' download='%s'><b>%s</b></a> (%s KB, gzip CSV): one row ",
+                     "per cell (%s cells) with columns <code>%s</code>. UMAP coordinates are rounded to 3 decimals. ",
+                     "Opens in R, Python or Excel after unzipping.</p>\n"),
+              pcx$uri, htmltools::htmlEscape(pcx$name), htmltools::htmlEscape(pcx$name), round(pcx$size / 1024),
+              format(pcx$n, big.mark = ","), htmltools::htmlEscape(paste(pcx$cols, collapse = ", "))))
+}
 ```
 
 # Versions {#versions}
