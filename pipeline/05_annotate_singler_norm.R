@@ -109,7 +109,7 @@ SINGLER_NORM <- c(
 
 # -----------------------------------------------------------------------------
 # split_generic_t(): optional replacement for the generic "T cells" -> "CD4 T"
-# collapse above (ANNOTATION$split_generic_t, default FALSE). Cells whose RAW
+# collapse above (ANNOTATION$split_generic_t, default TRUE since 2026-11-06). Cells whose RAW
 # SingleR label was MonacoImmune "T cells" / HPCA "T_cells" are assigned per cell:
 # CD8 T when mean(CD8A,CD8B) > thr and exceeds mean(CD4,IL7R), otherwise CD4 T
 # (same rule as build_reference.R step A). Human gene symbols; with no CD8A/CD8B

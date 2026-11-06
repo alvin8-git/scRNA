@@ -43,7 +43,10 @@ write_h5ad <- function(path, counts, obs, umap = NULL) {
         v <- as.character(v); lv <- sort(unique(v[!is.na(v)]))
         cg <- g$create_group(nm); enc(cg, "categorical", "0.2.0"); sattr(cg, "ordered", FALSE)
         strds(cg, "categories", lv)
-        cg$create_dataset("codes", robj = as.integer(match(v, lv) - 1L), dtype = hdf5r::h5types$H5T_NATIVE_INT8)
+        # AnnData marks a missing value with code -1; widen the integer type past 127 categories
+        codes <- match(v, lv) - 1L; codes[is.na(codes)] <- -1L
+        cg$create_dataset("codes", robj = as.integer(codes),
+                          dtype = if (length(lv) <= 127L) hdf5r::h5types$H5T_NATIVE_INT8 else hdf5r::h5types$H5T_NATIVE_INT32)
       }
     }
   }
