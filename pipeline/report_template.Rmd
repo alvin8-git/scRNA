@@ -378,7 +378,7 @@ defs <- c(
   "% retained"           = "Percentage of input GEM barcodes kept after QC and doublet removal. The low-QC tag on a sample card instead counts from barcodes that cleared the minimum-genes floor, so a permissive barcode caller does not flag a healthy sample.",
   "Median genes"         = "Median number of genes detected per cell (nFeature_RNA).",
   "Median UMI"           = "Median transcript (UMI) count per cell (nCount_RNA).",
-  "% MT (Median %MT)"    = "Median fraction of reads from mitochondrial genes per cell; high values flag stressed or dying cells.",
+  "% MT (Median %MT)"    = "Median fraction of reads from mitochondrial genes per cell; high values flag stressed or dying cells. A dash means not measured: the reference has no mitochondrial genes (as in the Parse split-pipe reference).",
   "Median %ribo"         = "Median fraction of reads from ribosomal genes per cell.",
   "Doublets (Doublet %)" = "Percentage of cells flagged as multiplets by scDblFinder and removed before integration.",
   "HVG"                  = sprintf("Highly Variable Genes: genes with vst standardized variance &gt; %s.", thr),

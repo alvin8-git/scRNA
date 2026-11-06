@@ -703,9 +703,14 @@ if (.species == "cm") {
       "20" = "Epicardial-like"             # n=347, D30 99; ITLN1 MGP BNC1 46 WT1 31 TBX18 28 (mesothelium)
     )
     CLUSTER_SUBCLUSTER_MAP <- list(
-      # 1_0 (28,643): 1,584 genes, D11-D30, every lineage marker at ambient level (cm UMI
-      # share 0.14 % vs 1.27 % in true CMs) — no identity; 1_1 (7,268): D0 64 POU5F1 65.
-      list(cluster = "1", resolution = 0.15, labels = c("0" = "Unknown", "1" = "Pluripotent")),
+      # Re-split 2026-11-06 at res 0.5 (was 0.15, 0 = Unknown / 1 = Pluripotent): 1_0/1_1 ambient
+      # blob (1,544-1,607 genes, every lineage marker at ambient level) — no identity;
+      # 1_2/1_3/1_4 POU5F1 SOX2 NANOG ESRG 55-66 % (1_3/1_4 hold 44 % non-D0 cells: residual
+      # undifferentiated); 1_5 (430, D30 81) COL6A3 CDH11 PDGFRB ACTA2 TGFBI.
+      # Evidence: /data/alvin/tmp/gap_annot/cm_unknown.md.
+      list(cluster = "1", resolution = 0.5,
+           labels = c("0" = "Unknown", "1" = "Unknown", "2" = "Pluripotent", "3" = "Pluripotent",
+                      "4" = "Pluripotent", "5" = "Myofibroblast")),
       # 3_2/3_4 D0 97-99 POU5F1 86-90; 3_0/3_1/3_3 GATA4 + FOXA2 39-73 HHEX endoderm;
       # 3_5 (444) GATA4 96 TBX5 21 SLC8A1 66 MYH6 47.
       list(cluster = "3", resolution = 0.15,
@@ -752,11 +757,12 @@ if (.species == "cm") {
       "14" = "Hepatic/Endoderm"            # FOXA2 96 HHEX 77 FOXA3 TBX3 87; D11 99
     )
     CLUSTER_SUBCLUSTER_MAP <- list(
-      # 2_0/2_1 (16,093): D11, 1,345-1,540 genes; MYL7/TTN/MYH6 no higher than the D11
-      # endoderm clusters (ambient), TBX5 5 NKX2-5 4 — no identity [possibly immature CMs,
-      # needs SoupX]; 2_2 (683) D0 96 POU5F1 79.
-      list(cluster = "2", resolution = 0.15,
-           labels = c("0" = "Unknown", "1" = "Unknown", "2" = "Pluripotent")),
+      # Re-split 2026-11-06 at res 0.3 (was 0.15): 2_0/2_1 ambient blob (D11 84-89 %,
+      # 1,341-1,494 genes) — no identity [possibly immature CMs, needs SoupX]; 2_2 D0 96
+      # POU5F1 79; 2_3 (511, D11 95) RBM20 TBX20 ACTN2 CMYA5 CHRM2, 29 % with >= 6 sarcomere
+      # genes [uncertain: progenitor vs early cardiomyocyte]. Evidence: /data/alvin/tmp/gap_annot/cm_unknown.md.
+      list(cluster = "2", resolution = 0.3,
+           labels = c("0" = "Unknown", "1" = "Unknown", "2" = "Pluripotent", "3" = "Cardiac progenitor")),
       # 5_0/5_1/5_3/5_5 D20/D30 HAND1 81-96 (myofibroblast); 5_2 (1,733) D11 44 GATA4 85
       # TBX5 19 ISL1 17 NKX2-5 11; 5_4 (581) D11 96 ACTC1 90 TTN 92 MYH6 78 TNNT2 68
       # NKX2-5 63 ISL1 67, 65 % of cells with >= 6 sarcomere genes (early cardiomyocytes).

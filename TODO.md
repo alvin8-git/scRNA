@@ -10,6 +10,8 @@
 
 ### Customer report: cell-type agnostic (2026-11-05)
 
+- [x] **Decisions applied 2026-11-06** (user): `ANNOTATION$split_generic_t` now defaults to TRUE (generic SingleR T cells split CD8/CD4 per cell; impact in /data/alvin/tmp/gap_annot/cd4_split.md; runs annotated earlier need 05-07 re-run); ASF5 cluster 1 and CLMC cluster 2 re-split with the relabels proposed in /data/alvin/tmp/gap_annot/cm_unknown.md; bat_wing gains `Smooth Muscle` and `Epithelial` MARKERS panels so the wing frozen reference keeps those cells. Parse samples show %MT as "—" (reference has no MT genes).
+
 The customer report (`08b --customer`) must carry no cell-type names in code. Each sample type
 supplies its own reference and model; the report reads only that. Target shape: one report profile
 per species overlay (`config_species_*.R`) holding the marker panel, the target-population spec,

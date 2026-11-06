@@ -296,6 +296,11 @@ summary$Cells           <- as.integer(table(cells$sample)[summary$Sample])
 summary$Median_genes    <- g(qc_sum, "Sample", "Median_nFeature")
 summary$Median_UMI      <- g(qc_sum, "Sample", "Median_nCount")
 summary$Median_pct_MT   <- g(qc_sum, "Sample", "Median_pct_mt")
+# %MT exactly 0 in every cell means the reference has no mitochondrial genes (the Parse
+# split-pipe hg38 reference ships none), so it was not measured: show "—", not a clean 0%.
+mt_absent <- vapply(summary$Sample, function(s) {
+  v <- cells$percent.mt[cells$sample == s]; length(v) > 0 && all(is.na(v) | v == 0) }, logical(1))
+summary$Median_pct_MT[mt_absent] <- NA
 summary$Pct_retained    <- g(fate, "Sample", "Pct_retained")
 # Retention among barcodes that passed the load gate (>= QC$min_features genes).
 # Retention is NOT a quality criterion. A permissive caller's empty droplets fail the

@@ -198,12 +198,13 @@ if (nzchar(Sys.getenv("SCRNA_CLUSTER_ALGORITHM")))
   CLUSTER$algorithm <- as.integer(Sys.getenv("SCRNA_CLUSTER_ALGORITHM"))
 
 # --- SingleR label normalisation options ---
-# split_generic_t: FALSE keeps the legacy mapping of MonacoImmune "T cells" / HPCA "T_cells"
-# to "CD4 T" (labels of past runs unchanged). TRUE assigns those cells to CD8 T vs CD4 T per
-# cell by CD8A/CD8B vs CD4/IL7R (see split_generic_t() in 05_annotate_singler_norm.R).
-# Changing it changes cell_type, so re-run 05-07. Not part of the 01-03 cache key.
+# split_generic_t: TRUE (default since 2026-11-06) assigns MonacoImmune "T cells" / HPCA
+# "T_cells" to CD8 T vs CD4 T per cell by CD8A/CD8B vs CD4/IL7R (see split_generic_t() in
+# 05_annotate_singler_norm.R). FALSE restores the legacy mapping of all generic T to "CD4 T",
+# which inflated CD4 T and flipped CD8 clusters (impact: /data/alvin/tmp/gap_annot/cd4_split.md).
+# Runs annotated before 2026-11-06 used FALSE; re-run 05-07 to update them. Not in the 01-03 cache key.
 ANNOTATION <- list(
-  split_generic_t = FALSE,
+  split_generic_t = TRUE,
   cd8_thr         = 0.5
 )
 

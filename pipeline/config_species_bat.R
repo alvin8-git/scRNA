@@ -208,6 +208,11 @@ if (.species == "bat") {
   MARKERS$Pericyte           <- c("PDGFRB", "RGS5", "CSPG4", "NOTCH3")
   MARKERS$Macrophage         <- c("CD68", "CSF1R", "MRC1", "CD163")
   MARKERS$Melanocyte         <- c("MLANA", "DCT", "TYRP1", "MITF")
+  # Named exactly as the curated wing labels so build_reference.R can validate those cells;
+  # without them every Smooth Muscle / Epithelial cell was dropped from the wing reference
+  # (2026-11-06). All genes present in the bat annotation.
+  MARKERS$`Smooth Muscle`    <- c("MYH11", "DES", "ACTG2", "LMOD1", "CNN1")
+  MARKERS$Epithelial         <- c("KRT8", "KRT18", "KRT19", "CLDN4", "CDH1")
   MARKERS$FCGR3A_mono        <- NULL
   MARKERS$Neutrophil         <- c("S100A8", "S100A9", "FCGR3B", "CSF3R")
   ALL_MARKERS <- unique(unlist(MARKERS[!sapply(MARKERS, is.null)]))
