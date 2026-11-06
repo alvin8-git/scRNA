@@ -38,7 +38,7 @@ suppressPackageStartupMessages({
 
 # ---- args -------------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 1) stop("usage: build_reference.R <ref_run_dir> [--holdout=A,B] [--out=DIR] [--min-cells=N] [--validate-thr=X] [--cd8-thr=X] [--label-col=COL]")
+if (length(args) < 1) stop("usage: build_reference.R <ref_run_dir> [--holdout=A,B] [--out=DIR] [--min-cells=N] [--validate-thr=X] [--cd8-thr=X] [--label-col=COL] [--exclude-labels=A,B] [--drop-cc-genes]")
 RUN_DIR <- args[1]
 getflag <- function(k, d) { m <- grep(paste0("^--", k, "="), args, value = TRUE)
   if (length(m)) sub(paste0("^--", k, "="), "", m[1]) else d }
@@ -48,6 +48,12 @@ MIN_CELLS    <- as.integer(getflag("min-cells", "20"))
 VALIDATE_THR <- as.numeric(getflag("validate-thr", "0.25"))
 CD8_THR      <- as.numeric(getflag("cd8-thr", "0.5"))
 LABEL_COL    <- getflag("label-col", "cell_type")
+# State/artefact labels are not lineages a classifier can learn ("Proliferating" absorbs
+# cycling cells of every lineage; "Fibroblast (low-depth)" is a depth artefact), so they can be
+# left out of training; --drop-cc-genes removes Seurat's cell-cycle genes from the features so
+# cycling cells classify by lineage. Both default off (cm rebuild 2026-11-06 uses them).
+EXCLUDE      <- Filter(nzchar, trimws(strsplit(getflag("exclude-labels", ""), ",")[[1]]))
+DROP_CC      <- "--drop-cc-genes" %in% args
 SPECIES      <- Sys.getenv("SCRNA_SPECIES", "human")
 
 stopifnot(dir.exists(RUN_DIR))
@@ -144,6 +150,11 @@ for (L in unique(lab)) {
 }
 is_anchor <- as.character(md[[SAMPLE_COL]]) %in% HOLDOUT
 keep <- keep & !is_anchor
+if (length(EXCLUDE)) {
+  message("  excluded from training (--exclude-labels): ", sum(keep & lab %in% EXCLUDE), " cells of ",
+          paste(EXCLUDE, collapse = ", "))
+  keep <- keep & !(lab %in% EXCLUDE)
+}
 message("  (B) marker-validated cells (>= ", VALIDATE_THR, ", anchors excluded): ", sum(keep))
 
 # ---- (C) drop tiny labels ----------------------------------------------------
@@ -169,6 +180,11 @@ print(val_tab[, c("label","n","mean_marker","median_marker")], row.names = FALSE
 
 # ---- train ------------------------------------------------------------------
 ref_mat <- d[, keep, drop = FALSE]
+if (DROP_CC) {
+  cc <- unique(unlist(Seurat::cc.genes.updated.2019))
+  ref_mat <- ref_mat[!toupper(rownames(ref_mat)) %in% cc, , drop = FALSE]
+  message("  --drop-cc-genes: removed ", sum(toupper(rownames(d)) %in% cc), " cell-cycle genes from the features")
+}
 message("\n[", format(Sys.time(), "%H:%M:%S"), "] trainSingleR (",
         nrow(ref_mat), " genes x ", ncol(ref_mat), " cells)...")
 trained <- trainSingleR(ref = ref_mat, labels = ref_labels, de.method = "classic")
@@ -181,7 +197,7 @@ if (any(is_anchor)) {
   for (s in HOLDOUT) {
     sel <- is_anchor & as.character(md[[SAMPLE_COL]]) == s
     if (!any(sel)) { message("  ", s, ": not present"); next }
-    p <- classifySingleR(test = d[, sel, drop = FALSE], trained = trained, fine.tune = TRUE)
+    p <- classifySingleR(test = d[rownames(ref_mat), sel, drop = FALSE], trained = trained, fine.tune = TRUE)
     prop <- sort(round(100 * table(p$pruned.labels, useNA = "no") / sum(!is.na(p$pruned.labels)), 2),
                  decreasing = TRUE)
     baseline[[s]] <- list(n = sum(sel),

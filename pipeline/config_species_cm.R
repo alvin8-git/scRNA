@@ -142,6 +142,10 @@ if (.species == "cm") {
     # FOXA2 peaks at D11 (23.4%). Detection that high is either a large endoderm
     # population or heavy ambient RNA from one — see the caveat at the foot of this file.
     `Hepatic/Endoderm` = c("AFP", "FOXA2", "SOX17", "TTR", "APOA1"),
+    # Two curated H1 labels had no panel, so build_reference.R dropped them from the cm frozen
+    # reference and their cells fell into Proliferating / Cardiac progenitor (2026-11-06).
+    `Mesenchyme (lateral plate)` = c("HAND1", "FOXF1", "BMP4", "PRRX1", "MSX1"),
+    `Amnion-like epithelium` = c("GABRP", "VTCN1", "ISL1", "TFAP2A", "KRT7"),
     Proliferating = c("MKI67", "TOP2A", "CCNB1")
   )
   # Gate the integrated FindAllMarkers pass the same way the other overlays do.

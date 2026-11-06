@@ -74,8 +74,14 @@ past runs.
   monocyte to ~18% neutrophil + ~15% monocyte, matching the raw signal (S100A8 in 99.9% of
   barcodes). Same decision as above. Related: [ES17 was the inverse case](docs/bat_neutrophil_literature.md).
 - [x] **cm ASF5/CLMC `Unknown` (26.6% / 15.5%)** — investigated 2026-11-06: curated, ambient/low-depth blob;
-  only ~1,430 (ASF5) and 511 (CLMC) cells are relabellable. Findings and proposed maps (not applied) in
-  `/data/alvin/tmp/gap_annot/cm_unknown.md`. Applied 2026-11-06 (user sign-off) in `config_species_cm.R`.
+  only ~1,430 (ASF5) and 511 (CLMC) cells are relabellable. Findings in
+  `/data/alvin/tmp/gap_annot/cm_unknown.md`; the subcluster relabels were applied 2026-11-06 (user sign-off)
+  in `config_species_cm.R`.
+- [ ] **cm frozen reference still below the bar** — v4 (2026-11-06, `Results/frozen_reference_cm_v4`, built with
+  `--exclude-labels=Proliferating,Fibroblast (low-depth),Unknown --drop-cc-genes` plus Mesenchyme and Amnion-like
+  panels): held-out H1D11_2 57.1% per cell, 68.7% on lineage labels; 72.6% lineage-only across all cells. Human and
+  mouse references reach 85-94%. Weakest: Myofibroblast (23% called Mesenchyme), Amnion-like (19% Epicardial-like),
+  Cardiac progenitor (15% Mesenchyme). Not wired into cm runs.
 - [x] **`08b_html_report.R` hard-copies config values** — fixed 2026-09-14: 08b now sources
   `config.R` (pinned to the run dir via `SCRNA_RESULTS_DIR`) and uses `CELLTYPE_COLORS` / `QC`
   directly; regression guard T9. `build_report.sh` on a non-human run needs `SCRNA_SPECIES` set
