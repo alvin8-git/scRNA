@@ -92,11 +92,12 @@ else
 fi
 
 # Compute results dir name (mirrors config.R logic) for LOG_DIR
-# Derives sample name from path: uses parent of filter_matrix, else basename
+# Derives sample name from path: uses parent of filter_matrix / DGE_filtered (Parse), else basename
 _sample_name() {
   local bn; bn=$(basename "$1")
   if [[ "$bn" == "filter_matrix" || "$bn" == "filtered_feature_bc_matrix" ||
-        "$bn" == "raw_matrix"    || "$bn" == "raw_feature_bc_matrix" ]]; then
+        "$bn" == "raw_matrix"    || "$bn" == "raw_feature_bc_matrix" ||
+        "$bn" == "DGE_filtered"  || "$bn" == "DGE_unfiltered" ]]; then
     basename "$(dirname "$1")"
   else
     echo "$bn"
@@ -104,7 +105,7 @@ _sample_name() {
 }
 _matrix_tag() {
   local bn; bn=$(basename "$1")
-  if [[ "$bn" == "raw_matrix" || "$bn" == "raw_feature_bc_matrix" ]]; then
+  if [[ "$bn" == "raw_matrix" || "$bn" == "raw_feature_bc_matrix" || "$bn" == "DGE_unfiltered" ]]; then
     echo "raw"
   else
     echo "filtered"

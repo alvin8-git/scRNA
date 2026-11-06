@@ -25,10 +25,31 @@ suppressPackageStartupMessages({
 # FUNCTIONS
 # =============================================================================
 
+# Parse Biosciences split-pipe DGE folder (DGE_filtered/ or DGE_unfiltered/):
+# count_matrix.mtx is cells x genes (transpose of 10x); all_genes.csv has gene_id,
+# gene_name, genome; cell_metadata.csv has bc_wells as the cell id. Returns genes x
+# cells with unique gene_name rownames, i.e. what Read10X(unique.features=TRUE) gives.
+read_parse_dge <- function(data_path) {
+  genes <- read.csv(file.path(data_path, "all_genes.csv"), stringsAsFactors = FALSE)
+  meta  <- read.csv(file.path(data_path, "cell_metadata.csv"), stringsAsFactors = FALSE)
+  m <- Matrix::readMM(file.path(data_path, "count_matrix.mtx"))
+  if (nrow(m) != nrow(meta) || ncol(m) != nrow(genes))
+    stop("split-pipe matrix is ", nrow(m), " x ", ncol(m), " but cell_metadata has ",
+         nrow(meta), " rows and all_genes has ", nrow(genes), " (expected cells x genes)")
+  m <- as(Matrix::t(m), "CsparseMatrix")
+  rownames(m) <- make.unique(as.character(genes$gene_name))
+  colnames(m) <- as.character(meta$bc_wells)
+  m
+}
+
 load_sample <- function(sample_name, data_path) {
   message("Loading: ", sample_name, " from ", data_path)
-  counts <- Read10X(data.dir = data_path, gene.column = 2,
-                    cell.column = 1, unique.features = TRUE)
+  if (file.exists(file.path(data_path, "count_matrix.mtx"))) {
+    counts <- read_parse_dge(data_path)
+  } else {
+    counts <- Read10X(data.dir = data_path, gene.column = 2,
+                      cell.column = 1, unique.features = TRUE)
+  }
   if (is.list(counts)) {
     if (!"Gene Expression" %in% names(counts))
       stop("'Gene Expression' modality not found in: ", paste(names(counts), collapse = ", "))
