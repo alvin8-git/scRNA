@@ -38,7 +38,9 @@ SCRNA_SPECIES=bat Rscript pipeline/build_reference.R \
 estimate. Other flags: `--out=DIR` (output dir), `--min-cells=N` (drop labels with fewer than N
 cells, default 20), `--validate-thr=X` (marker-validation cutoff, default 0.25),
 `--cd8-thr=X` (CD8 recovery threshold, default 0.5), `--label-col=COL` (which metadata column to
-train on).
+train on), `--exclude-labels=A,B` (leave labels that are states or artefacts rather than lineages
+out of training, e.g. `Proliferating,Fibroblast (low-depth),Unknown` for cm), `--drop-cc-genes`
+(remove Seurat's cell-cycle genes from the model so cycling cells are classified by lineage).
 
 This writes a model bundle plus audit files under `Results/frozen_reference/`:
 

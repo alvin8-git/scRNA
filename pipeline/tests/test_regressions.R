@@ -225,6 +225,12 @@ if (file.exists(f)) {
     fails <- c(fails, "08f_customer_export.R object export lost its opt-out or tryCatch wrapper")
 }
 
+# Regression T20: h5ad strings must be UTF-8. hdf5r defaults to ASCII, which anndata reads back
+# as bytes (b'CD4 T') in obs, var and the index. Verified with anndata 0.11.4 on 2026-11-06.
+f <- file.path(.pipeline, "object_export.R")
+if (file.exists(f) && !grepl("H5T_CSET_UTF8", paste(readLines(f), collapse = "\n")))
+  fails <- c(fails, "object_export.R h5ad string type is not UTF-8 (anndata reads bytes)")
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

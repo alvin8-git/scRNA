@@ -31,13 +31,13 @@ the expected types and the reference name/model.
   from `TARGET_POPULATION` in the species overlay (title, label regex, marker + UMI floor,
   subtypes, ratios, description); only `config_species_cm.R` sets one. Regression guard T16.
   Open follow-up: a blood `TARGET_POPULATION` for sort purity.
-- [ ] **Frozen reference exists only for bat.** In progress 2026-11-06: built (not enabled) in
-  `Results/frozen_reference_{human,cm,mouse}/`. Agreement with each run's own labels — human PBMC
+- [ ] **Frozen references beyond bat blood: built, none enabled.** As of 2026-11-06, in
+  `Results/frozen_reference_{human,mouse,cm_v4}/`. Agreement with each run's own labels — human PBMC
   85.7% on a held-out sample, 82.4% on the non-SoupX run (RBC and HSPC 0%); mouse 94.3% held-out,
-  88.9% on the 24h/72h run (CD4 T 48-62%). cm test pending. Not the default label source anywhere
-  yet: enabling one replaces that run's labels in its reports. `build_reference.R` now maps curated
-  label variants ("Epicardial-like") to the panel they start with. No human whole-blood sample
-  exists in DNBelab_Data to build one from.
+  88.9% on the 24h/72h run (CD4 T 48-62%); cm below the bar (item below). Remaining decision: enable
+  human and mouse per run (enabling one replaces that run's labels in its reports). Not viable: bat
+  wing (3 heterogeneous samples, 30-40% held-out agreement; stays on its curated cluster map) and
+  human whole blood (no sample in DNBelab_Data).
 - [x] **Contamination is prose only** — fixed 2026-11-06: each overlay sets `EXPECTED_TYPES`
   (prefix match; PBMC default, bat blood, bat wing, cm, mouse) and the customer report lists any
   other type at >= `UNEXPECTED_FLAG_PCT` (1%) of a sample, or says none was found.
@@ -48,8 +48,9 @@ the expected types and the reference name/model.
 - [x] **Parse Biosciences input** (2026-11-06). `01_load_qc.R` reads split-pipe `DGE_filtered/`
   (`count_matrix.mtx` cells × genes is transposed, `gene_name` made unique, `bc_wells` as cell ids);
   `DGE_unfiltered/` is the raw layout (`_raw` results tag); `config.R` / `run_pipeline.sh` name the
-  sample after the folder above `DGE_*`. Tested on a synthetic fixture only (no real split-pipe
-  output was readable); `soupx_adjust.R` still looks only for 10x/DNBelab folders.
+  sample after the folder above `DGE_*`. Tested on real split-pipe output (WTv3 sample A1: 8,573
+  cells, 7,191 after QC); the hg38 Parse reference has no MT genes, so the report shows %MT as a dash.
+  `soupx_adjust.R` still looks only for 10x/DNBelab folders.
 
 ### Open bugs and decisions (2026-07-30)
 
@@ -57,7 +58,7 @@ Surfaced by the 8-sample bat run, the T3/T4/T5 marker check, and the graphify kn
 build. The first two need a decision on fix shape before any code changes — both alter labels on
 past runs.
 
-- [ ] **`"T cells" → "CD4 T"` in `05_annotate_singler_norm.R`** — MonacoImmune's generic `"T cells"`
+- [x] **`"T cells" → "CD4 T"` in `05_annotate_singler_norm.R`** — MonacoImmune's generic `"T cells"`
   catch-all (and HPCA's `"T_cells"`) both map to `CD4 T`. In the T3/T4/T5 run raw `label.main` gave
   `"T cells"` 10,384 / `CD8+ T cells` 8,654 / `CD4+ T cells` 6,963, so CD4 T inflates to 17,347 vs
   CD8 T 8,652 (~14,000 cells affected); cluster-majority voting then flips whole CD8 clusters to

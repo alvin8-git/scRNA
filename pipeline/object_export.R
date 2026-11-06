@@ -8,7 +8,8 @@ OBJ_META <- c("orig.ident", "sample", "nCount_RNA", "nFeature_RNA", "percent.mt"
 
 write_h5ad <- function(path, counts, obs, umap = NULL) {
   stopifnot(requireNamespace("hdf5r", quietly = TRUE), inherits(counts, "dgCMatrix"))
-  str_t <- hdf5r::H5T_STRING$new(size = Inf)
+  # UTF-8 variable-length strings: with hdf5r's default ASCII charset h5py hands anndata bytes (b'A')
+  str_t <- hdf5r::H5T_STRING$new(size = Inf)$set_cset(hdf5r::h5const$H5T_CSET_UTF8)
   # scalar string / bool attributes: AnnData readers expect a scalar dataspace,
   # while hdf5r's `h5attr<-` writes a length-1 array
   sattr <- function(h, nm, v) {
