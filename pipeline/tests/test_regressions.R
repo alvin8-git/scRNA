@@ -197,6 +197,15 @@ if (file.exists(f) && any(grepl("marker_panel\\s*<-\\s*c\\(\"", .code_of(f))))
 if (file.exists(f) && any(grepl("\"(CD3D|TNNT2)\"", .code_of(f))))
   fails <- c(fails, "08b_html_report.R names CD3D/TNNT2 (use MARKERS / TARGET_POPULATION)")
 
+# Regression T17: the 08f object export (slim .rds + .h5ad) is additive and costly (xz), so it
+# must stay opt-out-able and wrapped so a failure never loses the CSV/xlsx export.
+f <- file.path(.pipeline, "08f_customer_export.R")
+if (file.exists(f)) {
+  src <- paste(readLines(f), collapse = "\n")
+  if (!grepl("SCRNA_NO_OBJECT_EXPORT", src) || !grepl("tryCatch\\(\\{\\s*source\\(", src))
+    fails <- c(fails, "08f_customer_export.R object export lost its opt-out or tryCatch wrapper")
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

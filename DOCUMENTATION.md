@@ -558,3 +558,10 @@ library(Seurat)
 seu <- readRDS("Results/results_H1-H2_filtered/integrated/integrated_annotated.rds")
 DimPlot(seu, group.by = "cell_type")
 ```
+
+## Customer export objects (08f)
+
+`08f_customer_export.R` writes `export/` (per-cell CSV, pseudobulk CPM, derived tables) and, as a supplement
+to the HTML report, a slim Seurat `<run>_seurat_slim.rds` (xz) and an AnnData `<run>.h5ad`
+(`pipeline/object_export.R`). Opt out with `SCRNA_NO_OBJECT_EXPORT=1` or `--no-object`; redirect the folder
+with `SCRNA_EXPORT_DIR`. Details: `docs/customer_report_additions_2026-10-29.md`.

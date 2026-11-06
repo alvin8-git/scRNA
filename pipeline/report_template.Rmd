@@ -1123,7 +1123,7 @@ cat("# Downloads\n\n",
     sprintf(paste0("<p class='plot-desc'><a href='%s' download='%s'><b>%s</b></a> (%s KB): every table ",
                    "behind this report — run parameters, per-sample QC, ambient RNA, cell-type counts, ",
                    "cluster evidence and markers — one sheet each, with a contents sheet. Opens in Excel ",
-                   "or LibreOffice; no internet connection needed.</p>\n"),
+                   "or LibreOffice; no internet connection needed. The R object (Seurat .rds, plus .h5ad for Python) is too large to embed and is supplied separately.</p>\n"),
             x$uri, htmltools::htmlEscape(x$name), htmltools::htmlEscape(x$name), round(x$size / 1024)), sep = "")
 ```
 
