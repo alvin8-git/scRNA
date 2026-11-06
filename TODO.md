@@ -62,11 +62,18 @@ past runs.
   CD4. **Affects every bat and human run, not just this dataset.** Two options: fix the generic
   label (needs a new `CELLTYPE_COLORS` entry, changes past results, re-run 05–07) or a
   run-scoped `CLUSTER_CELLTYPE_MAP`. Decision pending.
+  **2026-11-06:** flag-gated fix implemented, default off: `ANNOTATION$split_generic_t` in `config.R`
+  (per-cell CD8A/CD8B vs CD4/IL7R, `split_generic_t()` in `05_annotate_singler_norm.R`). Measured impact on
+  PBMC5K (3,589 of 16,432 generic T become CD8) and ES08 bat (6,636 of 11,194) in
+  `/data/alvin/tmp/gap_annot/cd4_split.md`. Turning it on changes past labels; re-run 05-07.
 - [ ] **SingleR under-calls bat neutrophils** — T3/T4/T5 cluster 11 (1,511 cells, 92% T5) scores
   S100A8 1063 / S100A9 381 / LYZ 70 with CSF1R 0.4 / MRC1 0.0 / VCAN 0.1 — a neutrophil labelled
   `CD14+ Mono`. SingleR called only 164 neutrophils run-wide. Reassignment moves T5 from 32.9%
   monocyte to ~18% neutrophil + ~15% monocyte, matching the raw signal (S100A8 in 99.9% of
   barcodes). Same decision as above. Related: [ES17 was the inverse case](docs/bat_neutrophil_literature.md).
+- [ ] **cm ASF5/CLMC `Unknown` (26.6% / 15.5%)** — investigated 2026-11-06: curated, ambient/low-depth blob;
+  only ~1,430 (ASF5) and 511 (CLMC) cells are relabellable. Findings and proposed maps (not applied) in
+  `/data/alvin/tmp/gap_annot/cm_unknown.md`. Awaiting sign-off.
 - [x] **`08b_html_report.R` hard-copies config values** — fixed 2026-09-14: 08b now sources
   `config.R` (pinned to the run dir via `SCRNA_RESULTS_DIR`) and uses `CELLTYPE_COLORS` / `QC`
   directly; regression guard T9. `build_report.sh` on a non-human run needs `SCRNA_SPECIES` set

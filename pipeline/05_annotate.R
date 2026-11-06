@@ -88,8 +88,16 @@ merged$singler_label_clean <- ifelse(is.na(merged$singler_pruned),
 
 # Normalise raw SingleR labels to match CELLTYPE_COLORS canonical names
 source(file.path(PIPELINE_DIR, "05_annotate_singler_norm.R"))  # SINGLER_NORM lookup (extracted)
+generic_t <- merged$singler_label_clean %in% c("T cells", "T_cells")  # raw generic T, before the CD4 collapse
 idx <- merged$singler_label_clean %in% names(SINGLER_NORM)
 merged$singler_label_clean[idx] <- SINGLER_NORM[merged$singler_label_clean[idx]]
+if (isTRUE(ANNOTATION$split_generic_t)) {
+  merged$singler_label_clean <- split_generic_t(
+    merged$singler_label_clean, generic_t,
+    GetAssayData(merged, assay = "RNA", layer = "data"), ANNOTATION$cd8_thr)
+  message("  split_generic_t: ", sum(generic_t), " generic T cells -> CD8 T: ",
+          sum(generic_t & merged$singler_label_clean == "CD8 T"))
+}
 
 
 # SingleR score heatmap (base R via pheatmap  -  save file, include in report)
