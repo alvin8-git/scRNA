@@ -15,7 +15,14 @@
 # blood, cardiac, bat blood, bat wing). Nothing is hardcoded to a species: the
 # marker panel comes from config, labels from the object.
 #
-# Usage: Rscript pipeline/08f_customer_export.R <run_dir>
+# Also writes the analysis object as a SUPPLEMENT to the HTML report (too large to
+# embed or email): <run>_seurat_slim.rds (counts + UMAP + labels, xz) and
+# <run>.h5ad (AnnData, written by hand with hdf5r; X = raw counts, CSR).
+# xz is ~8x slower than gzip, so on large runs this costs minutes: skip with
+# SCRNA_NO_OBJECT_EXPORT=1 or --no-object.
+#
+# Usage: Rscript pipeline/08f_customer_export.R <run_dir> [--no-object]
+# Env:   SCRNA_EXPORT_DIR  write export/ here instead of <run_dir>/export
 # =============================================================================
 .pipeline_dir <- local({
   f <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
@@ -26,14 +33,16 @@
   }
 })
 args    <- commandArgs(trailingOnly = TRUE)
-run_dir <- if (length(args)) args[1] else stop("usage: 08f_customer_export.R <run_dir>")
+pos     <- args[!startsWith(args, "--")]
+run_dir <- if (length(pos)) pos[1] else stop("usage: 08f_customer_export.R <run_dir> [--no-object]")
+no_obj  <- "--no-object" %in% args || nzchar(Sys.getenv("SCRNA_NO_OBJECT_EXPORT"))
 Sys.setenv(SCRNA_RESULTS_DIR = run_dir)
 source(file.path(.pipeline_dir, "config.R"))
 suppressPackageStartupMessages({ library(Seurat); library(Matrix) })
 
 msg <- function(fmt, ...) message(sprintf(paste0("[08f] ", fmt), ...))
 rp  <- function(...) file.path(run_dir, ...)
-exp_dir <- rp("export"); dir.create(exp_dir, showWarnings = FALSE, recursive = TRUE)
+exp_dir <- Sys.getenv("SCRNA_EXPORT_DIR", rp("export")); dir.create(exp_dir, showWarnings = FALSE, recursive = TRUE)
 csv <- function(p) if (file.exists(p)) tryCatch(read.csv(p, stringsAsFactors = FALSE),
                                                 error = function(e) NULL) else NULL
 
@@ -224,6 +233,16 @@ for (nm in names(sheets)) {
   write.csv(sheets[[nm]], f, row.names = FALSE)
 }
 msg("wrote %d derived tables as CSV", length(sheets))
+# ---- 4. analysis object supplement (never fails the export) -----------------
+if (no_obj) {
+  msg("object export skipped (--no-object / SCRNA_NO_OBJECT_EXPORT)")
+} else {
+  tryCatch({
+    source(file.path(.pipeline_dir, "object_export.R"))
+    export_objects(obj, md, lab, exp_dir, basename(run_dir), msg)
+  }, error = function(e) msg("object export skipped: %s", conditionMessage(e)))
+}
+
 saveRDS(list(sheets = sheets, run = basename(run_dir), exp_dir = exp_dir),
         file.path(tempdir(), "08f_sheets.rds"))
 cat(sprintf("EXPORT_TABLES_DONE %d %s\n", length(sheets), exp_dir))

@@ -1135,6 +1135,7 @@ if (!is.null(pcx)) {
               pcx$uri, htmltools::htmlEscape(pcx$name), htmltools::htmlEscape(pcx$name), round(pcx$size / 1024),
               format(pcx$n, big.mark = ","), htmltools::htmlEscape(paste(pcx$cols, collapse = ", "))))
 }
+cat("<p class='plot-desc'>The R object (Seurat <code>.rds</code>, plus <code>.h5ad</code> for Python) is too large to embed and is supplied separately.</p>\n")
 ```
 
 # Versions {#versions}

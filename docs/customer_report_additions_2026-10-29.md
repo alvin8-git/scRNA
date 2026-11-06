@@ -72,3 +72,17 @@ Items 1–3 + 7 together ≈ 1.6 MB; all eight ≈ 4–5 MB, still under 20 MB p
 Build 1, 2, 3 and 7 first: all four use data already on disk or seconds of computation, and
 together add about 1.6 MB. Then 4 and 5, which need a pipeline step per run before the
 report can show them.
+
+## Analysis object supplement (08f, 2026-11-06)
+
+The HTML report stays the main deliverable; the object is too large to embed or email, so `08f` writes
+it next to the tables as a supplement, in `export/`:
+
+| File | Contents |
+|---|---|
+| `<run>_seurat_slim.rds` | Seurat object, `xz`: RNA raw counts, UMAP, metadata `orig.ident sample nCount_RNA nFeature_RNA percent.mt seurat_clusters cell_type` (+ `cell_type_ref` / `cell_type_denovo` when present). ~31 MB at 11.8k cells, ~131 MB at 47.9k (xz took 93-144 s at 11.8k cells) |
+| `<run>.h5ad` | AnnData: `X` = raw counts (CSR), `obs` = same columns, `var` = gene names, `obsm/X_umap`. Written by hand with `hdf5r` (`pipeline/object_export.R`); no anndata/SeuratDisk needed. Uncompressed (gzip chunks made it larger): 62 MB at 11.8k cells, written in ~5 s |
+
+`xz` is ~8x slower than gzip, so large runs spend minutes here. Skip with `SCRNA_NO_OBJECT_EXPORT=1` or
+`Rscript pipeline/08f_customer_export.R <run> --no-object`. `SCRNA_EXPORT_DIR` redirects the whole `export/`
+folder (used for read-only test runs). A failure in the object step is logged and does not stop the CSV/xlsx export.

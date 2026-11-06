@@ -216,6 +216,15 @@ f <- file.path(.pipeline, "08b_html_report.R")
 if (file.exists(f) && !any(grepl("_per_cell.csv.gz", .code_of(f), fixed = TRUE)))
   fails <- c(fails, "08b_html_report.R no longer embeds <run>_per_cell.csv.gz in the customer report")
 
+# Regression T19: the 08f object export (slim .rds + .h5ad) is additive and costly (xz), so it
+# must stay opt-out-able and wrapped so a failure never loses the CSV/xlsx export.
+f <- file.path(.pipeline, "08f_customer_export.R")
+if (file.exists(f)) {
+  src <- paste(readLines(f), collapse = "\n")
+  if (!grepl("SCRNA_NO_OBJECT_EXPORT", src) || !grepl("tryCatch\\(\\{\\s*source\\(", src))
+    fails <- c(fails, "08f_customer_export.R object export lost its opt-out or tryCatch wrapper")
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)
