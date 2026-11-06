@@ -197,6 +197,11 @@ if (file.exists(f) && any(grepl("marker_panel\\s*<-\\s*c\\(\"", .code_of(f))))
 if (file.exists(f) && any(grepl("\"(CD3D|TNNT2)\"", .code_of(f))))
   fails <- c(fails, "08b_html_report.R names CD3D/TNNT2 (use MARKERS / TARGET_POPULATION)")
 
+# Regression T17: the generic-T split changes labels on past runs, so it stays opt-in.
+f17 <- file.path(.pipeline, "config.R")
+if (file.exists(f17) && !any(grepl("split_generic_t\\s*=\\s*FALSE", .code_of(f17))))
+  fails <- c(fails, "config.R: ANNOTATION$split_generic_t must default to FALSE")
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

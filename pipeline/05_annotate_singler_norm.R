@@ -106,3 +106,26 @@ SINGLER_NORM <- c(
   "B cells"                = "B cell",
   "NK"                     = "NK"
 )
+
+# -----------------------------------------------------------------------------
+# split_generic_t(): optional replacement for the generic "T cells" -> "CD4 T"
+# collapse above (ANNOTATION$split_generic_t, default FALSE). Cells whose RAW
+# SingleR label was MonacoImmune "T cells" / HPCA "T_cells" are assigned per cell:
+# CD8 T when mean(CD8A,CD8B) > thr and exceeds mean(CD4,IL7R), otherwise CD4 T
+# (same rule as build_reference.R step A). Human gene symbols; with no CD8A/CD8B
+# in `expr` it returns `labels` unchanged (clean no-op on other species).
+#   labels  character vector, already SINGLER_NORM-mapped
+#   generic logical vector, TRUE where the raw label was generic T
+#   expr    genes x cells log-normalised matrix, colnames aligned to labels
+# -----------------------------------------------------------------------------
+split_generic_t <- function(labels, generic, expr, thr = 0.5) {
+  cd8g <- intersect(c("CD8A", "CD8B"), rownames(expr))
+  if (!length(cd8g) || !any(generic)) return(labels)
+  cd4g <- intersect(c("CD4", "IL7R"), rownames(expr))
+  cells <- which(generic)
+  m <- function(g, i) if (!length(g)) rep(0, length(i)) else
+    as.numeric(Matrix::colMeans(expr[g, i, drop = FALSE]))
+  cd8e <- m(cd8g, cells); cd4e <- m(cd4g, cells)
+  labels[cells] <- ifelse(cd8e > thr & cd8e > cd4e, "CD8 T", "CD4 T")
+  labels
+}

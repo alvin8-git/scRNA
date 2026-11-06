@@ -190,6 +190,16 @@ CLUSTER <- list(
 if (nzchar(Sys.getenv("SCRNA_CLUSTER_ALGORITHM")))
   CLUSTER$algorithm <- as.integer(Sys.getenv("SCRNA_CLUSTER_ALGORITHM"))
 
+# --- SingleR label normalisation options ---
+# split_generic_t: FALSE keeps the legacy mapping of MonacoImmune "T cells" / HPCA "T_cells"
+# to "CD4 T" (labels of past runs unchanged). TRUE assigns those cells to CD8 T vs CD4 T per
+# cell by CD8A/CD8B vs CD4/IL7R (see split_generic_t() in 05_annotate_singler_norm.R).
+# Changing it changes cell_type, so re-run 05-07. Not part of the 01-03 cache key.
+ANNOTATION <- list(
+  split_generic_t = FALSE,
+  cd8_thr         = 0.5
+)
+
 # --- T Cell Sub-clustering ---
 # Set enabled = FALSE to skip.  t_patterns is a regex matched against cell_type labels.
 SUBCLUSTER <- list(
