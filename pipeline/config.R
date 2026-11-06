@@ -37,10 +37,17 @@ SAMPLE_CACHE_DIR  <- file.path(BASE_DIR, "sample_cache")
 
 .FILTERED_DIRS <- c("filter_matrix", "filtered_feature_bc_matrix")
 .RAW_DIRS      <- c("raw_matrix", "raw_feature_bc_matrix")
+# Parse Biosciences split-pipe: DGE_filtered/ (cells called) and DGE_unfiltered/ (raw),
+# each holding count_matrix.mtx (cells x genes), all_genes.csv and cell_metadata.csv.
+.PARSE_FILTERED_DIRS <- "DGE_filtered"
+.PARSE_RAW_DIRS      <- "DGE_unfiltered"
+.FILTERED_DIRS <- c(.FILTERED_DIRS, .PARSE_FILTERED_DIRS)
+.RAW_DIRS      <- c(.RAW_DIRS, .PARSE_RAW_DIRS)
 .MATRIX_DIRS   <- c(.FILTERED_DIRS, .RAW_DIRS)
 
 .resolve_sample_path <- function(path) {
-  matrix_files <- c("matrix.mtx.gz", "matrix.mtx", "barcodes.tsv.gz", "barcodes.tsv")
+  matrix_files <- c("matrix.mtx.gz", "matrix.mtx", "barcodes.tsv.gz", "barcodes.tsv",
+                    "count_matrix.mtx")   # last one: split-pipe DGE folder given directly
   if (any(file.exists(file.path(path, matrix_files)))) return(normalizePath(path))
   for (sub in .MATRIX_DIRS) {
     cand <- file.path(path, sub)
@@ -358,7 +365,8 @@ IO <- list(use_qs = requireNamespace("qs", quietly = TRUE))
   files <- c("matrix.mtx.gz", "matrix.mtx",
              "barcodes.tsv.gz", "barcodes.tsv",
              "features.tsv.gz", "features.tsv",
-             "genes.tsv.gz", "genes.tsv")
+             "genes.tsv.gz", "genes.tsv",
+             "count_matrix.mtx", "all_genes.csv", "cell_metadata.csv")  # Parse split-pipe
   fp   <- file.path(path, files)
   info <- file.info(fp[file.exists(fp)])
   if (nrow(info) == 0) return("")

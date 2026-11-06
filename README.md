@@ -84,7 +84,8 @@ SampleA/
 ```
 
 10x CellRanger's own `filtered_feature_bc_matrix/` and `raw_feature_bc_matrix/` are detected
-too. Point the runner at any number of sample folders by absolute or relative path:
+too, as is Parse Biosciences split-pipe output (`DGE_filtered/` with `count_matrix.mtx`,
+`all_genes.csv`, `cell_metadata.csv`; `DGE_unfiltered/` counts as the raw layout). Point the runner at any number of sample folders by absolute or relative path:
 
 ```bash
 # One sample (no integration)

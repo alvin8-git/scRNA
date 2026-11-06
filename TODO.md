@@ -40,11 +40,11 @@ the expected types and the reference name/model.
   wording; the whole-blood table shows only when the reference has Neutrophil/RBC/Platelet labels;
   the lineage UMAP takes the lead gene of each `MARKERS` panel (was a hard-coded PBMC list in
   `08b`) and its caption no longer names immune genes.
-- [ ] **Parse Biosciences input is not supported** (2026-11-06). `01_load_qc.R:30` reads only
-  `Read10X` folders (DNBelab `filter_matrix/`, Cell Ranger `filtered_feature_bc_matrix/`);
-  split-pipe writes `DGE_filtered/` (`count_matrix.mtx` cells × genes, `all_genes.csv`,
-  `cell_metadata.csv`). Needs a loader branch or a converter to the 10x layout before Parse
-  data can be offered.
+- [x] **Parse Biosciences input** (2026-11-06). `01_load_qc.R` reads split-pipe `DGE_filtered/`
+  (`count_matrix.mtx` cells × genes is transposed, `gene_name` made unique, `bc_wells` as cell ids);
+  `DGE_unfiltered/` is the raw layout (`_raw` results tag); `config.R` / `run_pipeline.sh` name the
+  sample after the folder above `DGE_*`. Tested on a synthetic fixture only (no real split-pipe
+  output was readable); `soupx_adjust.R` still looks only for 10x/DNBelab folders.
 
 ### Open bugs and decisions (2026-07-30)
 

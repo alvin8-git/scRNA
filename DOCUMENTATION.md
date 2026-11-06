@@ -65,7 +65,7 @@ The sections below detail each core step.
 **Input:** `H1/filter_matrix/`, `H2/filter_matrix/`  
 **Output:** `results/qc/*.pdf`, `results/individual/H{1,2}/H{1,2}_filtered.rds`
 
-Loads each sample with `Read10X(gene.column = 2)`, adds sample metadata, computes:
+Loads each sample with `Read10X(gene.column = 2)` (Parse split-pipe `DGE_filtered/` folders are read by `read_parse_dge()`: `count_matrix.mtx` transposed to genes × cells, `gene_name` rownames, `bc_wells` colnames), adds sample metadata, computes:
 - `nFeature_RNA` — number of detected genes per cell
 - `nCount_RNA` — total UMI count per cell
 - `percent.mt` — percentage of reads mapping to mitochondrial genes (`^MT-`)

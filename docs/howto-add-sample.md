@@ -6,7 +6,7 @@ Adding a new sample to an existing cohort only processes the new sample through 
 
 - Conda environment active: `conda activate scrna_seurat`
 - Existing completed run under `Results/results_<samples>_filtered/`
-- New sample folder with a `filter_matrix/` or `filtered_feature_bc_matrix/` subfolder
+- New sample folder with a `filter_matrix/` or `filtered_feature_bc_matrix/` subfolder (or a Parse split-pipe `DGE_filtered/` folder)
 
 ---
 
