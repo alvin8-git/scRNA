@@ -1,0 +1,5 @@
+%% Where the scRNA bottleneck sits: two routes from GEM matrices to a biological answer.
+flowchart LR
+  A["Sequencing<br/>run"] --> B["dnbc4tools<br/>Cell Ranger · split-pipe"] --> C["GEM<br/>matrices"]:::io
+  C --> D["In-lab bioinformatician<br/>QC · integration · annotation · statistics"]:::warn --> F["Biological<br/>answer"]:::io
+  C --> E["MGI scRNA report<br/>one emailable HTML + xlsx"]:::value --> F

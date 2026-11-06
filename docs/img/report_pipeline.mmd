@@ -1,0 +1,4 @@
+%% scRNA customer-report pipeline: GEM matrices in, emailable HTML report out.
+%% Source for the proposal deck (diagram-native) and the docs figure. Step numbers are pipeline scripts.
+flowchart LR
+  A["GEM<br/>matrices"]:::io --> B["QC +<br/>doublets"] --> C["Ambient<br/>RNA"] --> D["Batch<br/>integration"] --> E["Cell-type<br/>annotation"]:::value --> F["Frozen<br/>reference"]:::value --> G["Replicate<br/>statistics"] --> H["HTML<br/>report"]:::io

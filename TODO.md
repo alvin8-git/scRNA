@@ -40,6 +40,11 @@ the expected types and the reference name/model.
   wording; the whole-blood table shows only when the reference has Neutrophil/RBC/Platelet labels;
   the lineage UMAP takes the lead gene of each `MARKERS` panel (was a hard-coded PBMC list in
   `08b`) and its caption no longer names immune genes.
+- [ ] **Parse Biosciences input is not supported** (2026-11-06). `01_load_qc.R:30` reads only
+  `Read10X` folders (DNBelab `filter_matrix/`, Cell Ranger `filtered_feature_bc_matrix/`);
+  split-pipe writes `DGE_filtered/` (`count_matrix.mtx` cells × genes, `all_genes.csv`,
+  `cell_metadata.csv`). Needs a loader branch or a converter to the 10x layout before Parse
+  data can be offered.
 
 ### Open bugs and decisions (2026-07-30)
 
