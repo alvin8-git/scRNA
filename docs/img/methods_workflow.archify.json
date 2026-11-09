@@ -1,0 +1,287 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "How the analysis was done",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "output": "docs/img/methods_workflow.html",
+    "repository": {
+      "url": "https://github.com/alvin8-git/scRNA",
+      "provider": "github",
+      "link_mode": "local-only",
+      "revision": "380305874bcea8a5832764cdcc084a8c7ff501eb"
+    },
+    "legend": {
+      "entries": {
+        "external": {
+          "label": "Input"
+        },
+        "backend": {
+          "label": "Analysis step"
+        },
+        "security": {
+          "label": "Filter"
+        },
+        "messagebus": {
+          "label": "Optional correction"
+        },
+        "database": {
+          "label": "Optional reference"
+        },
+        "frontend": {
+          "label": "Report"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "sample",
+      "label": "Each sample"
+    },
+    {
+      "id": "run",
+      "label": "All samples together"
+    },
+    {
+      "id": "out",
+      "label": "Results"
+    }
+  ],
+  "mainPath": [
+    "matrix",
+    "qc",
+    "doublets",
+    "normalise",
+    "integrate",
+    "annotate",
+    "report"
+  ],
+  "nodes": [
+    {
+      "id": "matrix",
+      "lane": "sample",
+      "col": 0,
+      "type": "external",
+      "label": "Count matrix",
+      "sublabel": "DNBelab C4, 10x or Parse",
+      "sources": [
+        {
+          "path": "pipeline/01_load_qc.R",
+          "label": "matrix loaders"
+        }
+      ]
+    },
+    {
+      "id": "qc",
+      "lane": "sample",
+      "col": 1,
+      "type": "backend",
+      "label": "Cell QC",
+      "sublabel": "genes, UMIs, % mito",
+      "tag": "step 01",
+      "sources": [
+        {
+          "path": "pipeline/01_load_qc.R"
+        }
+      ]
+    },
+    {
+      "id": "doublets",
+      "lane": "sample",
+      "col": 2,
+      "type": "security",
+      "label": "Doublet removal",
+      "sublabel": "scDblFinder",
+      "tag": "step 02",
+      "sources": [
+        {
+          "path": "pipeline/02_doublets.R"
+        }
+      ]
+    },
+    {
+      "id": "normalise",
+      "lane": "sample",
+      "col": 3,
+      "type": "backend",
+      "label": "Normalise + cluster",
+      "sublabel": "per sample",
+      "tag": "step 03",
+      "sources": [
+        {
+          "path": "pipeline/03_individual.R"
+        }
+      ]
+    },
+    {
+      "id": "integrate",
+      "lane": "run",
+      "col": 3,
+      "type": "backend",
+      "label": "Integrate",
+      "sublabel": "Harmony",
+      "tag": "step 04",
+      "sources": [
+        {
+          "path": "pipeline/04_integrate.R"
+        }
+      ]
+    },
+    {
+      "id": "annotate",
+      "lane": "run",
+      "col": 4,
+      "type": "backend",
+      "label": "Label cell types",
+      "sublabel": "SingleR + markers",
+      "tag": "step 05",
+      "sources": [
+        {
+          "path": "pipeline/05_annotate.R"
+        }
+      ]
+    },
+    {
+      "id": "ambient",
+      "lane": "run",
+      "col": 1,
+      "type": "messagebus",
+      "label": "Ambient RNA",
+      "sublabel": "SoupX, optional",
+      "tag": "step 00",
+      "sources": [
+        {
+          "path": "pipeline/soupx_adjust.R"
+        }
+      ]
+    },
+    {
+      "id": "frozen",
+      "lane": "run",
+      "col": 5,
+      "type": "database",
+      "label": "Frozen reference",
+      "sublabel": "fixed labels, optional",
+      "tag": "step 05r",
+      "sources": [
+        {
+          "path": "pipeline/05r_reference_transfer.R"
+        }
+      ]
+    },
+    {
+      "id": "stats",
+      "lane": "out",
+      "col": 4,
+      "type": "backend",
+      "label": "Statistics",
+      "sublabel": "composition + genes",
+      "tag": "steps 06-09",
+      "sources": [
+        {
+          "path": "pipeline/09_bootstrap_proportions.R"
+        },
+        {
+          "path": "pipeline/06b_differential.R"
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "lane": "out",
+      "col": 5,
+      "type": "frontend",
+      "label": "This report",
+      "sublabel": "HTML + downloads",
+      "tag": "step 08b",
+      "sources": [
+        {
+          "path": "pipeline/08b_html_report.R"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-load",
+      "from": "matrix",
+      "to": "qc"
+    },
+    {
+      "id": "e-qc",
+      "from": "qc",
+      "to": "doublets",
+      "label": "pass"
+    },
+    {
+      "id": "e-dbl",
+      "from": "doublets",
+      "to": "normalise",
+      "label": "singlets"
+    },
+    {
+      "id": "e-int",
+      "from": "normalise",
+      "to": "integrate",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-ann",
+      "from": "integrate",
+      "to": "annotate"
+    },
+    {
+      "id": "e-rep",
+      "from": "annotate",
+      "to": "report",
+      "variant": "emphasis",
+      "toSide": "top"
+    },
+    {
+      "id": "e-stats",
+      "from": "annotate",
+      "to": "stats",
+      "role": "branch"
+    },
+    {
+      "id": "e-stats-rep",
+      "from": "stats",
+      "to": "report"
+    },
+    {
+      "id": "e-frozen",
+      "from": "annotate",
+      "to": "frozen",
+      "label": "if enabled",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e-frozen-rep",
+      "from": "frozen",
+      "to": "report",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "route": "outside-right"
+    },
+    {
+      "id": "e-soup",
+      "from": "annotate",
+      "to": "ambient",
+      "label": "if high ambient",
+      "variant": "dashed",
+      "role": "return"
+    },
+    {
+      "id": "e-rerun",
+      "from": "ambient",
+      "to": "qc",
+      "label": "re-run",
+      "variant": "dashed",
+      "role": "return"
+    }
+  ]
+}

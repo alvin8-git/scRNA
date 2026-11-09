@@ -882,7 +882,10 @@ bundle <- list(
   galleries = galleries, lite = lite, benchmark = benchmark,
   umap_static = umap_static, umap_panels = umap_panels,
   cell_colors = PAL, tool_versions = tool_versions,
-  hvg_var_threshold = HVG_VAR_THRESHOLD
+  hvg_var_threshold = HVG_VAR_THRESHOLD,
+  # methods diagram: archify export of docs/img/methods_workflow.archify.json (see that file)
+  methods_svg = local({ f <- file.path(.pipeline_dir, "assets", "methods_workflow.svg")
+                        if (file.exists(f)) knitr::image_uri(f) else NULL })
 )
 bpath <- file.path(tempdir(), paste0("report_bundle_", Sys.getpid(), ".rds"))
 saveRDS(bundle, bpath)
