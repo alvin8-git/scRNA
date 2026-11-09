@@ -231,6 +231,52 @@ f <- file.path(.pipeline, "object_export.R")
 if (file.exists(f) && !grepl("H5T_CSET_UTF8", paste(readLines(f), collapse = "\n")))
   fails <- c(fails, "object_export.R h5ad string type is not UTF-8 (anndata reads bytes)")
 
+# Regression T21: blood cell-type colours stay distinguishable in the report's stacked bars,
+# which stack types in sort() order. Same maths as the dataviz validate_palette.js: OKLab dE
+# x100 between neighbours >= 15 unsimulated and >= 8 under Machado protan/deutan, and every
+# colour inside OKLCH L 0.43-0.77 with chroma >= 0.10. The old palette (2026-11-08) failed
+# with CD4 T naive/memory at dE 8.9.
+BLOOD_PALETTE_SET <- c("B cell (memory)", "B cell (naive)", "CD14+ Mono", "CD4 T (effector)",
+  "CD4 T (memory)", "CD4 T (naive)", "CD8 T", "CD8 T (memory)", "CD8 T (naive)", "FCGR3A+ Mono", "HSPC",
+  "Mast cell", "NK", "Neutrophil", "Plasma", "Platelet", "RBC", "cDC2", "pDC")
+f <- file.path(.pipeline, "config.R")
+if (file.exists(f)) {
+  ex <- Filter(function(e) is.call(e) && identical(e[[1]], as.name("<-")) &&
+                 identical(e[[2]], as.name("CELLTYPE_COLORS")), as.list(parse(f)))
+  pal <- eval(ex[[1]][[3]])
+  lin <- function(h) { v <- grDevices::col2rgb(h)[, 1] / 255
+                       ifelse(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055)^2.4) }
+  oklab <- function(v) {
+    lms <- c(0.4122214708 * v[1] + 0.5363325363 * v[2] + 0.0514459929 * v[3],
+             0.2119034982 * v[1] + 0.6806995451 * v[2] + 0.1073969566 * v[3],
+             0.0883024619 * v[1] + 0.2817188376 * v[2] + 0.6299787005 * v[3])^(1 / 3)
+    c(0.2104542553, 1.9779984951, 0.0259040371) * lms[1] +
+      c(0.7936177850, -2.4285922050, 0.7827717662) * lms[2] +
+      c(-0.0040720468, 0.4505937099, -0.8086757660) * lms[3]
+  }
+  cvd <- list(protan = matrix(c(0.152286, 1.052583, -0.204868, 0.114503, 0.786281, 0.099216,
+                                -0.003882, -0.048116, 1.051998), 3, byrow = TRUE),
+              deutan = matrix(c(0.367322, 0.860646, -0.227968, 0.280085, 0.672501, 0.047413,
+                                -0.011820, 0.042940, 0.968881), 3, byrow = TRUE))
+  sim <- function(h, m) if (is.null(m)) lin(h) else pmin(pmax(m %*% lin(h), 0), 1)[, 1]
+  dE  <- function(a, b, m = NULL) 100 * sqrt(sum((oklab(sim(a, m)) - oklab(sim(b, m)))^2))
+  miss <- setdiff(BLOOD_PALETTE_SET, names(pal))
+  if (length(miss)) fails <- c(fails, paste("CELLTYPE_COLORS lacks", paste(miss, collapse = ", ")))
+  ord <- sort(intersect(BLOOD_PALETTE_SET, names(pal)))
+  for (t in ord) {
+    L <- oklab(lin(pal[[t]]))
+    if (L[1] < 0.43 || L[1] > 0.77 || sqrt(sum(L[2:3]^2)) < 0.10)
+      fails <- c(fails, sprintf("%s colour %s is outside L 0.43-0.77 or below chroma 0.10", t, pal[[t]]))
+  }
+  for (i in seq_len(length(ord) - 1)) {
+    a <- pal[[ord[i]]]; b <- pal[[ord[i + 1]]]
+    d <- c(normal = dE(a, b), protan = dE(a, b, cvd$protan), deutan = dE(a, b, cvd$deutan))
+    if (d[["normal"]] < 15 || min(d[c("protan", "deutan")]) < 8)
+      fails <- c(fails, sprintf("%s / %s colours too close (dE normal %.1f, colour-blind %.1f)",
+                                ord[i], ord[i + 1], d[["normal"]], min(d[c("protan", "deutan")])))
+  }
+}
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

@@ -474,45 +474,53 @@ EXPECTED_TYPES <- c("CD4 T", "CD8 T", "Treg", "γδ T", "MAIT", "NK", "B cell", 
                     "Monocyte", "CD14+ Mono", "FCGR3A+ Mono", "DC", "cDC", "pDC", "HSPC")
 UNEXPECTED_FLAG_PCT <- 1
 
+# Blood types (2026-11-09): one hue family per lineage, subtypes split by lightness. The 18
+# types in BLOOD_PALETTE_SET (tests/test_regressions.R T21) pass the dataviz palette checks in
+# the report's alphabetical stack order: neighbours differ by OKLab dE >= 15 (normal vision) and
+# >= 8 (protan/deutan), every colour inside L 0.43-0.77 with chroma >= 0.10. Re-run T21 after
+# changing any of them. A generic label deliberately shares its default subtype's colour
+# (CD4 T = naive, CD8 T = naive, B cell = naive, Monocyte = CD14+ Mono, DC = cDC2): a run carries
+# one or the other, never both (none of the 46 runs in Results/ has a pair), and twenty
+# separate colours cannot all stay apart (best all-pairs dE was 8.8).
 CELLTYPE_COLORS <- c(
   # CD4 T subtypes — red family
-  "CD4 T"              = "#E64B35",
-  "CD4 T (naive)"      = "#E64B35",
-  "CD4 T (memory)"     = "#FF7043",
-  "CD4 T (effector)"   = "#FF8A65",
-  # CD8 T subtypes — blue family
-  "CD8 T"              = "#4DBBD5",
-  "CD8 T (naive)"      = "#6ACDE6",
-  "CD8 T (memory)"     = "#3A8BA5",
+  "CD4 T"              = "#AE002B",
+  "CD4 T (naive)"      = "#AE002B",
+  "CD4 T (memory)"     = "#F98F83",
+  "CD4 T (effector)"   = "#DE4310",
+  # CD8 T subtypes — cyan family
+  "CD8 T"              = "#03A1CF",
+  "CD8 T (naive)"      = "#03A1CF",
+  "CD8 T (memory)"     = "#156994",
   "CD8 T (effector)"   = "#1D6680",
   # Other T
   "Treg"               = "#FF7F0E",
   "γδ T"               = "#FFC107",
   "NKT"                = "#17BECF",
-  # NK — teal
-  "NK"                 = "#00A087",
-  # B cell subtypes — dark blue family
-  "B cell"             = "#3C5488",
-  "B cell (naive)"     = "#3C5488",
-  "B cell (memory)"    = "#5C74A8",
-  "Plasma"             = "#7B4F9E",
-  # Monocyte subtypes — salmon/purple family
-  "Monocyte"           = "#F39B7F",
-  "CD14+ Mono"         = "#F39B7F",
-  "FCGR3A+ Mono"       = "#8491B4",
+  # NK — green
+  "NK"                 = "#006506",
+  # B cell subtypes — blue/violet family
+  "B cell"             = "#3F37BD",
+  "B cell (naive)"     = "#3F37BD",
+  "B cell (memory)"    = "#537AFD",
+  "Plasma"             = "#884ACD",
+  # Monocyte subtypes — amber family
+  "Monocyte"           = "#DAA91A",
+  "CD14+ Mono"         = "#DAA91A",
+  "FCGR3A+ Mono"       = "#A97D19",
   # Myeloid
-  "Neutrophil"         = "#E377C2",   # pink — distinct from NK teal
-  "DC"                 = "#91D1C2",
+  "Neutrophil"         = "#FD78DF",
+  "DC"                 = "#07CF9E",
   "cDC1"               = "#70BFB0",
-  "cDC2"               = "#A8E6D8",
-  "pDC"                = "#4FA090",
-  "Platelet"           = "#DC0000",
+  "cDC2"               = "#07CF9E",
+  "pDC"                = "#3C926E",
+  "Platelet"           = "#B39FFA",
   # Contamination / rare populations
-  "RBC"                = "#A52A2A",
-  "HSPC"               = "#8C564B",   # brown — distinct from Monocyte salmon
+  "RBC"                = "#CE4F8D",
+  "HSPC"               = "#794600",
   "Basophil"           = "#B5B000",
   "Eosinophil"         = "#F4A460",
-  "Mast cell"          = "#9400D3",
+  "Mast cell"          = "#7BAB05",
   # Non-immune / stromal (tissue contamination)
   "Endothelial"        = "#636363",
   "Epithelial"         = "#969696",
