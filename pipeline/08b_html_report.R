@@ -448,7 +448,7 @@ if (!lite) {
     cand[order(file.info(cand)$mtime, decreasing = TRUE)][1]
   }
 
-  ## per-sample diagnostics (reached by clicking a sample card) — match Overall_Report.pdf
+  ## per-sample diagnostics (reached by clicking a row of the Overview table) — match Overall_Report.pdf
   by_sample <- list()
   for (s in samples_all) {
     cs <- cells_plot[cells_plot$sample == s, , drop = FALSE]
@@ -686,6 +686,14 @@ if (customer) {
     clus <- as.character(md$seurat_clusters)
     sub  <- cmat[panel, , drop = FALSE]
     ord  <- order(suppressWarnings(as.integer(unique(clus))), unique(clus))
+    # lineage of a label, so the reference's coarse call ("Monocyte", "CD4 T") can be compared
+    # with the curated fine one ("CD14+ Mono", "CD4 T (memory)")
+    lineage <- function(x) {
+      x <- sub(" \\(.*\\)$", "", x)
+      x[x %in% c("CD14+ Mono", "FCGR3A+ Mono")] <- "Monocyte"
+      x[x %in% c("cDC1", "cDC2", "pDC")] <- "DC"
+      x
+    }
     evidence <- do.call(rbind, lapply(unique(clus)[ord], function(k) {
       i   <- which(clus == k)
       pc  <- round(100 * Matrix::rowSums(sub[, i, drop = FALSE] > 0) / length(i), 0)
@@ -698,6 +706,8 @@ if (customer) {
                  `Deciding markers (% of cluster's cells)` =
                    paste(sprintf("%s %d%%", names(top), as.integer(top)), collapse = ", "),
                  `Reference call` = if (is.null(sl)) NA_character_ else sl,
+                 Agrees = if (is.null(sl) || is.na(sl) || !length(lab) || is.na(lab)) ""
+                          else if (lineage(lab) == lineage(sl)) "yes" else "no",
                  check.names = FALSE, stringsAsFactors = FALSE)
     }))
   }

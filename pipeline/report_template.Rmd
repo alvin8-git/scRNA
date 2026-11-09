@@ -121,14 +121,16 @@ h1{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-
 h2{font-size:15px;border:0;margin-top:16px}
 h1:empty{display:none}  /* the hidden tab-closing header after the galleries */
 
-/* sample cards: compact, label/value stat rows (mockup style) */
-.cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px;
-  margin:10px 0 22px;max-width:880px}
-.scard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
-.scard h3{margin:0 0 9px;font-size:13.5px;display:flex;align-items:center;gap:7px;font-weight:600}
-.scard .tag{font-size:10.5px;color:#fff;background:var(--bad);border-radius:999px;padding:1px 7px;font-weight:600}
-.scard .stat{display:flex;justify-content:space-between;padding:2.5px 0;font-size:12.5px;color:var(--muted)}
-.scard .stat b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:600}
+/* overview verdict: the run's conclusion first, then one line per check */
+.verdict{margin:12px 0 22px;max-width:820px}
+.verdict .headline{font-size:22px;line-height:1.3;font-weight:600;color:var(--ink);margin:0 0 4px}
+.verdict .sub{font-size:14px;color:var(--muted);margin:0 0 14px}
+.verdict ul{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}
+.verdict li{display:flex;gap:10px;align-items:baseline;padding:8px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.verdict .vmark{flex:none;width:58px;font-size:12px;font-weight:700}
+.verdict .ok .vmark{color:var(--good)}
+.verdict .look .vmark{color:#a35f00}
+.verdict a{color:var(--accent)}
 
 /* accent tab pills + tables + read line */
 .nav-pills>li.active>a,.nav-pills>li.active>a:hover,.nav-pills>li.active>a:focus{background:var(--accent)}
@@ -136,6 +138,7 @@ h1:empty{display:none}  /* the hidden tab-closing header after the galleries */
 table.dataTable thead th{background:#fafbfd;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line)}
 /* overview summary rows deep-link to the per-sample plots */
 table.clickrows tbody tr{cursor:pointer}
+table.dataTable td.nowrap{white-space:nowrap}
 table.clickrows tbody tr:hover td{background:#f2f6ff}
 table.clickrows caption{caption-side:top;text-align:left;color:var(--muted);font-size:12.5px;padding:0 0 7px}
 .read-line{background:#f2f6ff;border-left:3px solid var(--accent);border-radius:6px;
@@ -202,10 +205,6 @@ small{color:var(--muted)}
 .legsw{width:12px;height:12px;border-radius:3px;flex:none}
 .muted-note{color:var(--muted);font-size:12.5px;margin:0 0 12px;max-width:760px}
 
-/* clickable sample cards (deep-link into the per-sample gallery) */
-.scardlink{text-decoration:none;color:inherit;display:block}
-.scardlink:hover .scard{border-color:var(--accent);box-shadow:0 2px 7px rgba(59,130,246,.16)}
-
 /* one- or two-line grey description printed under a section title */
 .plot-desc{color:var(--muted);font-size:12.5px;line-height:1.45;margin:2px 0 14px;max-width:820px}
 /* fixed-width plots scroll inside their own box on a narrow screen, not the whole page */
@@ -232,7 +231,6 @@ small{color:var(--muted)}
 .crosstalk-input .control-label,.selrow .sellabel,.shlegend .lgtitle{color:#6b7686}
 /* nav group headers darker than their links so RUN / COMPARE / PER SAMPLE read as headers */
 .report-nav .grouplabel{color:#3c4350}
-.scard .tag{background:#c0392b}
 
 /* frozen-reference benchmark tables (static, small — no widget needed) */
 .benchtab{border-collapse:collapse;margin:6px 0 18px;font-size:12.5px}
@@ -260,8 +258,7 @@ small{color:var(--muted)}
   .main-container{margin-left:0 !important;margin-right:auto;padding:10px 16px 60px}
   .report-top .meta{display:none}
   .report-top .title{font-size:14px}
-  .cardgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .scard{padding:10px 11px}
+  .verdict .headline{font-size:19px}
   /* stretch: flex-start shrank the stacked UMAP grid to its content width (~60 px panels) */
   .umapwrap{flex-direction:column;align-items:stretch}
   .umapgrid{grid-template-columns:1fr}
@@ -311,34 +308,45 @@ cat(top, nav)
 
 # Overview
 
-```{r cards, results='asis'}
+```{r verdict, results='asis'}
+# The run's conclusion first, then one line per check, each linking to its evidence. Replaces
+# the per-sample cards, which repeated the table below.
 S <- B$summary
-fmt <- function(x, d=0) ifelse(is.na(x), "—", formatC(round(as.numeric(x), d), big.mark=",", format="f", digits=d))
-row <- function(l, v) sprintf('<div class="stat"><span>%s</span><b>%s</b></div>', l, v)
-cards <- vapply(seq_len(nrow(S)), function(i) {
-  r <- S[i, ]
-  # Low QC = the cells that passed are poor (median genes < 500) or the library is
-  # mostly ambient (SoupX rho > 0.3). Retention is deliberately not a criterion: it
-  # measures how many barcodes the caller over-called, not cell quality (see 08b).
-  rho <- if (!is.null(r$Ambient_rho)) r$Ambient_rho else NA
-  low <- (!is.na(r$Median_genes) && r$Median_genes < 500) || (!is.na(rho) && rho > 0.3)
-  why <- if (!is.na(rho) && rho > 0.3) sprintf(" (ambient %.0f%%)", 100 * rho) else ""
-  tag <- if (low) sprintf(' <span class="tag">low QC%s</span>', why) else ''
-  stats <- paste0(
-    row("Cells", fmt(r$Cells)),
-    row("% retained", paste0(fmt(r$Pct_retained,1), "%")),
-    row("Median genes", fmt(r$Median_genes)),
-    row("Median UMI", fmt(r$Median_UMI)),
-    row("% MT", paste0(fmt(r$Median_pct_MT,1), "%")),
-    if (!is.null(r$Doublet_pct) && !is.na(r$Doublet_pct)) row("Doublets", paste0(fmt(r$Doublet_pct,1), "%")) else "",
-    if (!is.null(r$HVG) && !is.na(r$HVG)) row("HVG", fmt(r$HVG)) else "",
-    row("Cell types", fmt(r$N_cell_types)))
-  card <- sprintf('<div class="scard"><h3>%s%s</h3>%s</div>', htmltools::htmlEscape(r$Sample), tag, stats)
-  slug <- function(x) gsub("(^-|-$)", "", gsub("[^a-z0-9]+", "-", tolower(x)))
-  has_gal <- !isTRUE(B$lite) && !is.null(B$galleries) && r$Sample %in% names(B$galleries$by_sample)
-  if (has_gal) sprintf('<a class="scardlink" href="#sample-%s">%s</a>', slug(r$Sample), card) else card
-}, character(1))
-cat('<div class="cardgrid">', paste(cards, collapse=""), '</div>')
+esc <- htmltools::htmlEscape
+# Low QC = the cells that passed are poor (median genes < 500) or the library is mostly
+# ambient (SoupX rho > 0.3). Retention is deliberately not a criterion: it measures how many
+# barcodes the caller over-called, not cell quality (see 08b).
+rho <- if (!is.null(S$Ambient_rho)) S$Ambient_rho else rep(NA_real_, nrow(S))
+low <- (!is.na(S$Median_genes) & S$Median_genes < 500) | (!is.na(rho) & rho > 0.3)
+why <- ifelse(!is.na(rho) & rho > 0.3, sprintf("ambient %.0f%%", 100 * rho), "median genes under 500")
+checks <- list(if (any(low))
+  list(FALSE, sprintf("%d of %d samples have low QC: %s.", sum(low), nrow(S),
+                      paste(sprintf("%s (%s)", esc(S$Sample[low]), why[low]), collapse = ", ")))
+  else list(TRUE, sprintf("All %d samples pass QC.", nrow(S))))
+U <- B$cust$unexp
+if (!is.null(U)) checks[[length(checks) + 1]] <- (if (nrow(U))
+  list(FALSE, sprintf('%d unexpected cell type%s at %s%% of a sample or more, in %d sample%s. <a href="#unexpected-cell-types">See which</a>',
+                      length(unique(U[["Cell type"]])), if (length(unique(U[["Cell type"]])) > 1) "s" else "",
+                      B$cust$unexp_thr, length(unique(U$Sample)), if (length(unique(U$Sample)) > 1) "s" else ""))
+  else list(TRUE, sprintf("No unexpected cell type reaches %s%% of any sample.", B$cust$unexp_thr)))
+E <- B$cust$evidence
+if (!is.null(E) && "Agrees" %in% names(E) && any(E$Agrees != "")) {
+  d <- E[E$Agrees == "no", , drop = FALSE]
+  checks[[length(checks) + 1]] <- if (nrow(d))
+    list(FALSE, sprintf('%d cluster%s labelled differently from the reference classifier: %s. <a href="#why-each-cluster-got-its-label">See the markers</a>',
+                        nrow(d), if (nrow(d) > 1) "s" else "",
+                        paste(sprintf("cluster %s, %s vs %s", d$Cluster, esc(d[["Cell type"]]), esc(d[["Reference call"]])),
+                              collapse = "; ")))
+    else list(TRUE, "Every cluster's label agrees with the reference classifier.")
+}
+n_look <- sum(!vapply(checks, `[[`, logical(1), 1))
+head_txt <- (if (n_look) sprintf("%d point%s to check before reading the results", n_look, if (n_look > 1) "s" else "")
+            else "No issues found in these checks")
+items <- vapply(checks, function(k) sprintf('<li class="%s"><span class="vmark">%s</span><span>%s</span></li>',
+                                            if (k[[1]]) "ok" else "look", if (k[[1]]) "OK" else "Check", k[[2]]), "")
+cat(sprintf('<div class="verdict"><p class="headline">%s</p><p class="sub">%d sample%s, %s cells after QC and doublet removal.</p><ul>%s</ul></div>',
+            head_txt, nrow(S), if (nrow(S) > 1) "s" else "",
+            formatC(sum(S$Cells, na.rm = TRUE), big.mark = ",", format = "d"), paste(items, collapse = "")))
 ```
 
 ```{r summary_table}
@@ -367,7 +375,9 @@ datatable(S2, rownames = FALSE,
           # A no-op JS keeps the argument type valid when there are no galleries
           # to jump to.
           callback = if (gal_ok) cb else DT::JS("return table;"),
-          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE)) |>
+          options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
+                         columnDefs = list(list(className = "nowrap",
+                                                targets = which(names(S2) == "Top type") - 1)))) |>
   formatRound(roundable, 1)
 ```
 
@@ -375,7 +385,7 @@ datatable(S2, rownames = FALSE,
 thr <- if (is.null(B$hvg_var_threshold)) 1.3 else B$hvg_var_threshold
 defs <- c(
   "Cells"                = "Cells passing QC filtering and doublet removal.",
-  "% retained"           = "Percentage of input GEM barcodes kept after QC and doublet removal. The low-QC tag on a sample card instead counts from barcodes that cleared the minimum-genes floor, so a permissive barcode caller does not flag a healthy sample.",
+  "% retained"           = "Percentage of input GEM barcodes kept after QC and doublet removal. It does not decide the low-QC flag at the top of this page, so a permissive barcode caller does not flag a healthy sample.",
   "Median genes"         = "Median number of genes detected per cell (nFeature_RNA).",
   "Median UMI"           = "Median transcript (UMI) count per cell (nCount_RNA).",
   "% MT (Median %MT)"    = "Median fraction of reads from mitochondrial genes per cell; high values flag stressed or dying cells. A dash means not measured: the reference has no mitochondrial genes (as in the Parse split-pipe reference).",
@@ -679,8 +689,9 @@ cat("## Why each cluster got its label\n\n",
     "that decided it, as the percentage of that cluster's cells in which each was detected. ",
     "Several clusters often share one label — that is expected, and visible here. The dot plot ",
     "above shows marker <em>expression</em> per cell type; this table shows the ",
-    "<em>cluster-level evidence</em> behind each call, including where the reference ",
-    "classifier disagreed. Sort any column.</p>\n", sep = "")
+    "<em>cluster-level evidence</em> behind each call. <strong>Agrees</strong> compares the ",
+    "label's lineage with the reference classifier's call; a <em>no</em> row is worth checking ",
+    "against its markers. Sort any column.</p>\n", sep = "")
 ```
 
 ```{r cust_evidence, eval=!is.null(B$cust$evidence)}
@@ -689,7 +700,10 @@ datatable(B$cust$evidence, rownames = FALSE,
           callback = DT::JS("return table;"),
           options = list(dom = "t", paging = FALSE, ordering = TRUE, scrollX = TRUE,
                          order = list(list(1, "desc")),
-                         columnDefs = list(list(className = "dt-right", targets = 1))))
+                         columnDefs = list(list(className = "dt-right", targets = 1)))) |>
+  (\(w) if ("Agrees" %in% names(B$cust$evidence))
+     formatStyle(w, "Agrees", target = "row", fontWeight = styleEqual("no", "600"),
+                 backgroundColor = styleEqual("no", "#fff4e0")) else w)()
 ```
 
 ```{r cust_eff_head, results='asis', eval=!is.null(B$cust$eff)}
