@@ -1,5 +1,40 @@
 # Version History
 
+## v1.0.0 — 2026-11-17
+
+First tagged release. Covers the 76 commits since v0.9.1.
+
+#### Added
+
+- **Customer report** (`08b --customer`): a client-facing HTML report built from the same template. It opens with a verdict on the run (low-QC libraries, unexpected cell types, labels that disagree with the reference), then UMAPs, composition, markers, DE, and a per-cell table download. Species-agnostic: each section appears only when its data exists. Layout works on phones.
+- **Data export** (`08f_customer_export.R`): per-cell assignments, pseudobulk CPM, an `.xlsx` of every derived table, a slim Seurat `.rds` and an `.h5ad` that anndata reads.
+- **Species modes**: `cm` (hESC/iPSC to cardiomyocyte, with monocle3 trajectory in `pipeline/projects/cm/`) and `mouse` (immune panels, ImmGen reference, `^mt-` / `^Rp[sl]` patterns). Mouse is experimental.
+- **Ambient RNA** step 00 (`soupx_adjust.R`): SoupX rho per sample written into the run directory; libraries above rho 0.5 are flagged unsuitable.
+- **Statistics and clustering**: replicate-aware composition statistics, Leiden clustering as the default (`SCRNA_CLUSTER_ALGORITHM` switches back to Louvain), opt-in adaptive QC (`SCRNA_QC_ADAPTIVE`).
+- **Inputs**: Parse Biosciences split-pipe output (`DGE_filtered/`, `DGE_unfiltered/`) alongside DNBelab C4 and 10x CellRanger.
+- **Annotation**: generic SingleR T cells are split into CD4/CD8 per cell by default; `CLUSTER_SUBCLUSTER_MAP` splits one mixed cluster; `SCRNA_NO_CLUSTER_MAP` turns curated maps off.
+- **Frozen reference** on by default for bat runs; `build_reference.R` gains `--exclude-labels`, `--drop-cc-genes` and a SingleR delta report.
+- Per-stage HTML reports next to the stage PDFs, and an MGI-template PPT report generated from a finished run.
+- `docs/img/render.sh` and `docs/img/pipeline_overview.mmd` (the README figure).
+
+#### Changed
+
+- Blood cell-type palette redrawn so neighbouring colours stay apart under normal and colour-blind vision; regression guard T21 checks it.
+- HTML report palette and QC thresholds come from `config.R`, not the template; the marker panel and label source come from the run.
+- Curated cluster maps are guarded on sample set and clustering algorithm so they cannot leak into a different run.
+- README rewritten: install, smoke test, deployment and a table of supported specimen types with their limits.
+
+#### Fixed
+
+- 8-sample runs no longer stall, and pipeline errors are no longer masked.
+- `Overall_report.pdf` keeps its per-sample pages and run order.
+- The low-QC tag uses median genes and ambient rho, never retention.
+- `.h5ad` categorical codes use -1 for NA, and strings are written as UTF-8.
+- Bat-wing steps 12 and 13 skip cleanly when a run has only one condition.
+- A fresh clone runs from wherever it is checked out: `BASE_DIR` and the `build_report.sh` Rscript path were hardcoded to the author's machine. Guard T22.
+- `setup_env.sh` installs everything the pipeline now loads (SoupX, edgeR, MAST, leidenbase, presto, rmarkdown, knitr, DT, plotly, ragg, pandoc); `SCRNA_ENV_NAME` builds or runs a differently named env. Its R install and check blocks had never run (`conda run` drops stdin), so CellChat, monocle3, SeuratWrappers and presto were never installed on a fresh setup; they now live in the optional `setup_extras.sh`. Harmony is pinned to 1.2.4 (2.x renamed `max.iter.harmony` and fails step 04) and SeuratObject to 5.3.0. Guard T22.
+- Customer- and project-specific notes removed from the public tree (kept locally, now gitignored).
+
 ## v0.9.1 — 2026-07-28
 
 ### bat_wing made usable on real wing tissue

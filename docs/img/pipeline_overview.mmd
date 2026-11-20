@@ -1,0 +1,22 @@
+%% README figure 1: what run_pipeline.sh does, from count matrices to reports.
+flowchart TB
+  accTitle: scRNA pipeline overview
+  accDescr: Count matrices go through per-sample QC, doublet removal and clustering, then Harmony integration and cell-type annotation, ending in PDF reports, an interactive HTML report and a data export.
+
+  subgraph per["Per sample (cached in sample_cache/)"]
+    direction LR
+    in["Count matrix<br/>C4 · CellRanger · Parse"]:::io --> qc["01 QC filter"] --> dbl["02 Doublets"] --> ind["03 Normalise,<br/>cluster"]
+  end
+  subgraph all["All samples together"]
+    direction LR
+    int["04 Harmony<br/>integration"] --> ann["05 Annotate<br/>SingleR + markers"]:::key --> ref["05r Frozen reference<br/>(optional)"]:::opt --> viz["06 / 06b Plots,<br/>DE"]
+  end
+  subgraph out["Deliverables"]
+    direction LR
+    pdf["07 PDF reports"]:::io ~~~ html["08b Interactive<br/>HTML report"]:::io ~~~ exp["08f Data export<br/>.h5ad · .xlsx (by hand)"]:::opt
+  end
+  per --> all --> out
+
+  classDef io fill:#e8f1fb,stroke:#2b6cb0,color:#1a365d
+  classDef key fill:#fff4e0,stroke:#c05621,color:#7b341e
+  classDef opt fill:#f7fafc,stroke:#a0aec0,stroke-dasharray:4 3,color:#4a5568

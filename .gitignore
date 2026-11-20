@@ -27,3 +27,13 @@ pipeline/report_template.knit.md
 # graphify knowledge-graph build output (regenerate with /graphify)
 graphify-out/
 CustomerReports/
+
+# Customer/project-specific notes: kept locally, never public (2026-11-17)
+docs/lynnyap_flowcell_barcodes_2026.csv
+docs/h1d11_10x_vs_c4_2026-10-28.md
+docs/cm_questions_for_data_owner.md
+docs/pbmc_summary_slide.md
+docs/mouse_reint_evidence.R
+docs/mouse_reint_evidence_posA.txt
+docs/mouse_reint_evidence_posB.txt
+docs/mouse_reinterpretation_2026-10-27.md

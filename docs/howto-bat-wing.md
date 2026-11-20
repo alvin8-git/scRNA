@@ -17,8 +17,8 @@ to the same sample.
 - Conda environment active: `conda activate scrna_seurat`
 - 10x/DNBelab matrices with HGNC-style gene names (same orthology mapping as `bat`)
 - For steps `13` (CellChat) and `14` (monocle3 trajectory): `CellChat`, `monocle3` and
-  `SeuratWrappers`. As of 2026-09-14 `monocle3` is installed in `scrna_seurat`, `CellChat` is being
-  installed, and **`SeuratWrappers` is not installable** in this env (its Bioconductor 3.18
+  `SeuratWrappers`, installed by `bash pipeline/setup_extras.sh` (not by `setup_env.sh`). As of
+  2026-09-14 **`SeuratWrappers` was not installable** in this env (its Bioconductor 3.18
   dependency chain conflicts). Step `14` calls `SeuratWrappers::as.cell_data_set()`, so it will
   hard-fail until it builds the monocle3 object directly, as `pipeline/projects/cm/trajectory.R`
   does. Check with `Rscript -e 'requireNamespace("CellChat")'` before running `13`.

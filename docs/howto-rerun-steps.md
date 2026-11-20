@@ -6,7 +6,7 @@ Each pipeline step writes checkpoint `.rds` files so you can restart from any po
 
 - Conda environment active: `conda activate scrna_seurat`
 - A completed run under `Results/results_<samples>_filtered/`
-- The working directory is the repository root (`/data/alvin/scRNA` or wherever you cloned it)
+- The working directory is the repository root (wherever you cloned it)
 
 ---
 

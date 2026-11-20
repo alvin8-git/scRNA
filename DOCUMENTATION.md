@@ -511,19 +511,19 @@ fractions of 0.1–7% in the vein-draw samples are normal-to-low for neutrophil-
 conda activate scrna_seurat
 
 # Re-run a single step
-bash /data/alvin/scRNA/pipeline/run_pipeline.sh 05
+bash pipeline/run_pipeline.sh 05
 
 # Re-run annotation and visualisation only (most common after manual labelling)
-bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 05 06 07
+bash pipeline/run_pipeline.sh /path/S1 /path/S2 05 06 07
 
 # Re-run from doublet detection onwards
-bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 02 03 04 05 06 07
+bash pipeline/run_pipeline.sh /path/S1 /path/S2 02 03 04 05 06 07
 
 # Re-generate comparison report only (all earlier steps already done)
-bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 08
+bash pipeline/run_pipeline.sh /path/S1 /path/S2 08
 
 # Re-run visualisation + both reports
-bash /data/alvin/scRNA/pipeline/run_pipeline.sh /path/S1 /path/S2 06 07 08
+bash pipeline/run_pipeline.sh /path/S1 /path/S2 06 07 08
 ```
 
 **Run any single step directly (no wrapper).** Every step resolves `config.R` relative to its own location, so you can run one stage with `Rscript` and your own env vars — handy when iterating on a single stage:

@@ -174,8 +174,9 @@ except `CTGF`.
 ## 5. Steps 11–14 and 06b
 
 - **`CellChat`, `monocle3`, and `SeuratWrappers` are not installed** in `scrna_seurat`, and steps 13
-  and 14 `library()` them unconditionally — both will hard-fail. `setup_env.sh` intends to install
-  them from GitHub; that evidently did not complete.
+  and 14 `library()` them unconditionally — both will hard-fail. `setup_env.sh` intended to install
+  them from GitHub, but its R block never ran (`conda run` drops stdin). They now come from the
+  optional `bash pipeline/setup_extras.sh` (2026-11-19).
 - **11, 13 need `SCRNA_CONDITION` with ≥2 levels** (`condition` is derived from
   `SAMPLE_CONDITIONS[merged$sample]`, never stored in the RDS); 11 and 13 skip cleanly with one
   level, **14 does not guard** and assumes exactly two condition colours.

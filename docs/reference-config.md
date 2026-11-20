@@ -27,11 +27,11 @@ Source-level regression checks (e.g. "step 10 must not hardcode a ground-truth s
 ## Base paths
 
 ```r
-BASE_DIR         <- Sys.getenv("SCRNA_BASE_DIR", "/data/alvin/scRNA")
+BASE_DIR         <- Sys.getenv("SCRNA_BASE_DIR", <parent of pipeline/>)
 SAMPLE_CACHE_DIR <- file.path(BASE_DIR, "sample_cache")
 ```
 
-`BASE_DIR` resolves to the repository root. Override it without touching `config.R` by setting the `SCRNA_BASE_DIR` env var:
+`BASE_DIR` resolves to the repository root, wherever the clone lives (`run_pipeline.sh` exports it so every step agrees). Override it without touching `config.R` by setting the `SCRNA_BASE_DIR` env var:
 
 ```bash
 SCRNA_BASE_DIR=/mnt/nas/project bash pipeline/run_pipeline.sh /path/to/SampleA
