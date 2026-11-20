@@ -1,10 +1,12 @@
 #!/usr/bin/env Rscript
-# Build github_banner_collage.png from the 8-sample run: an annotated UMAP cluster
-# atlas + the per-sample cell-type proportion bars, using the canonical palette.
+# Build github_banner_collage.png from a finished run (default: the bundled H1/H2 smoke test):
+# an annotated UMAP cluster atlas + the per-sample cell-type proportion bars, canonical palette.
+# Usage: Rscript pipeline/make_banner.R [run_dir]
 suppressWarnings(suppressMessages({
   library(Seurat); library(ggplot2); library(patchwork)
 }))
-PIPE <- "/data/alvin/scRNA/pipeline"
+.self <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+PIPE  <- if (length(.self)) dirname(normalizePath(.self[1])) else normalizePath("pipeline")  # Rscript, or source() from the repo root
 # Source config.R BARE. It locates pdf_helpers.R via `sys.frame(1)$ofile`, so any
 # wrapper call — suppressWarnings(), suppressMessages(), try() — adds a stack frame,
 # ofile comes back NULL, the `%||% "."` fallback looks for ./pdf_helpers.R, and the
@@ -14,9 +16,10 @@ source(file.path(PIPE, "config.R"))
 PAL_CANON <- if (exists("CELLTYPE_COLORS")) CELLTYPE_COLORS else NULL
 if (is.null(PAL_CANON)) warning("CELLTYPE_COLORS unavailable - falling back to the generic palette")
 
-R8  <- "/data/alvin/scRNA/Results/results_Aksh1-ES03-ES14-ES258-ES332-ES35-ES407-ES459_filtered"
-rds <- file.path(R8, "integrated", "integrated_annotated.rds")
-out <- "/data/alvin/scRNA/github_banner_collage.png"
+run <- commandArgs(TRUE)[1]
+if (is.na(run)) run <- RESULTS_DIR   # config.R's default samples: the bundled H1/H2
+rds <- file.path(run, "integrated", "integrated_annotated.rds")
+out <- file.path(BASE_DIR, "github_banner_collage.png")
 
 cat("loading", rds, "...\n")
 obj <- readRDS(rds)
@@ -52,7 +55,7 @@ dd  <- cells[idx, ]
 ctr <- aggregate(cbind(UMAP_1, UMAP_2) ~ cell_type, data = dd, FUN = median)
 
 p_umap <- ggplot(dd, aes(UMAP_1, UMAP_2, color = cell_type)) +
-  geom_point(size = 0.45, alpha = 0.85, stroke = 0) +
+  geom_point(size = if (nrow(dd) < 5000) 1.6 else 0.45, alpha = 0.85, stroke = 0) +
   ggrepel::geom_text_repel(data = ctr, aes(UMAP_1, UMAP_2, label = cell_type),
     inherit.aes = FALSE, size = 3.1, fontface = "bold", colour = "#16202e",
     bg.color = "white", bg.r = 0.14, max.overlaps = Inf, seed = 1,
@@ -67,8 +70,8 @@ tab  <- table(cells$cell_type, cells$sample)
 prop <- as.data.frame(as.table(sweep(tab, 2, colSums(tab), "/") * 100), stringsAsFactors = FALSE)
 colnames(prop) <- c("cell_type", "sample", "pct")
 p_bar <- ggplot(prop, aes(sample, pct, fill = cell_type)) +
-  geom_col(width = 0.82) +
-  scale_fill_manual(values = PAL, guide = "none") +
+  geom_col(width = 0.6, colour = "white", linewidth = 0.5) +
+  scale_fill_manual(values = PAL, name = NULL) +
   scale_y_continuous(expand = c(0, 0)) +
   labs(subtitle = "Cell-type proportions per sample", y = NULL, x = NULL) +
   theme_minimal(base_size = 12) +
@@ -77,12 +80,13 @@ p_bar <- ggplot(prop, aes(sample, pct, fill = cell_type)) +
         axis.text.y = element_text(size = 8, colour = "#90a0b3"),
         panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
         panel.grid.major.y = element_line(colour = "#eef1f5"),
+        legend.text = element_text(size = 9, colour = "#516074"), legend.key.size = unit(10, "pt"),
         plot.margin = margin(8, 14, 8, 6))
 
 banner <- (p_umap | p_bar) + plot_layout(widths = c(1.35, 1)) +
   plot_annotation(
-    title = "scRNA-seq Seurat pipeline — interactive HTML run report",
-    subtitle = "Multi-sample QC → doublets → Harmony integration → annotation, compiled into one self-contained, emailable dashboard.",
+    title = "scRNA-seq Seurat pipeline: interactive HTML run report",
+    subtitle = "Bundled human PBMC example (H1, H2): QC, doublets, Harmony integration and annotation in one self-contained report.",
     theme = theme(
       plot.title = element_text(face = "bold", size = 19, colour = "#16202e"),
       plot.subtitle = element_text(size = 12, colour = "#516074", margin = margin(t = 2, b = 4)),

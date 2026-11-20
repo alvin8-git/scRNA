@@ -277,6 +277,21 @@ if (file.exists(f)) {
   }
 }
 
+# Regression T22: a fresh clone must run from wherever it is checked out. run_pipeline.sh,
+# config.R and build_report.sh once hardcoded /data/alvin/scRNA, so a clone elsewhere wrote
+# its results into (or failed on) the author's path.
+for (s in c("run_pipeline.sh", "config.R", "build_report.sh")) {
+  f <- file.path(.pipeline, s)
+  if (file.exists(f) && any(grepl("/(data|home)/alvin", .code_of(f))))
+    fails <- c(fails, paste0(s, " hardcodes an author-machine path (derive it from the script location)"))
+}
+# ...and no shell script may feed R code through `conda run ... Rscript -`: conda run drops
+# stdin, so setup_env.sh's install block silently did nothing and CellChat/monocle3/presto
+# were never installed.
+for (f in list.files(.pipeline, "\\.sh$", full.names = TRUE, recursive = TRUE))
+  if (any(grepl("conda run .*Rscript\\s+-(\\s|$)", .code_of(f))))
+    fails <- c(fails, paste0(basename(f), " pipes R code through `conda run ... Rscript -` (stdin is dropped)"))
+
 if (length(fails) > 0) {
   for (x in fails) message("FAIL: ", x)
   quit(status = 1)

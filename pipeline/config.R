@@ -24,7 +24,9 @@ suppressWarnings(library(ggplot2))    # silence freetype/systemfonts version mis
 source(file.path(dirname(sys.frame(1)$ofile %||% "."), "pdf_helpers.R"))
 
 # --- Base paths ---
-BASE_DIR          <- Sys.getenv("SCRNA_BASE_DIR", "/data/alvin/scRNA")
+# Repo root: SCRNA_BASE_DIR (run_pipeline.sh exports it), else the parent of pipeline/.
+BASE_DIR          <- Sys.getenv("SCRNA_BASE_DIR", dirname(normalizePath(
+  if (exists(".pipeline_dir")) .pipeline_dir else dirname(sys.frame(1)$ofile %||% "pipeline/config.R"))))
 PIPELINE_DIR      <- file.path(BASE_DIR, "pipeline")
 # Per-sample RDS cache — shared across all combo runs; delete a subfolder to force recompute
 SAMPLE_CACHE_DIR  <- file.path(BASE_DIR, "sample_cache")

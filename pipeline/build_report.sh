@@ -10,7 +10,7 @@
 # Output:  <run_dir>/reports/<run>_report.html   (+ build_report.log alongside it)
 set -euo pipefail
 
-RSCRIPT="${RSCRIPT:-/home/alvin/miniconda3/envs/scrna_seurat/bin/Rscript}"
+RSCRIPT="${RSCRIPT:-$(conda run -n "${SCRNA_ENV_NAME:-scrna_seurat}" which Rscript)}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ $# -lt 1 ]; then

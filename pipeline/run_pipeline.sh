@@ -40,8 +40,9 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="/data/alvin/scRNA"
-CONDA_ENV="scrna_seurat"
+BASE_DIR="${SCRNA_BASE_DIR:-$(dirname "$PIPELINE_DIR")}"   # repo root = parent of pipeline/
+export SCRNA_BASE_DIR="$BASE_DIR"                         # so every R step agrees
+CONDA_ENV="${SCRNA_ENV_NAME:-scrna_seurat}"   # override to test a freshly built env
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
